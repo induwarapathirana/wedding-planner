@@ -33,18 +33,8 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(url)
         }
 
-        // Check if user has a wedding
-        const { data } = await supabase
-            .from('collaborators')
-            .select('wedding_id')
-            .eq('user_id', user.id)
-            .maybeSingle()
-
-        if (!data) {
-            const url = request.nextUrl.clone()
-            url.pathname = '/onboarding'
-            return NextResponse.redirect(url)
-        }
+        // Check if user has a wedding (Optional: could fetch to context or just let page handle it)
+        // logic removed to allow dashboard access without wedding
     }
 
     // Protect onboarding

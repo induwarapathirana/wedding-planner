@@ -68,10 +68,8 @@ export default function DashboardPage() {
                         setStats({ guestCount: 0, totalBudget: 0, currency: 'USD' });
                     }
                 }
-            } else {
-                // Should be caught by middleware, but client-side fallback:
-                router.push("/onboarding");
             }
+            // If no wedding, we simply stay on this page and render the empty state
             setLoading(false);
         }
         fetchWedding();
@@ -79,16 +77,34 @@ export default function DashboardPage() {
 
     if (loading) return <div className="p-10 text-center text-muted-foreground">Loading specific details...</div>;
 
-    const daysToGo = wedding && wedding.wedding_date
-        ? differenceInDays(parseISO(wedding.wedding_date), new Date())
-        : 0;
+    if (!wedding) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
+                <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center text-4xl mb-4">
+                    ✨
+                </div>
+                <h2 className="font-serif text-3xl font-bold text-foreground">Welcome to Vow & Venue</h2>
+                <p className="text-muted-foreground max-w-md">
+                    You haven't created or joined a wedding plan yet. Start your journey by creating a new wedding plan.
+                </p>
+                <button
+                    onClick={() => router.push('/onboarding')}
+                    className="rounded-xl bg-primary px-8 py-4 text-base font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all hover:scale-105"
+                >
+                    + Create Your Wedding
+                </button>
+            </div>
+        );
+    }
+
+    const daysToGo = differenceInDays(parseISO(wedding.wedding_date), new Date());
 
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="font-serif text-3xl font-bold text-foreground">
-                        Welcome Back, {wedding ? `${wedding.couple_name_1} & ${wedding.couple_name_2}` : "Planner"}
+                        Welcome Back, {wedding.couple_name_1} & {wedding.couple_name_2}
                     </h2>
                     <p className="mt-1 text-muted-foreground">Here is what is happening with your wedding.</p>
                 </div>
@@ -112,7 +128,7 @@ export default function DashboardPage() {
                 <div className="h-40 rounded-2xl border border-border bg-white p-6 shadow-sm">
                     <h3 className="font-medium text-foreground">Days to Go</h3>
                     <p className="mt-2 text-2xl font-bold text-foreground">{daysToGo > 0 ? daysToGo : "Big Day!"}</p>
-                    {wedding?.wedding_date && <p className="text-sm text-muted-foreground mt-1">{new Date(wedding.wedding_date).toDateString()}</p>}
+                    <p className="text-sm text-muted-foreground mt-1">{new Date(wedding.wedding_date).toDateString()}</p>
                 </div>
             </div>
         </div>

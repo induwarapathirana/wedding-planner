@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
     LayoutDashboard,
@@ -21,7 +22,7 @@ import { supabase } from "@/lib/supabase";
 const navItems = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
     { name: "Checklist", href: "/dashboard/checklist", icon: LayoutList },
-    { name: "Budget", href: "/dashboard/budget", icon: Store }, // Using Store icon for budget/vendors implied
+    { name: "Budget", href: "/dashboard/budget", icon: Store },
     { name: "Guest List", href: "/dashboard/guests", icon: Users },
     { name: "Vendors", href: "/dashboard/vendors", icon: HeartHandshake },
     { name: "Inventory", href: "/dashboard/inventory", icon: Package },
@@ -31,6 +32,27 @@ const navItems = [
 export function Sidebar() {
     const pathname = usePathname();
     const router = useRouter();
+    const [hasWeddings, setHasWeddings] = useState(false);
+
+    useEffect(() => {
+        checkWeddings();
+    }, []);
+
+    async function checkWeddings() {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data } = await supabase
+            .from('collaborators')
+            .select('wedding_id')
+            .eq('user_id', user.id)
+            .limit(1)
+            .maybeSingle();
+
+        if (data) {
+            setHasWeddings(true);
+        }
+    }
 
     async function handleSignOut() {
         await supabase.auth.signOut();
@@ -65,7 +87,7 @@ export function Sidebar() {
 
                 {/* Navigation */}
                 <nav className="flex-1 space-y-1">
-                    {navItems.map((item) => {
+                    {hasWeddings && navItems.map((item) => {
                         const isActive = pathname === item.href;
                         return (
                             <Link
@@ -92,13 +114,15 @@ export function Sidebar() {
 
                 {/* Footer / User */}
                 <div className="border-t border-border pt-6">
-                    <Link
-                        href="/dashboard/settings"
-                        className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                    >
-                        <Settings className="h-5 w-5" />
-                        Settings
-                    </Link>
+                    {hasWeddings && (
+                        <Link
+                            href="/dashboard/settings"
+                            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                        >
+                            <Settings className="h-5 w-5" />
+                            Settings
+                        </Link>
+                    )}
                     <button
                         onClick={handleSignOut}
                         className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"

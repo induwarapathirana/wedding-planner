@@ -22,6 +22,16 @@ export default function LoginPage() {
 
     // Handle OAuth hash tokens (implicit flow)
     useEffect(() => {
+        // Check for invite token in URL (from link click)
+        const params = new URLSearchParams(window.location.search);
+        const inviteToken = params.get('invite_token');
+        if (inviteToken) {
+            localStorage.setItem('pending_invite_token', inviteToken);
+        }
+        if (params.get('signup') === 'true') {
+            setIsSignUp(true);
+        }
+
         const hash = window.location.hash;
         if (hash && hash.includes('access_token')) {
             console.log('📍 OAuth tokens detected in hash');
@@ -50,7 +60,7 @@ export default function LoginPage() {
                         if (collaboration) {
                             window.location.replace('/dashboard');
                         } else {
-                            window.location.replace('/onboarding');
+                            window.location.replace('/dashboard');
                         }
                     } else {
                         console.error('❌ Session error:', error);
@@ -69,10 +79,6 @@ export default function LoginPage() {
             provider: 'google',
             options: {
                 redirectTo: `${window.location.origin}/auth/callback`,
-                queryParams: {
-                    access_type: 'offline',
-                    prompt: 'consent',
-                },
             },
         });
 
@@ -116,7 +122,7 @@ export default function LoginPage() {
                     if (collaboration) {
                         window.location.replace('/dashboard');
                     } else {
-                        window.location.replace('/onboarding');
+                        window.location.replace('/dashboard');
                     }
                 }
             }

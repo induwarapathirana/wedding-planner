@@ -1,13 +1,191 @@
-import PlaceholderPage from "@/components/dashboard/placeholder-page";
+"use client";
+
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { Plus, Package, Search } from "lucide-react";
+import { InventoryItem } from "@/types/inventory";
+import InventoryItemRow from "@/components/dashboard/inventory/InventoryItem";
+import InventoryForm from "@/components/dashboard/inventory/InventoryForm";
 
 export default function InventoryPage() {
+    const [items, setItems] = useState<InventoryItem[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [weddingId, setWeddingId] = useState<string | null>(null);
+    const [showForm, setShowForm] = useState(false);
+    const [editingItem, setEditingItem] = useState<InventoryItem | undefined>(undefined);
+    const [searchTerm, setSearchTerm] = useState("");
+
+    useEffect(() => {
+        const storedWeddingId = localStorage.getItem("current_wedding_id");
+        if (storedWeddingId) {
+            setWeddingId(storedWeddingId);
+            fetchItems(storedWeddingId);
+        }
+    }, []);
+
+    const fetchItems = async (id: string) => {
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('inventory_items')
+            .select('*')
+            .eq('wedding_id', id)
+            .order('category', { ascending: true });
+
+        if (!error && data) {
+            setItems(data as InventoryItem[]);
+        }
+        setLoading(false);
+    };
+
+    const handleDelete = async (id: string) => {
+        const { error } = await supabase.from('inventory_items').delete().eq('id', id);
+        if (!error) {
+            setItems(prev => prev.filter(i => i.id !== id));
+        } else {
+            alert("Failed to delete item");
+        }
+    };
+
+    const handleToggleStatus = async (item: InventoryItem) => {
+        // Simple toggle: 'packed' <-> 'needed' (or preserve previous if complex, but simple toggle is safer for UI)
+        // Actually, let's just mark as 'packed' if not packed, and 'needed' if packed.
+        const newStatus = item.status === 'packed' ? 'needed' : 'packed';
+
+        const { error } = await supabase
+            .from('inventory_items')
+            .update({ status: newStatus })
+            .eq('id', item.id);
+
+        if (!error) {
+            setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: newStatus } : i));
+        }
+    };
+
+    const filteredItems = items.filter(item =>
+        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.category?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const totalItems = items.reduce((acc, item) => acc + item.quantity, 0);
+    const totalCost = items.reduce((acc, item) => acc + (item.quantity * item.unit_cost), 0);
+    const packedCount = items.filter(i => i.status === 'packed').length;
+
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="font-serif text-3xl font-bold text-foreground">Inventory</h2>
-                <p className="mt-1 text-muted-foreground">Keep track of decor, favors, and stationery.</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h2 className="font-serif text-3xl font-bold text-foreground">Inventory</h2>
+                    <p className="mt-1 text-muted-foreground">Track your decor, items, and supplies.</p>
+                </div>
+                <button
+                    onClick={() => {
+                        setEditingItem(undefined);
+                        setShowForm(true);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
+                >
+                    <Plus className="w-4 h-4" />
+                    Add Item
+                </button>
             </div>
-            <PlaceholderPage title="Inventory Tracker Coming Soon" />
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                    <div className="text-sm text-gray-500 font-medium">Total Items</div>
+                    <div className="text-2xl font-bold text-gray-900 mt-1">{totalItems}</div>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                    <div className="text-sm text-gray-500 font-medium">Estimated Cost</div>
+                    <div className="text-2xl font-bold text-gray-900 mt-1">
+                        ${totalCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    </div>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                    <div className="text-sm text-gray-500 font-medium">Packed / Ready</div>
+                    <div className="text-2xl font-bold text-gray-900 mt-1">
+                        {packedCount} <span className="text-sm text-gray-400 font-normal">/ {items.length} unique</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search items..."
+                    className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 outline-none text-sm"
+                />
+            </div>
+
+            {/* Content */}
+            {loading ? (
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-gray-500">Loading inventory...</p>
+                </div>
+            ) : items.length === 0 ? (
+                <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
+                    <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Package className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-1">Inventory is empty</h3>
+                    <p className="text-gray-500 mb-6">Start tracking your wedding items.</p>
+                    <button
+                        onClick={() => setShowForm(true)}
+                        className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 font-medium"
+                    >
+                        Add First Item
+                    </button>
+                </div>
+            ) : (
+                <div className="bg-white border boundary-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider font-semibold border-b border-gray-100">
+                                <tr>
+                                    <th className="px-6 py-3 w-1/3">Item</th>
+                                    <th className="px-6 py-3 hidden md:table-cell">Category</th>
+                                    <th className="px-6 py-3">Status</th>
+                                    <th className="px-6 py-3 text-center">Qty</th>
+                                    <th className="px-6 py-3 text-right">Cost</th>
+                                    <th className="px-6 py-3 text-right w-24">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {filteredItems.map(item => (
+                                    <InventoryItemRow
+                                        key={item.id}
+                                        item={item}
+                                        onEdit={(i) => {
+                                            setEditingItem(i);
+                                            setShowForm(true);
+                                        }}
+                                        onDelete={handleDelete}
+                                        onToggleStatus={handleToggleStatus}
+                                    />
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    {filteredItems.length === 0 && (
+                        <div className="text-center py-8 text-gray-500 text-sm">
+                            No items match your search.
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {showForm && weddingId && (
+                <InventoryForm
+                    weddingId={weddingId}
+                    initialData={editingItem}
+                    onClose={() => setShowForm(false)}
+                    onSuccess={() => fetchItems(weddingId)}
+                />
+            )}
         </div>
     );
 }
