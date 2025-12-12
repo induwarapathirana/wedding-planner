@@ -1,0 +1,277 @@
+"use client";
+
+import { useMode } from "@/context/mode-context";
+import { CheckCircle2, Circle, Clock, Plus, Edit2, CalendarDays, ListTodo } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { ChecklistDialog } from "@/components/dashboard/checklist-dialog";
+
+type ChecklistItem = {
+    id: string;
+    title: string;
+    category: string;
+    due_date?: string;
+    is_completed: boolean;
+    notes?: string;
+};
+
+export default function ChecklistPage() {
+    const { mode } = useMode();
+    const [items, setItems] = useState<ChecklistItem[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [weddingId, setWeddingId] = useState<string | null>(null);
+
+    // Dialog State
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [editingItem, setEditingItem] = useState<ChecklistItem | null>(null);
+
+    useEffect(() => {
+        async function loadData() {
+            setLoading(true);
+            const wId = localStorage.getItem("current_wedding_id");
+            if (wId) {
+                setWeddingId(wId);
+                fetchItems(wId);
+            } else {
+                // Fallback auth check if direct link
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    const { data: collab } = await supabase.from('collaborators').select('wedding_id').eq('user_id', user.id).single();
+                    if (collab) {
+                        localStorage.setItem("current_wedding_id", collab.wedding_id);
+                        setWeddingId(collab.wedding_id);
+                        fetchItems(collab.wedding_id);
+                        return;
+                    }
+                }
+                setLoading(false);
+            }
+        }
+        loadData();
+    }, []);
+
+    async function fetchItems(wId: string) {
+        const { data } = await supabase.from('checklist_items').select('*').eq('wedding_id', wId).order('due_date', { ascending: true });
+        if (data) {
+            setItems(data as unknown as ChecklistItem[]);
+        }
+        setLoading(false);
+    }
+
+    const handleOpenAdd = () => {
+        setEditingItem(null);
+        setIsDialogOpen(true);
+    };
+
+    const handleOpenEdit = (item: ChecklistItem) => {
+        setEditingItem(item);
+        setIsDialogOpen(true);
+    };
+
+    const handleSaveItem = async (itemData: Partial<ChecklistItem>) => {
+        if (!weddingId) return;
+
+        const payload = {
+            ...itemData,
+            wedding_id: weddingId
+        };
+
+        if (editingItem) {
+            const { error } = await supabase.from('checklist_items').update(payload).eq('id', editingItem.id);
+            if (error) alert("Error: " + error.message);
+        } else {
+            const { error } = await supabase.from('checklist_items').insert(payload);
+            if (error) alert("Error: " + error.message);
+        }
+        setIsDialogOpen(false);
+        fetchItems(weddingId);
+    };
+
+    const toggleComplete = async (item: ChecklistItem) => {
+        // Optimistic update
+        const newStatus = !item.is_completed;
+        setItems(items.map(i => i.id === item.id ? { ...i, is_completed: newStatus } : i));
+
+        const { error } = await supabase.from('checklist_items').update({ is_completed: newStatus }).eq('id', item.id);
+        if (error) {
+            // Revert if failed
+            setItems(items.map(i => i.id === item.id ? { ...i, is_completed: !newStatus } : i));
+            alert("Failed to update status");
+        }
+    };
+
+    // Grouping Logic
+    const completedItems = items.filter(i => i.is_completed);
+    const pendingItems = items.filter(i => !i.is_completed);
+
+    // Group by Category for Advanced View
+    const groupedItems = items.reduce((acc, item) => {
+        const cat = item.category || 'Uncategorized';
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(item);
+        return acc;
+    }, {} as Record<string, ChecklistItem[]>);
+
+    // Custom sort order for categories
+    const categoryOrder = [
+        "12+ Months Out", "9-12 Months Out", "6-9 Months Out", "4-6 Months Out",
+        "2-4 Months Out", "1 Month Out", "Final Week", "Wedding Day", "Uncategorized"
+    ];
+
+    return (
+        <div className="space-y-8">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="font-serif text-3xl font-bold text-foreground">Checklist & Timeline</h2>
+                    <p className="mt-1 text-muted-foreground">Stay organized every step of the way.</p>
+                </div>
+                <button
+                    onClick={handleOpenAdd}
+                    className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all">
+                    <Plus className="w-4 h-4" />
+                    Add Task
+                </button>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="relative h-4 w-full rounded-full bg-muted overflow-hidden">
+                <div
+                    className="absolute top-0 left-0 h-full bg-primary transition-all duration-500 ease-out"
+                    style={{ width: `${items.length > 0 ? (completedItems.length / items.length) * 100 : 0}%` }}
+                />
+            </div>
+            <div className="flex justify-between text-sm text-muted-foreground -mt-4">
+                <span>0%</span>
+                <span>{items.length > 0 ? Math.round((completedItems.length / items.length) * 100) : 0}% Completed</span>
+            </div>
+
+            {/* Main Content */}
+            <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden min-h-[400px]">
+                {mode === "simple" ? (
+                    /* SIMPLE MODE: To Do vs Done */
+                    <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border h-full">
+                        {/* PENDING */}
+                        <div className="p-6">
+                            <h3 className="flex items-center gap-2 font-medium text-foreground mb-4">
+                                <Circle className="w-4 h-4 text-amber-500" /> To Do ({pendingItems.length})
+                            </h3>
+                            <div className="space-y-3">
+                                {pendingItems.map(item => (
+                                    <div key={item.id} className="group flex items-start gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors border border-transparent hover:border-border/50">
+                                        <button onClick={() => toggleComplete(item)} className="mt-0.5 text-muted-foreground hover:text-primary transition-colors">
+                                            <Circle className="w-5 h-5" />
+                                        </button>
+                                        <div className="flex-1">
+                                            <p className="font-medium text-foreground">{item.title}</p>
+                                            <p className="text-xs text-muted-foreground">{item.category} • {item.due_date ? new Date(item.due_date).toLocaleDateString() : 'No Date'}</p>
+                                        </div>
+                                        <button onClick={() => handleOpenEdit(item)} className="opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-primary transition-all">
+                                            <Edit2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                ))}
+                                {pendingItems.length === 0 && <p className="text-sm text-muted-foreground italic">No pending tasks.</p>}
+                            </div>
+                        </div>
+
+                        {/* COMPLETED */}
+                        <div className="p-6 bg-muted/10">
+                            <h3 className="flex items-center gap-2 font-medium text-muted-foreground mb-4">
+                                <CheckCircle2 className="w-4 h-4 text-green-600" /> Completed ({completedItems.length})
+                            </h3>
+                            <div className="space-y-3">
+                                {completedItems.map(item => (
+                                    <div key={item.id} className="group flex items-start gap-3 p-3 rounded-xl opacity-75 hover:opacity-100 transition-opacity">
+                                        <button onClick={() => toggleComplete(item)} className="mt-0.5 text-green-600 transition-colors">
+                                            <CheckCircle2 className="w-5 h-5" />
+                                        </button>
+                                        <div className="flex-1">
+                                            <p className="font-medium text-foreground line-through decoration-muted-foreground/50">{item.title}</p>
+                                            <p className="text-xs text-muted-foreground">{item.category}</p>
+                                        </div>
+                                        <button onClick={() => handleOpenEdit(item)} className="opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-primary transition-all">
+                                            <Edit2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    /* ADVANCED MODE: Timeline Layout */
+                    <div className="p-8">
+                        <div className="relative border-l border-border ml-3 space-y-10">
+                            {categoryOrder.filter(cat => groupedItems[cat] && groupedItems[cat].length > 0).map((category) => (
+                                <div key={category} className="relative pl-8">
+                                    {/* Timeline Dot */}
+                                    <div className="absolute -left-1.5 top-1 h-3 w-3 rounded-full bg-primary ring-4 ring-white" />
+
+                                    <h3 className="text-lg font-bold text-foreground mb-4">{category}</h3>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {groupedItems[category].map(item => (
+                                            <div key={item.id} className={cn(
+                                                "relative flex flex-col justify-between rounded-xl border p-4 transition-all hover:shadow-md",
+                                                item.is_completed ? "bg-muted/20 border-border opacity-75" : "bg-white border-border"
+                                            )}>
+                                                <div className="flex items-start justify-between mb-3">
+                                                    <span className={cn(
+                                                        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                                                        item.is_completed ? "bg-green-100 text-green-700" : "bg-primary/10 text-primary"
+                                                    )}>
+                                                        {item.is_completed ? "Done" : "Pending"}
+                                                    </span>
+                                                    <button onClick={() => handleOpenEdit(item)} className="text-muted-foreground hover:text-primary transition-colors">
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+
+                                                <h4 className={cn("font-medium text-foreground mb-1", item.is_completed && "line-through")}>
+                                                    {item.title}
+                                                </h4>
+
+                                                {item.due_date && (
+                                                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-4">
+                                                        <CalendarDays className="w-3.5 h-3.5" />
+                                                        {new Date(item.due_date).toLocaleDateString()}
+                                                    </div>
+                                                )}
+
+                                                <button
+                                                    onClick={() => toggleComplete(item)}
+                                                    className={cn(
+                                                        "mt-auto w-full rounded-lg py-2 text-xs font-medium transition-colors",
+                                                        item.is_completed
+                                                            ? "bg-white border border-border text-foreground hover:bg-muted"
+                                                            : "bg-primary text-white hover:bg-primary/90"
+                                                    )}
+                                                >
+                                                    {item.is_completed ? "Mark Undone" : "Mark Complete"}
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+
+                            {Object.keys(groupedItems).length === 0 && (
+                                <div className="pl-8 text-muted-foreground italic">
+                                    No tasks found. Add a task to start your timeline!
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <ChecklistDialog
+                isOpen={isDialogOpen}
+                onClose={() => setIsDialogOpen(false)}
+                onSubmit={handleSaveItem}
+                initialData={editingItem}
+            />
+        </div>
+    );
+}
