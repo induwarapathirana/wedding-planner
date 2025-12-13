@@ -3,11 +3,10 @@
 import { useMode } from "@/context/mode-context";
 import { Users, UserPlus, Check, X, HelpCircle, Utensils, Armchair, Edit2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-// Mock Data
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { GuestDialog } from "@/components/dashboard/guest-dialog";
+import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 
 type Guest = {
     id: string; // Changed to string for UUID
@@ -24,6 +23,7 @@ export default function GuestPage() {
     const { mode } = useMode();
     const [guests, setGuests] = useState<Guest[]>([]);
     const [targetCount, setTargetCount] = useState(0);
+    const [tier, setTier] = useState<PlanTier>('free');
     const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState<"name" | "priority" | "status">("priority");
 
@@ -42,9 +42,13 @@ export default function GuestPage() {
                 return;
             }
 
-            // Fetch wedding target
-            const { data: weddingData } = await supabase.from('weddings').select('target_guest_count').eq('id', weddingId).single();
-            if (weddingData) setTargetCount(weddingData.target_guest_count || 0);
+            // Fetch wedding target and tier
+            const { data: weddingData } = await supabase.from('weddings').select('target_guest_count, tier').eq('id', weddingId).single();
+
+            if (weddingData) {
+                setTargetCount(weddingData.target_guest_count || 0);
+                setTier((weddingData.tier as PlanTier) || 'free');
+            }
 
             fetchGuests(weddingId);
         }
@@ -60,6 +64,10 @@ export default function GuestPage() {
     }
 
     const handleOpenAdd = () => {
+        if (!checkLimit(tier, 'guests', guests.length)) {
+            alert(`You have reached the guest limit (${PLAN_LIMITS[tier].guests}) for the ${tier} plan.\nPlease upgrade to Premium for unlimited guests.`);
+            return;
+        }
         setEditingGuest(null);
         setIsDialogOpen(true);
     };

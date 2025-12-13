@@ -7,6 +7,7 @@ import { Event } from "@/types/itinerary";
 import TimelineItem from "@/components/dashboard/itinerary/TimelineItem";
 import EventForm from "@/components/dashboard/itinerary/EventForm";
 import { format } from "date-fns";
+import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 
 export default function ItineraryPage() {
     const [events, setEvents] = useState<Event[]>([]);
@@ -15,6 +16,7 @@ export default function ItineraryPage() {
     const [weddingDate, setWeddingDate] = useState<string | undefined>(undefined);
     const [showForm, setShowForm] = useState(false);
     const [editingEvent, setEditingEvent] = useState<Event | undefined>(undefined);
+    const [tier, setTier] = useState<PlanTier>('free');
 
     useEffect(() => {
         const storedWeddingId = localStorage.getItem("current_wedding_id");
@@ -22,6 +24,9 @@ export default function ItineraryPage() {
             setWeddingId(storedWeddingId);
             fetchWeddingDetails(storedWeddingId);
             fetchEvents(storedWeddingId);
+            // Fetch Tier
+            supabase.from('weddings').select('tier').eq('id', storedWeddingId).single()
+                .then(({ data }) => { if (data) setTier((data.tier as PlanTier) || 'free'); });
         }
     }, []);
 
@@ -64,6 +69,10 @@ export default function ItineraryPage() {
                 </div>
                 <button
                     onClick={() => {
+                        if (!checkLimit(tier, 'events', events.length)) {
+                            alert(`You have reached the event limit (${PLAN_LIMITS[tier].events}) for the ${tier} plan.\nPlease upgrade to Premium.`);
+                            return;
+                        }
                         setEditingEvent(undefined);
                         setShowForm(true);
                     }}

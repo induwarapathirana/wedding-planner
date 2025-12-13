@@ -6,6 +6,7 @@ import { Plus, Search, Filter } from "lucide-react";
 import { Vendor } from "@/types/vendors";
 import VendorCard from "@/components/dashboard/vendors/VendorCard";
 import VendorForm from "@/components/dashboard/vendors/VendorForm";
+import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 
 export default function VendorsPage() {
     const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -14,12 +15,16 @@ export default function VendorsPage() {
     const [showForm, setShowForm] = useState(false);
     const [editingVendor, setEditingVendor] = useState<Vendor | undefined>(undefined);
     const [filterCategory, setFilterCategory] = useState<string>("All");
+    const [tier, setTier] = useState<PlanTier>('free');
 
     useEffect(() => {
         const storedWeddingId = localStorage.getItem("current_wedding_id");
         if (storedWeddingId) {
             setWeddingId(storedWeddingId);
             fetchVendors(storedWeddingId);
+            // Fetch Tier
+            supabase.from('weddings').select('tier').eq('id', storedWeddingId).single()
+                .then(({ data }) => { if (data) setTier((data.tier as PlanTier) || 'free'); });
         }
     }, []);
 
@@ -60,6 +65,10 @@ export default function VendorsPage() {
                 </div>
                 <button
                     onClick={() => {
+                        if (!checkLimit(tier, 'vendors', vendors.length)) {
+                            alert(`You have reached the vendor limit (${PLAN_LIMITS[tier].vendors}) for the ${tier} plan.\nPlease upgrade to Premium.`);
+                            return;
+                        }
                         setEditingVendor(undefined);
                         setShowForm(true);
                     }}
@@ -79,8 +88,8 @@ export default function VendorsPage() {
                             key={cat}
                             onClick={() => setFilterCategory(cat)}
                             className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${filterCategory === cat
-                                    ? "bg-primary text-white"
-                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                ? "bg-primary text-white"
+                                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                                 }`}
                         >
                             {cat}

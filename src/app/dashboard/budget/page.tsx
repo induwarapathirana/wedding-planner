@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { BudgetDialog } from "@/components/dashboard/budget-dialog";
 import { CURRENCIES } from "@/lib/constants";
+import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 
 type BudgetItem = {
     id: string;
@@ -26,6 +27,7 @@ export default function BudgetPage() {
     const [loading, setLoading] = useState(true);
     const [currency, setCurrency] = useState("USD");
     const [weddingId, setWeddingId] = useState<string | null>(null);
+    const [tier, setTier] = useState<PlanTier>('free');
 
     // Dialog State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -47,10 +49,11 @@ export default function BudgetPage() {
             const wId = localStorage.getItem("current_wedding_id");
             if (wId) {
                 setWeddingId(wId);
-                // Fetch Settings (Currency)
-                const { data: wedding } = await supabase.from('weddings').select('currency').eq('id', wId).single();
-                if (wedding && wedding.currency) {
-                    setCurrency(wedding.currency);
+                // Fetch Settings (Currency & Tier)
+                const { data: wedding } = await supabase.from('weddings').select('currency, tier').eq('id', wId).single();
+                if (wedding) {
+                    if (wedding.currency) setCurrency(wedding.currency);
+                    if (wedding.tier) setTier(wedding.tier as PlanTier);
                 }
                 fetchBudget(wId);
             } else {
@@ -81,6 +84,10 @@ export default function BudgetPage() {
     }
 
     const handleOpenAdd = () => {
+        if (!checkLimit(tier, 'budget_items', budgetItems.length)) {
+            alert(`You have reached the limit (${PLAN_LIMITS[tier].budget_items}) for budget items on the ${tier} plan.\nPlease upgrade to Premium.`);
+            return;
+        }
         setEditingItem(null);
         setIsDialogOpen(true);
     };
