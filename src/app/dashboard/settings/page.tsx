@@ -554,6 +554,14 @@ See you there!`);
                     ))}
                 </div>
             </div>
+            
+            <LimitModal
+                isOpen={showLimitModal}
+                onClose={() => setShowLimitModal(false)}
+                feature="Collaborators"
+                limit={0}
+                tier={tier}
+            />
         </div>
     );
 }
