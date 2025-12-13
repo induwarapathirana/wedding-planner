@@ -1,4 +1,3 @@
-```typescript
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
@@ -33,11 +32,9 @@ export async function GET(request: NextRequest) {
         if (!error) {
             // Check if user has a wedding (onboarding check)
             const { data: { user } } = await supabase.auth.getUser();
-            
+
             if (user) {
-                // Check for pending invite in URL or metadata? 
-                // We can just rely on the same check as before.
-                
+                // Check if the user is a collaborator on any wedding
                 const { data: collaborator } = await supabase
                     .from('collaborators')
                     .select('wedding_id')
@@ -45,18 +42,17 @@ export async function GET(request: NextRequest) {
                     .maybeSingle();
 
                 if (collaborator) {
-                   return NextResponse.redirect(`${ requestUrl.origin }/dashboard`);
+                    return NextResponse.redirect(`${requestUrl.origin}/dashboard`);
                 } else {
-    // New user -> Onboarding
-    return NextResponse.redirect(`${requestUrl.origin}/onboarding`);
-}
+                    // New user (no wedding) -> Onboarding
+                    return NextResponse.redirect(`${requestUrl.origin}/onboarding`);
+                }
             }
 
-return NextResponse.redirect(`${requestUrl.origin}${next}`);
+            return NextResponse.redirect(`${requestUrl.origin}${next}`);
         }
     }
 
-// Auth failed
-return NextResponse.redirect(`${requestUrl.origin}/login?error=auth_failed`);
+    // Auth failed
+    return NextResponse.redirect(`${requestUrl.origin}/login?error=auth_failed`);
 }
-```
