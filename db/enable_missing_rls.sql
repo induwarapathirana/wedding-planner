@@ -1,20 +1,25 @@
 -- SECURE ALL TABLES (Fix for "Unrestricted" warning)
 -- This script enables RLS on all tables that were missing it and adds standard policies.
+-- Updated to be Re-Run Safe (Idempotent)
 
 -- 1. PROFILES
 alter table profiles enable row level security;
 
+drop policy if exists "Users can view own profile" on profiles;
 create policy "Users can view own profile" 
 on profiles for select using (auth.uid() = id);
 
+drop policy if exists "Users can update own profile" on profiles;
 create policy "Users can update own profile" 
 on profiles for update using (auth.uid() = id);
 
 -- Allow new users to insert their profile (handled by trigger, but good to have)
+drop policy if exists "Users can insert own profile" on profiles;
 create policy "Users can insert own profile" 
 on profiles for insert with check (auth.uid() = id);
 
 -- Public read for collaboration (needed to see team member names)
+drop policy if exists "Users can view team profiles" on profiles;
 create policy "Users can view team profiles"
 on profiles for select
 using (
@@ -29,6 +34,7 @@ using (
 alter table weddings enable row level security;
 
 -- Policy: Users can view/update weddings they are a collaborator on
+drop policy if exists "Collaborators can view weddings" on weddings;
 create policy "Collaborators can view weddings"
 on weddings for select
 using (
@@ -39,6 +45,7 @@ using (
   )
 );
 
+drop policy if exists "Collaborators can update weddings" on weddings;
 create policy "Collaborators can update weddings"
 on weddings for update
 using (
@@ -50,6 +57,7 @@ using (
   )
 );
 
+drop policy if exists "Users can create weddings" on weddings;
 create policy "Users can create weddings"
 on weddings for insert
 with check (true); -- Anyone can create, relationship established immediately after
@@ -57,6 +65,7 @@ with check (true); -- Anyone can create, relationship established immediately af
 -- 3. GUESTS
 alter table guests enable row level security;
 
+drop policy if exists "Collaborators can view guests" on guests;
 create policy "Collaborators can view guests"
 on guests for select
 using (
@@ -67,6 +76,7 @@ using (
   )
 );
 
+drop policy if exists "Collaborators can manage guests" on guests;
 create policy "Collaborators can manage guests"
 on guests for all
 using (
@@ -80,6 +90,7 @@ using (
 -- 4. BUDGET ITEMS
 alter table budget_items enable row level security;
 
+drop policy if exists "Collaborators can view budget" on budget_items;
 create policy "Collaborators can view budget"
 on budget_items for select
 using (
@@ -90,6 +101,7 @@ using (
   )
 );
 
+drop policy if exists "Collaborators can manage budget" on budget_items;
 create policy "Collaborators can manage budget"
 on budget_items for all
 using (
@@ -103,6 +115,7 @@ using (
 -- 5. CHECKLIST ITEMS
 alter table checklist_items enable row level security;
 
+drop policy if exists "Collaborators can view checklist" on checklist_items;
 create policy "Collaborators can view checklist"
 on checklist_items for select
 using (
@@ -113,6 +126,7 @@ using (
   )
 );
 
+drop policy if exists "Collaborators can manage checklist" on checklist_items;
 create policy "Collaborators can manage checklist"
 on checklist_items for all
 using (
