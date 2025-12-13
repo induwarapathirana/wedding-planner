@@ -8,6 +8,8 @@ import VendorCard from "@/components/dashboard/vendors/VendorCard";
 import VendorForm from "@/components/dashboard/vendors/VendorForm";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 
+import { LimitModal } from "@/components/dashboard/limit-modal";
+
 export default function VendorsPage() {
     const [vendors, setVendors] = useState<Vendor[]>([]);
     const [loading, setLoading] = useState(true);
@@ -16,6 +18,7 @@ export default function VendorsPage() {
     const [editingVendor, setEditingVendor] = useState<Vendor | undefined>(undefined);
     const [filterCategory, setFilterCategory] = useState<string>("All");
     const [tier, setTier] = useState<PlanTier>('free');
+    const [showLimitModal, setShowLimitModal] = useState(false);
 
     useEffect(() => {
         const storedWeddingId = localStorage.getItem("current_wedding_id");
@@ -66,7 +69,7 @@ export default function VendorsPage() {
                 <button
                     onClick={() => {
                         if (!checkLimit(tier, 'vendors', vendors.length)) {
-                            alert(`You have reached the vendor limit (${PLAN_LIMITS[tier].vendors}) for the ${tier} plan.\nPlease upgrade to Premium.`);
+                            setShowLimitModal(true);
                             return;
                         }
                         setEditingVendor(undefined);
@@ -142,6 +145,13 @@ export default function VendorsPage() {
                     onSuccess={() => fetchVendors(weddingId)}
                 />
             )}
+            <LimitModal
+                isOpen={showLimitModal}
+                onClose={() => setShowLimitModal(false)}
+                feature="Vendors"
+                limit={PLAN_LIMITS.free.vendors}
+                tier={tier}
+            />
         </div>
     );
 }

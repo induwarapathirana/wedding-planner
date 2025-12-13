@@ -64,8 +64,9 @@ export default function GuestPage() {
     }
 
     const handleOpenAdd = () => {
-        if (!checkLimit(tier, 'guests', guests.length)) {
-            alert(`You have reached the guest limit (${PLAN_LIMITS[tier].guests}) for the ${tier} plan.\nPlease upgrade to Premium for unlimited guests.`);
+        const canAdd = checkLimit(tier, 'guests', guests.length);
+        if (!canAdd) {
+            setShowLimitModal(true);
             return;
         }
         setEditingGuest(null);

@@ -94,7 +94,7 @@ function ChecklistContent() {
 
     const handleOpenAdd = () => {
         if (!checkLimit(tier, 'checklist_items', items.length)) {
-            alert(`You have reached the limit (${PLAN_LIMITS[tier].checklist_items}) for checklist items on the ${tier} plan.\nPlease upgrade to Premium.`);
+            setShowLimitModal(true);
             return;
         }
         setEditingItem(null);
@@ -308,6 +308,14 @@ function ChecklistContent() {
                 onClose={() => setIsDialogOpen(false)}
                 onSubmit={handleSaveItem}
                 initialData={editingItem}
+            />
+            {/* Limit Modal */}
+            <LimitModal
+                isOpen={showLimitModal}
+                onClose={() => setShowLimitModal(false)}
+                feature="Tasks"
+                limit={PLAN_LIMITS.free.checklist_items}
+                tier={tier}
             />
         </div>
     );

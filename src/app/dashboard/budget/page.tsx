@@ -84,8 +84,9 @@ export default function BudgetPage() {
     }
 
     const handleOpenAdd = () => {
-        if (!checkLimit(tier, 'budget_items', budgetItems.length)) {
-            alert(`You have reached the limit (${PLAN_LIMITS[tier].budget_items}) for budget items on the ${tier} plan.\nPlease upgrade to Premium.`);
+        const canAdd = checkLimit(tier, 'budget_items', budgetItems.length);
+        if (!canAdd) {
+            setShowLimitModal(true);
             return;
         }
         setEditingItem(null);
@@ -288,6 +289,13 @@ export default function BudgetPage() {
                 onSubmit={handleSaveItem}
                 initialData={editingItem}
                 currencySymbol={symbol}
+            />
+            <LimitModal
+                isOpen={showLimitModal}
+                onClose={() => setShowLimitModal(false)}
+                feature="Budget Items"
+                limit={PLAN_LIMITS.free.budget_items}
+                tier={tier}
             />
         </div>
     );
