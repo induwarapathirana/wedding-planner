@@ -1,5 +1,7 @@
+```typescript
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 export async function GET(request: NextRequest) {
     const requestUrl = new URL(request.url);
@@ -7,17 +9,19 @@ export async function GET(request: NextRequest) {
     const next = requestUrl.searchParams.get("next") ?? "/dashboard";
 
     if (code) {
+        const cookieStore = cookies();
+
         const supabase = createServerClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
             {
                 cookies: {
                     getAll() {
-                        return request.cookies.getAll();
+                        return cookieStore.getAll();
                     },
                     setAll(cookiesToSet) {
-                        cookiesToSet.forEach(({ name, value }) =>
-                            request.cookies.set(name, value)
+                        cookiesToSet.forEach(({ name, value, options }) =>
+                            cookieStore.set(name, value, options)
                         );
                     },
                 },
@@ -29,12 +33,11 @@ export async function GET(request: NextRequest) {
         if (!error) {
             // Check if user has a wedding (onboarding check)
             const { data: { user } } = await supabase.auth.getUser();
-
+            
             if (user) {
                 // Check for pending invite in URL or metadata? 
-                // Note: For simplicity, we just check if they have a wedding.
-                // If they accepted an invite via separate flow, they'll have a collaborator record.
-
+                // We can just rely on the same check as before.
+                
                 const { data: collaborator } = await supabase
                     .from('collaborators')
                     .select('wedding_id')
@@ -42,17 +45,18 @@ export async function GET(request: NextRequest) {
                     .maybeSingle();
 
                 if (collaborator) {
-                    return NextResponse.redirect(`${requestUrl.origin}/dashboard`);
+                   return NextResponse.redirect(`${ requestUrl.origin }/dashboard`);
                 } else {
-                    // New user -> Onboarding
-                    return NextResponse.redirect(`${requestUrl.origin}/onboarding`);
-                }
+    // New user -> Onboarding
+    return NextResponse.redirect(`${requestUrl.origin}/onboarding`);
+}
             }
 
-            return NextResponse.redirect(`${requestUrl.origin}${next}`);
+return NextResponse.redirect(`${requestUrl.origin}${next}`);
         }
     }
 
-    // Auth failed
-    return NextResponse.redirect(`${requestUrl.origin}/login?error=auth_failed`);
+// Auth failed
+return NextResponse.redirect(`${requestUrl.origin}/login?error=auth_failed`);
 }
+```
