@@ -27,8 +27,9 @@ export default function AuthCallbackPage() {
 
             if (error) {
                 console.error('❌ OAuth Error:', error_description);
-                setStatus(`Error: ${error_description}`);
-                setTimeout(() => router.push('/login'), 4000);
+                setStatus(`Login Failed: ${error_description || error}`);
+                // STOP redirecting so user can see the error
+                // setTimeout(() => router.push('/login'), 4000); 
                 return;
             }
 
@@ -62,8 +63,8 @@ export default function AuthCallbackPage() {
 
                     if (sessionError) {
                         console.error('❌ Session Set Error:', sessionError.message);
-                        setStatus(`Error: ${sessionError.message}`);
-                        setTimeout(() => router.push('/login'), 4000);
+                        setStatus(`Session Error: ${sessionError.message}`);
+                        // setTimeout(() => router.push('/login'), 4000);
                     } else {
                         console.log('✅ Session set - checking weddings');
                         await checkWeddingsAndRedirect();
