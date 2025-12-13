@@ -16,8 +16,8 @@ export default function ItineraryPage() {
     const [loading, setLoading] = useState(true);
     const [weddingId, setWeddingId] = useState<string | null>(null);
     const [weddingDate, setWeddingDate] = useState<string | undefined>(undefined);
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+    const [showForm, setShowForm] = useState(false);
+    const [editingEvent, setEditingEvent] = useState<Event | undefined>(undefined);
     const [tier, setTier] = useState<PlanTier>('free');
     const [showLimitModal, setShowLimitModal] = useState(false);
 

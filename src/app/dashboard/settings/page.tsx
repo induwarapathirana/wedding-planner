@@ -318,6 +318,14 @@ export default function SettingsPage() {
                     <TeamMembers weddingId={wedding?.id || ''} tier={wedding?.tier || 'free'} />
                 </div>
             </div>
+
+            <LimitModal
+                isOpen={showLimitModal}
+                onClose={() => setShowLimitModal(false)}
+                feature="Collaborators"
+                limit={0}
+                tier={tier}
+            />
         </div>
     );
 }
