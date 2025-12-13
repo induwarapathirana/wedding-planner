@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Save, ArrowLeft, Trash2, UserPlus, X } from "lucide-react";
 import Link from "next/link";
 import { PayHereButton } from "@/components/payhere-button";
+import { LimitModal } from "@/components/dashboard/limit-modal";
 
 type WeddingData = {
     id: string;
@@ -330,6 +331,7 @@ function TeamMembers({ weddingId, tier }: { weddingId: string, tier: string }) {
     const [sending, setSending] = useState(false);
     const [generatedLink, setGeneratedLink] = useState<string | null>(null);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [showLimitModal, setShowLimitModal] = useState(false);
 
     useEffect(() => {
         if (weddingId) fetchData();

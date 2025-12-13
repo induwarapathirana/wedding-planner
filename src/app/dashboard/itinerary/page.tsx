@@ -9,14 +9,17 @@ import EventForm from "@/components/dashboard/itinerary/EventForm";
 import { format } from "date-fns";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 
+import { LimitModal } from "@/components/dashboard/limit-modal";
+
 export default function ItineraryPage() {
     const [events, setEvents] = useState<Event[]>([]);
     const [loading, setLoading] = useState(true);
     const [weddingId, setWeddingId] = useState<string | null>(null);
     const [weddingDate, setWeddingDate] = useState<string | undefined>(undefined);
-    const [showForm, setShowForm] = useState(false);
-    const [editingEvent, setEditingEvent] = useState<Event | undefined>(undefined);
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [editingEvent, setEditingEvent] = useState<Event | null>(null);
     const [tier, setTier] = useState<PlanTier>('free');
+    const [showLimitModal, setShowLimitModal] = useState(false);
 
     useEffect(() => {
         const storedWeddingId = localStorage.getItem("current_wedding_id");
@@ -139,6 +142,13 @@ export default function ItineraryPage() {
                     onSuccess={() => fetchEvents(weddingId)}
                 />
             )}
+            <LimitModal
+                isOpen={showLimitModal}
+                onClose={() => setShowLimitModal(false)}
+                feature="Timeline Events"
+                limit={PLAN_LIMITS.free.events}
+                tier={tier}
+            />
         </div>
     );
 }
