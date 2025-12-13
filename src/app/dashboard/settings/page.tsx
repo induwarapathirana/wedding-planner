@@ -23,11 +23,43 @@ export default function SettingsPage() {
     const [wedding, setWedding] = useState<WeddingData | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
     const router = useRouter();
 
     useEffect(() => {
         fetchWedding();
     }, []);
+
+    const handleDeleteWedding = async () => {
+        if (!wedding?.id) return;
+
+        const confirmed = window.confirm(
+            "Are you sure you want to delete this wedding? This action is irreversible and will delete all guests, budget items, and data."
+        );
+
+        if (!confirmed) return;
+
+        setIsDeleting(true);
+        try {
+            const { error } = await supabase.rpc('delete_wedding_cascade', {
+                target_wedding_id: wedding.id
+            });
+
+            if (error) {
+                console.error("Delete failed:", error);
+                alert("Failed to delete wedding: " + error.message);
+                return;
+            }
+
+            // Success - Redirect to home or dashboard
+            window.location.href = '/dashboard';
+        } catch (err) {
+            console.error("Unexpected error:", err);
+            alert("An unexpected error occurred.");
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     async function fetchWedding() {
         const weddingId = localStorage.getItem("current_wedding_id");
