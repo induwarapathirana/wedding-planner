@@ -93,8 +93,25 @@ export default function LoginPage() {
         e.preventDefault();
         setLoading(true);
 
+        // Check for invite token to carry over
+        const params = new URLSearchParams(window.location.search);
+        const inviteToken = params.get('invite_token') || localStorage.getItem('pending_invite_token');
+
         if (isSignUp) {
-            const { error } = await supabase.auth.signUp({ email, password });
+            const options: any = {
+                emailRedirectTo: `${window.location.origin}/auth/callback`,
+            };
+
+            if (inviteToken) {
+                options.emailRedirectTo = `${window.location.origin}/auth/callback?invite_token=${inviteToken}`;
+            }
+
+            const { error } = await supabase.auth.signUp({
+                email,
+                password,
+                options
+            });
+
             if (error) {
                 alert(error.message);
                 setLoading(false);
@@ -113,21 +130,37 @@ export default function LoginPage() {
                 setRedirecting(true);
 
                 if (data.user) {
-                    const { data: collaboration } = await supabase
-                        .from('collaborators')
-                        .select('wedding_id')
-                        .eq('user_id', data.user.id)
-                        .maybeSingle();
+                    try {
+                        const { data: collaboration, error: collabError } = await supabase
+                            .from('collaborators')
+                            .select('wedding_id')
+                            .eq('user_id', data.user.id)
+                            .maybeSingle();
 
-                    if (collaboration) {
+                        // Ignore error, just redirect
+                        if (collabError) console.error("Collab check fetch error:", collabError);
                         window.location.replace('/dashboard');
-                    } else {
+                    } catch (err) {
+                        console.error("Redirect logic error:", err);
                         window.location.replace('/dashboard');
                     }
+                } else {
+                    window.location.replace('/dashboard');
                 }
             }
         }
     };
+
+    // Safety timeout for redirect
+    useEffect(() => {
+        if (redirecting) {
+            const timer = setTimeout(() => {
+                console.warn("Redirect timeout - forcing dashboard");
+                window.location.replace('/dashboard');
+            }, 5000); // 5s timeout
+            return () => clearTimeout(timer);
+        }
+    }, [redirecting]);
 
     // Show redirecting state
     if (redirecting) {
