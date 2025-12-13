@@ -13,6 +13,7 @@ type Guest = {
     id: string; // Changed to string for UUID
     name: string;
     group_category: string;
+    priority: "A" | "B" | "C";
     rsvp_status: "accepted" | "declined" | "pending";
     meal_preference?: string;
     table_assignment?: string;
@@ -22,7 +23,9 @@ type Guest = {
 export default function GuestPage() {
     const { mode } = useMode();
     const [guests, setGuests] = useState<Guest[]>([]);
+    const [targetCount, setTargetCount] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [sortBy, setSortBy] = useState<"name" | "priority" | "status">("priority");
 
     // Dialog State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -32,23 +35,16 @@ export default function GuestPage() {
     useEffect(() => {
         async function loadData() {
             setLoading(true);
-            // Ensure we have a wedding ID from context (stored in localStorage during dashboard load)
             const weddingId = localStorage.getItem("current_wedding_id");
 
             if (!weddingId) {
-                // Fallback for direct navigation if localStorage is empty (re-fetch logic simplified)
-                const { data: { user } } = await supabase.auth.getUser();
-                if (user) {
-                    const { data: collab } = await supabase.from('collaborators').select('wedding_id').eq('user_id', user.id).single();
-                    if (collab) {
-                        localStorage.setItem("current_wedding_id", collab.wedding_id);
-                        fetchGuests(collab.wedding_id);
-                        return;
-                    }
-                }
-                setLoading(false); // No wedding found
+                setLoading(false);
                 return;
             }
+
+            // Fetch wedding target
+            const { data: weddingData } = await supabase.from('weddings').select('target_guest_count').eq('id', weddingId).single();
+            if (weddingData) setTargetCount(weddingData.target_guest_count || 0);
 
             fetchGuests(weddingId);
         }
@@ -56,11 +52,8 @@ export default function GuestPage() {
     }, []);
 
     async function fetchGuests(weddingId: string) {
-        const { data } = await supabase.from('guests').select('*').eq('wedding_id', weddingId).order('created_at', { ascending: false });
+        const { data } = await supabase.from('guests').select('*').eq('wedding_id', weddingId);
         if (data) {
-            // Map DB fields which might be snake_case to our types if needed,
-            // but our Types match the DB schema mostly (except camel vs snake).
-            // Our Guest type above uses snake_case keys where DB does.
             setGuests(data as unknown as Guest[]);
         }
         setLoading(false);
@@ -85,21 +78,19 @@ export default function GuestPage() {
 
         const payload = {
             ...guestData,
+            priority: guestData.priority || 'B',
             wedding_id: weddingId
         };
 
         if (editingGuest) {
-            // UPDATE
             const { error } = await supabase.from('guests').update(payload).eq('id', editingGuest.id);
             if (error) alert("Failed to update: " + error.message);
         } else {
-            // INSERT
             const { error } = await supabase.from('guests').insert(payload);
             if (error) alert("Failed to add: " + error.message);
         }
 
-        setIsDialogOpen(false); // Close dialog after save
-        // Refresh list
+        setIsDialogOpen(false);
         fetchGuests(weddingId);
     };
 
@@ -111,10 +102,29 @@ export default function GuestPage() {
         total: guests.length,
     };
 
+    // Sorting Logic
+    const sortedGuests = [...guests].sort((a, b) => {
+        if (sortBy === 'priority') {
+            // A < B < C (A is highest)
+            const prioMap = { A: 1, B: 2, C: 3 };
+            const pA = prioMap[a.priority || 'B'];
+            const pB = prioMap[b.priority || 'B'];
+            if (pA !== pB) return pA - pB;
+        }
+        if (sortBy === 'status') {
+            return a.rsvp_status.localeCompare(b.rsvp_status);
+        }
+        return a.name.localeCompare(b.name);
+    });
+
+    // Progress Bar Calcs
+    const progressPercent = targetCount > 0 ? Math.min((stats.total / targetCount) * 100, 100) : 0;
+    const isOverLimit = targetCount > 0 && stats.total > targetCount;
+
     return (
         <div className="space-y-8">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h2 className="font-serif text-3xl font-bold text-foreground">Guest List</h2>
                     <p className="mt-1 text-muted-foreground">
@@ -123,13 +133,41 @@ export default function GuestPage() {
                             : "Detailed tracking for meals, seating, and groupings."}
                     </p>
                 </div>
-                <button
-                    onClick={handleOpenAdd}
-                    className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all">
-                    <UserPlus className="w-4 h-4" />
-                    Add Guest
-                </button>
+                <div className="flex items-center gap-3">
+                    <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as any)}
+                        className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    >
+                        <option value="priority">Sort by Priority</option>
+                        <option value="name">Sort by Name</option>
+                        <option value="status">Sort by Status</option>
+                    </select>
+                    <button
+                        onClick={handleOpenAdd}
+                        className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all">
+                        <UserPlus className="w-4 h-4" />
+                        Add Guest
+                    </button>
+                </div>
             </div>
+
+            {/* Target Progress Bar */}
+            {targetCount > 0 && (
+                <div className="bg-white p-4 rounded-xl border border-border shadow-sm flex flex-col gap-2">
+                    <div className="flex justify-between text-sm font-medium">
+                        <span>Total Guests: {stats.total}</span>
+                        <span className={isOverLimit ? "text-amber-600" : "text-muted-foreground"}>Target: {targetCount}</span>
+                    </div>
+                    <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                            className={cn("h-full transition-all duration-500 rounded-full", isOverLimit ? "bg-amber-500" : "bg-primary")}
+                            style={{ width: `${progressPercent}%` }}
+                        />
+                    </div>
+                    {isOverLimit && <p className="text-xs text-amber-600 font-medium">You have exceeded your target headcount.</p>}
+                </div>
+            )}
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -167,11 +205,15 @@ export default function GuestPage() {
                 {mode === "simple" ? (
                     /* SIMPLE MODE: Clean List */
                     <div className="divide-y divide-border">
-                        {guests.map((guest) => (
+                        {sortedGuests.map((guest) => (
                             <div key={guest.id} className="flex items-center justify-between p-6 hover:bg-muted/30 transition-colors">
                                 <div className="flex items-center gap-4">
-                                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center font-medium text-muted-foreground uppercase">
-                                        {guest.name.charAt(0)}
+                                    <div className={cn(
+                                        "h-10 w-10 rounded-full flex items-center justify-center font-bold text-xs ring-2 ring-white shadow-sm",
+                                        guest.priority === 'A' ? "bg-red-100 text-red-700" :
+                                            guest.priority === 'C' ? "bg-gray-100 text-gray-600" : "bg-blue-50 text-blue-600"
+                                    )}>
+                                        {guest.priority || 'B'}
                                     </div>
                                     <div>
                                         <p className="font-medium text-foreground">{guest.name}</p>
@@ -201,6 +243,7 @@ export default function GuestPage() {
                                 <tr>
                                     <th className="px-6 py-4 w-1/4">Guest Name</th>
                                     <th className="px-6 py-4">Group</th>
+                                    <th className="px-6 py-4">Priority</th>
                                     <th className="px-6 py-4">Status</th>
                                     <th className="px-6 py-4">Meal Choice</th>
                                     <th className="px-6 py-4">Seating</th>
@@ -209,7 +252,7 @@ export default function GuestPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
-                                {guests.map((guest) => (
+                                {sortedGuests.map((guest) => (
                                     <tr key={guest.id} className="hover:bg-muted/30 transition-colors">
                                         <td className="px-6 py-4 font-medium text-foreground">
                                             <div className="flex items-center gap-3">
@@ -220,6 +263,15 @@ export default function GuestPage() {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-muted-foreground">{guest.group_category || '-'}</td>
+                                        <td className="px-6 py-4">
+                                            <span className={cn(
+                                                "inline-flex items-center rounded px-2 py-0.5 text-xs font-bold",
+                                                guest.priority === 'A' ? "bg-red-100 text-red-700" :
+                                                    guest.priority === 'C' ? "bg-gray-100 text-gray-600" : "bg-blue-50 text-blue-700"
+                                            )}>
+                                                {guest.priority || 'B'}
+                                            </span>
+                                        </td>
                                         <td className="px-6 py-4">
                                             <span className={cn(
                                                 "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",

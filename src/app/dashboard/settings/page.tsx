@@ -13,6 +13,7 @@ type WeddingData = {
     wedding_date: string;
     location?: string;
     currency?: string;
+    target_guest_count?: number; // Added
 };
 
 export default function SettingsPage() {
@@ -64,6 +65,7 @@ export default function SettingsPage() {
                 wedding_date: wedding.wedding_date,
                 location: wedding.location,
                 currency: wedding.currency,
+                target_guest_count: wedding.target_guest_count, // Added
             })
             .eq('id', wedding.id);
 
@@ -137,6 +139,21 @@ export default function SettingsPage() {
                                     className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                                     required
                                 />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Target Guest Count (Expected)
+                                </label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={wedding?.target_guest_count || ''}
+                                    onChange={(e) => setWedding(prev => prev ? { ...prev, target_guest_count: parseInt(e.target.value) || 0 } : null)}
+                                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                    placeholder="e.g. 150"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">This allows you to track your actual headcount vs your goal.</p>
                             </div>
 
                             <div>

@@ -8,6 +8,7 @@ type Guest = {
     id?: string;
     name: string;
     group_category: string;
+    priority: "A" | "B" | "C";
     rsvp_status: "accepted" | "declined" | "pending";
     meal_preference?: string;
     table_assignment?: string;
@@ -25,6 +26,7 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
     const [formData, setFormData] = useState<Guest>({
         name: "",
         group_category: "Bride Family",
+        priority: "B",
         rsvp_status: "pending",
         meal_preference: "",
         table_assignment: "",
@@ -39,6 +41,7 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
             setFormData({
                 name: "",
                 group_category: "Bride Family", // Match the first option in the select
+                priority: "B",
                 rsvp_status: "pending",
                 meal_preference: "",
                 table_assignment: "",
@@ -70,9 +73,9 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Name & Group */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
+                    {/* Name, Group, Priority */}
+                    <div className="grid grid-cols-12 gap-4">
+                        <div className="col-span-12">
                             <label className="text-sm font-medium text-foreground">Full Name</label>
                             <input
                                 required
@@ -83,7 +86,7 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
                                 placeholder="Jane Doe"
                             />
                         </div>
-                        <div>
+                        <div className="col-span-8">
                             <label className="text-sm font-medium text-foreground">Group</label>
                             <select
                                 value={formData.group_category}
@@ -96,6 +99,18 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
                                 <option value="Groom Friends">Groom Friends</option>
                                 <option value="Mutual">Mutual</option>
                                 <option value="Work">Work</option>
+                            </select>
+                        </div>
+                        <div className="col-span-4">
+                            <label className="text-sm font-medium text-foreground">Priority</label>
+                            <select
+                                value={formData.priority}
+                                onChange={(e) => setFormData({ ...formData, priority: e.target.value as "A" | "B" | "C" })}
+                                className="mt-1 block w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                            >
+                                <option value="A">A - Must</option>
+                                <option value="B">B - Standard</option>
+                                <option value="C">C - Backup</option>
                             </select>
                         </div>
                     </div>
