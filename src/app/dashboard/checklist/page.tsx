@@ -1,9 +1,9 @@
 "use client";
 
 import { useMode } from "@/context/mode-context";
-import { CheckCircle2, Circle, Clock, Plus, Edit2, CalendarDays, ListTodo } from "lucide-react";
+import { CheckCircle2, Circle, Plus, Edit2, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { supabase } from "@/lib/supabase";
 import { ChecklistDialog } from "@/components/dashboard/checklist-dialog";
 import { useSearchParams } from "next/navigation";
@@ -17,7 +17,7 @@ type ChecklistItem = {
     notes?: string;
 };
 
-export default function ChecklistPage() {
+function ChecklistContent() {
     const { mode } = useMode();
     const [items, setItems] = useState<ChecklistItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -280,5 +280,13 @@ export default function ChecklistPage() {
                 initialData={editingItem}
             />
         </div>
+    );
+}
+
+export default function ChecklistPage() {
+    return (
+        <Suspense fallback={<div className="p-10 text-center text-muted-foreground">Loading checklist...</div>}>
+            <ChecklistContent />
+        </Suspense>
     );
 }
