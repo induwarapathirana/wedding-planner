@@ -3,8 +3,10 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import { Save, ArrowLeft } from "lucide-react";
+import { Save, ArrowLeft, Trash2, UserPlus, X } from "lucide-react";
 import Link from "next/link";
+import { PayHereButton } from "@/components/payhere-button";
+import { CollaboratorManager } from "@/components/dashboard/collaborator-manager";
 
 type WeddingData = {
     id: string;
