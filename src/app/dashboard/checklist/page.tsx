@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { ChecklistDialog } from "@/components/dashboard/checklist-dialog";
 import { useSearchParams } from "next/navigation";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
+import { LimitModal } from "@/components/dashboard/limit-modal";
 
 type ChecklistItem = {
     id: string;
@@ -24,6 +25,7 @@ function ChecklistContent() {
     const [loading, setLoading] = useState(true);
     const [weddingId, setWeddingId] = useState<string | null>(null);
     const [tier, setTier] = useState<PlanTier>('free');
+    const [showLimitModal, setShowLimitModal] = useState(false); // Added state
     const searchParams = useSearchParams();
 
     // Dialog State
