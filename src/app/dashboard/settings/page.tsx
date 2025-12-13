@@ -279,14 +279,13 @@ export default function SettingsPage() {
                         </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Team Side Column */}
-            <div className="lg:col-span-1">
-                <TeamMembers weddingId={wedding?.id || ''} tier={wedding?.tier || 'free'} />
+                {/* Team Side Column */}
+                <div className="lg:col-span-1">
+                    <TeamMembers weddingId={wedding?.id || ''} tier={wedding?.tier || 'free'} />
+                </div>
             </div>
         </div>
-        </div >
     );
 }
 
