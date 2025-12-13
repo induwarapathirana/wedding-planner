@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ChecklistDialog } from "@/components/dashboard/checklist-dialog";
+import { useSearchParams } from "next/navigation";
 
 type ChecklistItem = {
     id: string;
@@ -21,12 +22,18 @@ export default function ChecklistPage() {
     const [items, setItems] = useState<ChecklistItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [weddingId, setWeddingId] = useState<string | null>(null);
+    const searchParams = useSearchParams();
 
     // Dialog State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<ChecklistItem | null>(null);
 
     useEffect(() => {
+        // Auto-open dialog if ?new=true
+        if (searchParams.get('new') === 'true') {
+            setIsDialogOpen(true);
+        }
+
         async function loadData() {
             setLoading(true);
             const wId = localStorage.getItem("current_wedding_id");
@@ -49,7 +56,7 @@ export default function ChecklistPage() {
             }
         }
         loadData();
-    }, []);
+    }, [searchParams]);
 
     async function fetchItems(wId: string) {
         const { data } = await supabase.from('checklist_items').select('*').eq('wedding_id', wId).order('due_date', { ascending: true });

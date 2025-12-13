@@ -13,7 +13,8 @@ type WeddingData = {
     wedding_date: string;
     location?: string;
     currency?: string;
-    target_guest_count?: number; // Added
+    target_guest_count?: number;
+    estimated_budget?: number; // Added
 };
 
 export default function SettingsPage() {
@@ -65,7 +66,8 @@ export default function SettingsPage() {
                 wedding_date: wedding.wedding_date,
                 location: wedding.location,
                 currency: wedding.currency,
-                target_guest_count: wedding.target_guest_count, // Added
+                target_guest_count: wedding.target_guest_count,
+                estimated_budget: wedding.estimated_budget, // Added
             })
             .eq('id', wedding.id);
 
@@ -154,6 +156,22 @@ export default function SettingsPage() {
                                     placeholder="e.g. 150"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">This allows you to track your actual headcount vs your goal.</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Estimated Total Budget
+                                </label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={wedding?.estimated_budget || ''}
+                                    onChange={(e) => setWedding(prev => prev ? { ...prev, estimated_budget: parseFloat(e.target.value) || 0 } : null)}
+                                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                    placeholder="e.g. 20000"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Your total spending goal for the wedding.</p>
                             </div>
 
                             <div>

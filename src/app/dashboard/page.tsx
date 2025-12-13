@@ -11,6 +11,8 @@ type WeddingData = {
     couple_name_2: string;
     wedding_date: string;
     currency?: string;
+    target_guest_count?: number;
+    estimated_budget?: number;
 };
 
 export default function DashboardPage() {
@@ -18,7 +20,9 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
         guestCount: 0,
+        targetGuest: 0,
         totalBudget: 0,
+        estBudget: 0,
         currency: 'USD'
     });
     const [inviteCode, setInviteCode] = useState("");
@@ -60,13 +64,15 @@ export default function DashboardPage() {
 
                         setStats({
                             guestCount,
+                            targetGuest: weddingData.target_guest_count || 0,
                             totalBudget,
+                            estBudget: weddingData.estimated_budget || 0,
                             currency: (weddingData as WeddingData).currency || 'USD'
                         });
                     } catch (err) {
                         console.error("Dashboard Stats Error:", err);
                         // Fallback to basic stats
-                        setStats({ guestCount: 0, totalBudget: 0, currency: 'USD' });
+                        setStats({ guestCount: 0, targetGuest: 0, totalBudget: 0, estBudget: 0, currency: 'USD' });
                     }
                 }
             }
@@ -138,22 +144,39 @@ export default function DashboardPage() {
                     </h2>
                     <p className="mt-1 text-muted-foreground">Here is what is happening with your wedding.</p>
                 </div>
-                <button className="rounded-xl bg-primary px-6 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all">
-                    + New Task
+                <button
+                    onClick={() => router.push('/dashboard/checklist?new=true')}
+                    className="rounded-xl bg-primary px-6 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all"
+                >
+                    + Add to Checklist
                 </button>
             </div>
 
             {/* Content Placeholder */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                 <div className="h-40 rounded-2xl border border-border bg-white p-6 shadow-sm">
-                    <h3 className="font-medium text-foreground">Total Budget</h3>
+                    <h3 className="font-medium text-foreground">Budget (Actual / Est.)</h3>
                     <p className="mt-2 text-2xl font-bold text-primary">
-                        {stats.currency} {stats.totalBudget.toLocaleString()}
+                        {stats.currency} {stats.totalBudget.toLocaleString()} <span className="text-muted-foreground text-lg font-normal">/ {stats.estBudget.toLocaleString()}</span>
                     </p>
+                    <div className="mt-3 h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                            className="h-full bg-primary rounded-full transition-all"
+                            style={{ width: `${stats.estBudget > 0 ? Math.min((stats.totalBudget / stats.estBudget) * 100, 100) : 0}%` }}
+                        />
+                    </div>
                 </div>
                 <div className="h-40 rounded-2xl border border-border bg-white p-6 shadow-sm">
-                    <h3 className="font-medium text-foreground">Guest Count</h3>
-                    <p className="mt-2 text-2xl font-bold text-secondary-foreground">{stats.guestCount}</p>
+                    <h3 className="font-medium text-foreground">Guest Count (Confirmed / Target)</h3>
+                    <p className="mt-2 text-2xl font-bold text-secondary-foreground">
+                        {stats.guestCount} <span className="text-muted-foreground text-lg font-normal">/ {stats.targetGuest}</span>
+                    </p>
+                    <div className="mt-3 h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                            className="h-full bg-secondary-foreground rounded-full transition-all"
+                            style={{ width: `${stats.targetGuest > 0 ? Math.min((stats.guestCount / stats.targetGuest) * 100, 100) : 0}%` }}
+                        />
+                    </div>
                 </div>
                 <div className="h-40 rounded-2xl border border-border bg-white p-6 shadow-sm">
                     <h3 className="font-medium text-foreground">Days to Go</h3>
