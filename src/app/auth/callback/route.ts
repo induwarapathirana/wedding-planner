@@ -30,25 +30,8 @@ export async function GET(request: NextRequest) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
 
         if (!error) {
-            // Check if user has a wedding (onboarding check)
-            const { data: { user } } = await supabase.auth.getUser();
-
-            if (user) {
-                // Check if the user is a collaborator on any wedding
-                const { data: collaborator } = await supabase
-                    .from('collaborators')
-                    .select('wedding_id')
-                    .eq('user_id', user.id)
-                    .maybeSingle();
-
-                if (collaborator) {
-                    return NextResponse.redirect(`${requestUrl.origin}/dashboard`);
-                } else {
-                    // New user (no wedding) -> Onboarding
-                    return NextResponse.redirect(`${requestUrl.origin}/onboarding`);
-                }
-            }
-
+            // We redirect everyone to the dashboard (or 'next' param).
+            // The dashboard page handles the empty state (Create vs Join).
             return NextResponse.redirect(`${requestUrl.origin}${next}`);
         }
     }
