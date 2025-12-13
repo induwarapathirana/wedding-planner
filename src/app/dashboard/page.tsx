@@ -95,22 +95,31 @@ export default function DashboardPage() {
                     + Create Your Wedding
                 </button>
 
-                <div className="pt-8 w-full max-w-xs mx-auto border-t border-gray-100">
-                    <p className="text-sm text-gray-500 mb-3">Have an invitation code?</p>
+                <div className="pt-8 w-full max-w-sm mx-auto border-t border-gray-100">
+                    <p className="text-sm font-medium text-gray-900 mb-4">Collaborate on a Wedding?</p>
                     <div className="flex gap-2">
                         <input
                             type="text"
-                            placeholder="Enter code"
+                            placeholder="Paste Invitation Code"
                             value={inviteCode}
                             onChange={(e) => setInviteCode(e.target.value)}
-                            className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                            className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-primary/20 outline-none shadow-sm"
                         />
                         <button
-                            disabled={!inviteCode}
-                            onClick={() => router.push(`/invite/${inviteCode}`)}
-                            className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
+                            disabled={!inviteCode || loading}
+                            onClick={async () => {
+                                setLoading(true);
+                                const { data, error } = await supabase.rpc('accept_invitation', { lookup_token: inviteCode });
+                                if (error || (data && data.error)) {
+                                    alert(error?.message || "Invalid Code");
+                                    setLoading(false);
+                                } else {
+                                    window.location.reload(); // Reload to fetch wedding
+                                }
+                            }}
+                            className="px-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-800 disabled:opacity-50 transition-all shadow-sm"
                         >
-                            Join
+                            {loading && inviteCode ? "Joining..." : "Join"}
                         </button>
                     </div>
                 </div>

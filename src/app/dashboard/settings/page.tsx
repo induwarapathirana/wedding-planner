@@ -312,17 +312,44 @@ function TeamMembers({ weddingId }: { weddingId: string }) {
                         disabled={sending}
                         className="w-full py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
                     >
-                        {sending ? "Creating Link..." : "Create Invitation Link"}
+                        {sending ? "Generating Code..." : "Generate Invitation Code"}
                     </button>
                 </form>
 
                 {generatedLink && (
-                    <div className="mt-4 p-3 bg-green-50 border border-green-100 rounded-lg">
-                        <p className="text-xs text-green-800 font-medium mb-1">Invitation Created!</p>
-                        <div className="text-xs text-gray-600 break-all bg-white p-2 rounded border border-green-100 select-all">
-                            {generatedLink}
-                        </div>
-                        <p className="text-[10px] text-gray-500 mt-1">Share this link with them.</p>
+                    <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-lg">
+                        <p className="text-xs text-green-800 font-medium mb-2">Invitation Code Generated!</p>
+                        <p className="text-xs text-gray-500 mb-2">Copy and send this to <strong>{inviteEmail}</strong>:</p>
+                        <textarea
+                            readOnly
+                            className="w-full text-xs text-gray-700 bg-white p-3 rounded border border-green-200 focus:outline-none resize-none h-32"
+                            value={
+                                `You are invited to collaborate on our wedding plan!
+
+1. Log in to Vow & Venue
+2. On the dashboard, find "Collaboration" or "Join Wedding"
+3. Enter this Invitation Code:
+${generatedLink.split('/').pop()}
+
+See you there!`}
+                        />
+                        <button
+                            onClick={() => {
+                                navigator.clipboard.writeText(
+                                    `You are invited to collaborate on our wedding plan!
+
+1. Log in to Vow & Venue
+2. On the dashboard, find "Collaboration" or "Join Wedding"
+3. Enter this Invitation Code:
+${generatedLink.split('/').pop()}
+
+See you there!`);
+                                alert("Copied to clipboard!");
+                            }}
+                            className="mt-2 text-xs text-green-700 hover:text-green-900 font-medium"
+                        >
+                            Copy Instructions
+                        </button>
                     </div>
                 )}
             </div>
