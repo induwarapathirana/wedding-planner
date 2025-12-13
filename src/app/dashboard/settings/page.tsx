@@ -200,6 +200,7 @@ function TeamMembers({ weddingId }: { weddingId: string }) {
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
     const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
     useEffect(() => {
         if (weddingId) fetchData();
@@ -207,10 +208,16 @@ function TeamMembers({ weddingId }: { weddingId: string }) {
 
     const fetchData = async () => {
         setLoading(true);
+
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+        setCurrentUserId(user?.id || null);
+
         // Fetch Collaborators
         const { data: collaData } = await supabase
             .from('collaborators')
             .select(`
+                user_id,
                 role,
                 profiles (email, full_name, avatar_url)
             `)
@@ -228,6 +235,8 @@ function TeamMembers({ weddingId }: { weddingId: string }) {
         if (inviteData) setInvitations(inviteData);
         setLoading(false);
     };
+
+    const isCurrentUserOwner = collaborators.find(c => c.user_id === currentUserId)?.role === 'owner';
 
     const handleInvite = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -251,7 +260,7 @@ function TeamMembers({ weddingId }: { weddingId: string }) {
         } else {
             setGeneratedLink(`${window.location.origin}/invite/${token}`);
             setInviteEmail("");
-            fetchData();
+            fetchData(); // Refresh to show in pending if needed
         }
         setSending(false);
     };
@@ -260,6 +269,23 @@ function TeamMembers({ weddingId }: { weddingId: string }) {
         if (!confirm("Revoke this invitation?")) return;
         await supabase.from('invitations').delete().eq('id', id);
         fetchData();
+    };
+
+    const handleRemoveMember = async (userId: string) => {
+        if (!confirm("Are you sure you want to remove this person from the team?")) return;
+
+        const { error } = await supabase
+            .from('collaborators')
+            .delete()
+            .eq('wedding_id', weddingId)
+            .eq('user_id', userId);
+
+        if (error) {
+            console.error(error);
+            alert("Failed to remove member. Ensure you are an owner.");
+        } else {
+            fetchData();
+        }
     };
 
     if (loading) return <div className="text-sm text-gray-500">Loading team...</div>;
@@ -325,21 +351,32 @@ function TeamMembers({ weddingId }: { weddingId: string }) {
                 <h3 className="font-bold text-gray-900 mb-3 text-sm">Team Members</h3>
                 <div className="space-y-4">
                     {collaborators.map((member, i) => (
-                        <div key={i} className="flex items-center gap-3">
+                        <div key={i} className="flex items-center gap-3 group">
                             <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
                                 {member.profiles?.full_name?.[0] || member.profiles?.email?.[0] || '?'}
                             </div>
                             <div className="overflow-hidden">
                                 <p className="text-sm font-medium text-gray-900 truncate">
-                                    {member.profiles?.full_name || 'User'}
+                                    {member.profiles?.full_name || 'User'} {member.user_id === currentUserId && "(You)"}
                                 </p>
                                 <p className="text-xs text-gray-500 truncate">
                                     {member.profiles?.email}
                                 </p>
                             </div>
-                            <span className="ml-auto text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full capitalize">
-                                {member.role}
-                            </span>
+                            <div className="ml-auto flex items-center gap-2">
+                                <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full capitalize">
+                                    {member.role}
+                                </span>
+                                {isCurrentUserOwner && member.user_id !== currentUserId && (
+                                    <button
+                                        onClick={() => handleRemoveMember(member.user_id)}
+                                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                                        title="Remove Member"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     ))}
                 </div>
