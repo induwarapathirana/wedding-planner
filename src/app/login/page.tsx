@@ -75,10 +75,19 @@ export default function LoginPage() {
     //Google OAuth
     const handleGoogleSignIn = async () => {
         setLoading(true);
+
+        const params = new URLSearchParams(window.location.search);
+        const inviteToken = params.get('invite_token') || localStorage.getItem('pending_invite_token');
+
+        let redirectUrl = `${window.location.origin}/auth/callback`;
+        if (inviteToken) {
+            redirectUrl += `?invite_token=${inviteToken}`;
+        }
+
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: `${window.location.origin}/auth/callback`,
+                redirectTo: redirectUrl,
             },
         });
 
