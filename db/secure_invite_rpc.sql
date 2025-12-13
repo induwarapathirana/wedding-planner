@@ -47,12 +47,34 @@ begin
      return json_build_object('success', true, 'wedding_id', invite_record.wedding_id);
   end if;
 
-  -- 5. Add to collaborators
+  -- 5. CHECK LIMITS (New: Enforce 5 Collaborators for Free Tier)
+  declare
+    current_count integer;
+    wedding_tier text;
+    limit_count integer;
+  begin
+    -- Get current count and tier
+    select count(*) into current_count from collaborators where wedding_id = invite_record.wedding_id;
+    select tier into wedding_tier from weddings where id = invite_record.wedding_id;
+    
+    -- Define Limit (5 for Free, Infinity/Null for Premium)
+    if wedding_tier = 'free' then
+        limit_count := 5;
+    else
+        limit_count := 9999; -- Premium
+    end if;
+
+    if current_count >= limit_count then
+        raise exception 'Collaborator limit reached for this plan. Please upgrade to add more team members.';
+    end if;
+  end;
+
+  -- 6. Add to collaborators
   insert into collaborators (wedding_id, user_id, role)
   values (invite_record.wedding_id, auth.uid(), invite_record.role)
   returning wedding_id into new_wedding_id;
 
-  -- 6. Update invitation status
+  -- 7. Update invitation status
   update invitations 
   set status = 'accepted' 
   where id = invite_record.id;
