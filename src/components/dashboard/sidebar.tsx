@@ -29,7 +29,7 @@ const navItems = [
     { name: "Itinerary", href: "/dashboard/itinerary", icon: CalendarDays },
 ];
 
-export function Sidebar() {
+export function Sidebar({ onClose }: { onClose?: () => void }) {
     const pathname = usePathname();
     const router = useRouter();
     const [hasWeddings, setHasWeddings] = useState(false);
@@ -60,18 +60,20 @@ export function Sidebar() {
     }
 
     return (
-        <aside className="fixed left-0 top-0 z-40 h-screen w-72 border-r border-border bg-white/50 backdrop-blur-xl">
+        <aside className="h-full w-full border-r border-border bg-white/50 backdrop-blur-xl">
             <div className="flex h-full flex-col px-6 py-8">
                 {/* Brand */}
-                <div className="mb-10 flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
-                        <span className="font-serif text-xl font-bold">V</span>
-                    </div>
-                    <div>
-                        <h1 className="font-serif text-xl font-bold text-foreground">
-                            Vow & Venue
-                        </h1>
-                        <p className="text-xs text-muted-foreground">Planning made perfect</p>
+                <div className="mb-10 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
+                            <span className="font-serif text-xl font-bold">V</span>
+                        </div>
+                        <div>
+                            <h1 className="font-serif text-xl font-bold text-foreground">
+                                Vow & Venue
+                            </h1>
+                            <p className="text-xs text-muted-foreground">Planning made perfect</p>
+                        </div>
                     </div>
                 </div>
 
@@ -86,13 +88,14 @@ export function Sidebar() {
                 </div>
 
                 {/* Navigation */}
-                <nav className="flex-1 space-y-1">
+                <nav className="flex-1 space-y-1 overflow-y-auto">
                     {hasWeddings && navItems.map((item) => {
                         const isActive = pathname === item.href;
                         return (
                             <Link
                                 key={item.href}
                                 href={item.href}
+                                onClick={onClose}
                                 className={cn(
                                     "group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-300",
                                     isActive
@@ -113,10 +116,11 @@ export function Sidebar() {
                 </nav>
 
                 {/* Footer / User */}
-                <div className="border-t border-border pt-6">
+                <div className="border-t border-border pt-6 mt-auto">
                     {hasWeddings && (
                         <Link
                             href="/dashboard/settings"
+                            onClick={onClose}
                             className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                         >
                             <Settings className="h-5 w-5" />
