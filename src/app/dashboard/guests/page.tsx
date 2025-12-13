@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { GuestDialog } from "@/components/dashboard/guest-dialog";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
+import { LimitModal } from "@/components/dashboard/limit-modal";
 
 type Guest = {
     id: string; // Changed to string for UUID
@@ -24,6 +25,7 @@ export default function GuestPage() {
     const [guests, setGuests] = useState<Guest[]>([]);
     const [targetCount, setTargetCount] = useState(0);
     const [tier, setTier] = useState<PlanTier>('free');
+    const [showLimitModal, setShowLimitModal] = useState(false); // Added state
     const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState<"name" | "priority" | "status">("priority");
 
