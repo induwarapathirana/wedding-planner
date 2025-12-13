@@ -24,7 +24,7 @@ interface GuestDialogProps {
 export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDialogProps) {
     const [formData, setFormData] = useState<Guest>({
         name: "",
-        group_category: "Friends",
+        group_category: "Bride Family",
         rsvp_status: "pending",
         meal_preference: "",
         table_assignment: "",
@@ -38,7 +38,7 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
         } else {
             setFormData({
                 name: "",
-                group_category: "Friends",
+                group_category: "Bride Family", // Match the first option in the select
                 rsvp_status: "pending",
                 meal_preference: "",
                 table_assignment: "",

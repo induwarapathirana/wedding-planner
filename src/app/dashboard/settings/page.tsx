@@ -237,6 +237,7 @@ function TeamMembers({ weddingId }: { weddingId: string }) {
     };
 
     const isCurrentUserOwner = collaborators.find(c => c.user_id === currentUserId)?.role === 'owner';
+    console.log("DEBUG TEAM:", { currentUserId, isCurrentUserOwner, collaborators });
 
     const handleInvite = async (e: React.FormEvent) => {
         e.preventDefault();
