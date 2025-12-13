@@ -8,9 +8,19 @@ import { supabase } from "@/lib/supabase";
 import { BudgetDialog } from "@/components/dashboard/budget-dialog";
 import { CURRENCIES } from "@/lib/constants";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
-import { LimitModal } from "@/components/dashboard/limit-modal"; // Added import
+import { LimitModal } from "@/components/dashboard/limit-modal";
 
-// ...
+type BudgetItem = {
+    id: string;
+    category: string;
+    item_name: string;
+    estimated_cost: number;
+    actual_cost: number;
+    paid_amount: number;
+    due_date?: string;
+    is_paid: boolean;
+    notes?: string;
+};
 
 export default function BudgetPage() {
     const { mode } = useMode();
