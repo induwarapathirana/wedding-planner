@@ -240,7 +240,7 @@ export default function SettingsPage() {
                                     <PayHereButton
                                         orderId={`ORDER_${wedding?.id}_${Date.now()}`}
                                         items="Wedding Planner Premium"
-                                        amount={1990.00}
+                                        amount={99}
                                         currency="LKR"
                                         first_name={wedding?.couple_name_1.split(' ')[0] || 'User'}
                                         last_name={wedding?.couple_name_1.split(' ')[1] || 'Name'}
