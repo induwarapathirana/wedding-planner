@@ -2,12 +2,12 @@ export type PlanTier = 'free' | 'premium';
 
 export const PLAN_LIMITS = {
     free: {
-        guests: 10,
-        budget_items: 3,
-        vendors: 3,
-        events: 2, // Itinerary/Timeline
-        checklist_items: 3,
-        collaborators: 0
+        guests: 1000,
+        budget_items: 100,
+        vendors: 300,
+        events: 200, // Itinerary/Timeline
+        checklist_items: 3000,
+        collaborators: 5
     },
     premium: {
         guests: Infinity,
