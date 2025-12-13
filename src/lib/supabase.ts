@@ -10,7 +10,7 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_A
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
-        flowType: 'implicit',
+        flowType: 'pkce',
         storage: cookieStorage,
         detectSessionInUrl: true,
         persistSession: true,
