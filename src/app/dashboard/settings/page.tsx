@@ -229,7 +229,7 @@ export default function SettingsPage() {
                                 <div>
                                     <div className="flex items-center gap-2">
                                         <h3 className="font-medium text-purple-900">Current Plan: {wedding?.tier === 'premium' ? 'Premium' : 'Free'}</h3>
-                                        {wedding?.tier === 'premium' && <Badge className="bg-purple-200 text-purple-700">Active</Badge>}
+                                        {wedding?.tier === 'premium' && <span className="bg-purple-200 text-purple-700 px-2 py-0.5 rounded-full text-xs font-medium">Active</span>}
                                     </div>
                                     <p className="text-sm text-purple-700 mt-1">
                                         {wedding?.tier === 'premium'
