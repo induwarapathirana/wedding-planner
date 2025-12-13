@@ -8,18 +8,9 @@ import { supabase } from "@/lib/supabase";
 import { BudgetDialog } from "@/components/dashboard/budget-dialog";
 import { CURRENCIES } from "@/lib/constants";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
+import { LimitModal } from "@/components/dashboard/limit-modal"; // Added import
 
-type BudgetItem = {
-    id: string;
-    category: string;
-    item_name: string;
-    estimated_cost: number;
-    actual_cost: number;
-    paid_amount: number;
-    due_date?: string;
-    is_paid: boolean;
-    notes?: string;
-};
+// ...
 
 export default function BudgetPage() {
     const { mode } = useMode();
@@ -28,6 +19,7 @@ export default function BudgetPage() {
     const [currency, setCurrency] = useState("USD");
     const [weddingId, setWeddingId] = useState<string | null>(null);
     const [tier, setTier] = useState<PlanTier>('free');
+    const [showLimitModal, setShowLimitModal] = useState(false); // Added state
 
     // Dialog State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
