@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from 'react';
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { Save, ArrowLeft, Trash2, UserPlus, X } from "lucide-react";
@@ -223,17 +223,18 @@ export default function SettingsPage() {
 
                     {/* Subscription Section */}
                     <div className="bg-white rounded-2xl border border-border overflow-hidden">
-                        <div className="px-6 py-4 border-b border-border">
-                            <h3 className="font-serif text-lg font-semibold text-foreground">Subscription Plan</h3>
-                        </div>
-                        <div className="p-6">
-                            <div className="flex items-center justify-between">
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Subscription Plan</h2>
+                            <div className="flex items-center justify-between p-4 bg-purple-50 rounded-xl border border-purple-100">
                                 <div>
-                                    <p className="font-medium text-foreground">
-                                        Current Plan: <span className="uppercase text-primary font-bold">{wedding?.tier || 'free'}</span>
-                                    </p>
-                                    <p className="text-sm text-muted-foreground mt-1">
-                                        {wedding?.tier === 'premium' ? "You have unlocked all features!" : "Upgrade to unlock unlimited guests, items, and team collaboration."}
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="font-medium text-purple-900">Current Plan: {wedding?.tier === 'premium' ? 'Premium' : 'Free'}</h3>
+                                        {wedding?.tier === 'premium' && <Badge className="bg-purple-200 text-purple-700">Active</Badge>}
+                                    </div>
+                                    <p className="text-sm text-purple-700 mt-1">
+                                        {wedding?.tier === 'premium'
+                                            ? "You have access to all premium features."
+                                            : "Upgrade to unlock unlimited guests, budget items, and more."}
                                     </p>
                                 </div>
                                 {wedding?.tier !== 'premium' && (
@@ -244,42 +245,48 @@ export default function SettingsPage() {
                                         currency="LKR"
                                         first_name={wedding?.couple_name_1.split(' ')[0] || 'User'}
                                         last_name={wedding?.couple_name_1.split(' ')[1] || 'Name'}
-                                        email="user@example.com"
+                                        email="user@example.com" // Todo: Get real email
                                         phone="0771234567"
-                                        address={wedding?.location || "Colombo"}
+                                        address="123, Main Street"
                                         city="Colombo"
                                         country="Sri Lanka"
-                                        className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-6 py-2.5 rounded-xl font-medium shadow-lg shadow-orange-500/20 hover:shadow-orange-500/40 transition-all hover:-translate-y-0.5"
+                                        className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors"
                                     >
-                                        Upgrade to Premium (LKR 1,990)
+                                        Upgrade for 99 LKR
                                     </PayHereButton>
                                 )}
                             </div>
                         </div>
-                    </div>
 
-                    <div className="bg-red-50 rounded-2xl border border-red-100 overflow-hidden">
-                        <div className="px-6 py-4 border-b border-red-100 bg-red-50/50">
-                            <h3 className="font-serif text-lg font-semibold text-red-700">Danger Zone</h3>
-                        </div>
-                        <div className="p-6">
-                            <p className="text-sm text-red-600 mb-4">Once you delete your wedding, there is no going back. Please be certain.</p>
-                            {/* Assuming the delete button code is here, simplified for this replace chunk context if needed, but best to leave unchanged if not touching it. Since I replaced a huge chunk including it, I need to make sure I put it back or use a different strategy.
-                             Wait, I replaced almost the whole file content in my `ReplacementContent` block above. I should be careful. 
-                             The `ReplacementContent` above is huge and might overwrite things I don't see.
-                             I should target smaller blocks or be very precise.
-                             I will cancel this big replacement and do smaller targeted replacements.
-                             */}
+                        {/* Danger Zone */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-6">
+                            <h2 className="text-lg font-semibold text-red-900 mb-4">Danger Zone</h2>
+                            <div className="p-4 bg-red-50 rounded-xl border border-red-100 flex items-center justify-between">
+                                <div>
+                                    <h3 className="font-medium text-red-900">Delete Wedding</h3>
+                                    <p className="text-sm text-red-700 mt-1">
+                                        Permanently delete this wedding and all associated data. This action cannot be undone.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={handleDeleteWedding}
+                                    disabled={isDeleting}
+                                    className="px-4 py-2 bg-white border border-red-200 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors"
+                                >
+                                    {isDeleting ? "Deleting..." : "Delete Wedding"}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-
-                {/* Team Side Column */}
-                <div className="lg:col-span-1">
-                    <TeamMembers weddingId={wedding?.id || ''} tier={wedding?.tier || 'free'} />
                 </div>
             </div>
+
+            {/* Team Side Column */}
+            <div className="lg:col-span-1">
+                <TeamMembers weddingId={wedding?.id || ''} tier={wedding?.tier || 'free'} />
+            </div>
         </div>
+        </div >
     );
 }
 
