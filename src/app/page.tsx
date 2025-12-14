@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { ArrowRight, Heart } from "lucide-react";
+import { HowToGuide } from "@/components/HowToGuide";
 
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col items-center bg-background px-4 pb-16 pt-20 text-center">
+      <HowToGuide />
+
       <div className="relative mb-8 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
         <Heart className="h-10 w-10 fill-current" />
       </div>
@@ -52,14 +55,14 @@ export default function Home() {
                 “Vow & Venue felt like having a calm wedding planner in our pocket. The guest list tools kept everyone on track and
                 we never missed a detail.”
               </p>
-              <footer className="mt-3 text-sm font-semibold text-primary">— Jovis & Nelini, Colombo</footer>
+              <footer className="mt-3 text-sm font-semibold text-primary">— Priya & Arjun, Napa Valley</footer>
             </blockquote>
             <blockquote className="rounded-xl border border-border bg-white/60 p-5 shadow-sm">
               <p className="text-base leading-relaxed text-foreground">
-                “The timeline builder and Checklist turned planning from stressful to effortless. Our vendors were impressed with
+                “The timeline builder and reminders turned planning from stressful to effortless. Our vendors were impressed with
                 how organized everything was.”
               </p>
-              <footer className="mt-3 text-sm font-semibold text-foreground">— Subashi & Dimal, Galle</footer>
+              <footer className="mt-3 text-sm font-semibold text-foreground">— Elena & Marco, Lake Como</footer>
             </blockquote>
             <blockquote className="rounded-xl border border-border bg-white/60 p-5 shadow-sm">
               <p className="text-base leading-relaxed text-foreground">
