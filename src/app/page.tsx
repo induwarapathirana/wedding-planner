@@ -5,8 +5,6 @@ import { HowToGuide } from "@/components/HowToGuide";
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col items-center bg-background px-4 pb-16 pt-20 text-center">
-      <HowToGuide />
-
       <div className="relative mb-8 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
         <Heart className="h-10 w-10 fill-current" />
       </div>
