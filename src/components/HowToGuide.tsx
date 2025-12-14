@@ -106,12 +106,13 @@ export function HowToGuide() {
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 py-10 backdrop-blur-sm">
-          <div className="relative w-full max-w-4xl rounded-3xl bg-white/95 p-8 shadow-2xl ring-1 ring-border">
-            <button
-              type="button"
-              onClick={() => {
-                setFocusedRoute(null);
-                setOpen(false);
+          <div className="relative w-full max-w-4xl overflow-hidden rounded-3xl bg-white/95 shadow-2xl ring-1 ring-border">
+            <div className="max-h-[80vh] overflow-y-auto p-8">
+              <button
+                type="button"
+                onClick={() => {
+                  setFocusedRoute(null);
+                  setOpen(false);
               }}
               className="absolute right-4 top-4 rounded-full p-2 text-muted-foreground transition hover:bg-muted"
               aria-label="Close how-to guide"
@@ -136,7 +137,7 @@ export function HowToGuide() {
               </div>
             </div>
 
-            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            <div className="mt-8 grid max-h-[70vh] gap-4 overflow-y-auto pr-1 sm:grid-cols-2">
               {guideItems.map((item) => {
                 const isActive = matchesRoute(focusedRoute ?? pathname, item.route);
                 return (
@@ -176,6 +177,7 @@ export function HowToGuide() {
                   </button>
                 );
               })}
+            </div>
             </div>
           </div>
         </div>
