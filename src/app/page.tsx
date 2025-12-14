@@ -52,21 +52,21 @@ export default function Home() {
                 “Vow & Venue felt like having a calm wedding planner in our pocket. The guest list tools kept everyone on track and
                 we never missed a detail.”
               </p>
-              <footer className="mt-3 text-sm font-semibold text-primary">— Priya & Arjun, Napa Valley</footer>
+              <footer className="mt-3 text-sm font-semibold text-primary">— Jovis & Nelini, Colombo</footer>
             </blockquote>
             <blockquote className="rounded-xl border border-border bg-white/60 p-5 shadow-sm">
               <p className="text-base leading-relaxed text-foreground">
-                “The timeline builder and reminders turned planning from stressful to effortless. Our vendors were impressed with
+                “The timeline builder and Checklist turned planning from stressful to effortless. Our vendors were impressed with
                 how organized everything was.”
               </p>
-              <footer className="mt-3 text-sm font-semibold text-foreground">— Elena & Marco, Lake Como</footer>
+              <footer className="mt-3 text-sm font-semibold text-foreground">— Subashi & Dimal, Galle</footer>
             </blockquote>
             <blockquote className="rounded-xl border border-border bg-white/60 p-5 shadow-sm">
               <p className="text-base leading-relaxed text-foreground">
                 “We loved personalizing every detail together. Vow & Venue kept our budget honest and our families informed without
                 endless spreadsheets.”
               </p>
-              <footer className="mt-3 text-sm font-semibold text-foreground">— Tasha & Morgan, Charleston</footer>
+              <footer className="mt-3 text-sm font-semibold text-foreground">— Tasha & Kamil, Colombo</footer>
             </blockquote>
           </div>
         </div>
