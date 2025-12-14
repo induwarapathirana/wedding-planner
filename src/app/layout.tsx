@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit, Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
+import { HowToGuide } from "@/components/HowToGuide";
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -28,6 +29,7 @@ export default function RootLayout({
       <body
         className={`${outfit.variable} ${cormorant.variable} antialiased`}
       >
+        <HowToGuide />
         {children}
       </body>
     </html>
