@@ -12,7 +12,7 @@ type Guest = {
     rsvp_status: "accepted" | "declined" | "pending";
     meal_preference?: string;
     table_assignment?: string;
-    plus_one: boolean;
+    companion_guest_count: number;
 };
 
 interface GuestDialogProps {
@@ -30,22 +30,25 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
         rsvp_status: "pending",
         meal_preference: "",
         table_assignment: "",
-        plus_one: false,
+        companion_guest_count: 0,
     });
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         if (initialData) {
-            setFormData(initialData);
+            setFormData({
+                ...initialData,
+                companion_guest_count: initialData.companion_guest_count || 0
+            });
         } else {
             setFormData({
                 name: "",
-                group_category: "Bride Family", // Match the first option in the select
+                group_category: "Bride Family",
                 priority: "B",
                 rsvp_status: "pending",
                 meal_preference: "",
                 table_assignment: "",
-                plus_one: false,
+                companion_guest_count: 0,
             });
         }
     }, [initialData, isOpen]);
@@ -76,7 +79,7 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
                     {/* Name, Group, Priority */}
                     <div className="grid grid-cols-12 gap-4">
                         <div className="col-span-12">
-                            <label className="text-sm font-medium text-foreground">Full Name</label>
+                            <label className="text-sm font-medium text-foreground">Full Name (Primary)</label>
                             <input
                                 required
                                 type="text"
@@ -140,13 +143,18 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
                     {/* Advanced Details */}
                     <div className="rounded-xl bg-muted/30 p-4 space-y-4 border border-border/50">
                         <div className="flex items-center justify-between">
-                            <label className="text-sm font-medium text-foreground">Plus One (+1)</label>
-                            <input
-                                type="checkbox"
-                                checked={formData.plus_one}
-                                onChange={(e) => setFormData({ ...formData, plus_one: e.target.checked })}
-                                className="accent-primary h-4 w-4 rounded"
-                            />
+                            <label className="text-sm font-medium text-foreground">Additional Guests (+Count)</label>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground">Total Party: {1 + (formData.companion_guest_count || 0)}</span>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="50"
+                                    value={formData.companion_guest_count}
+                                    onChange={(e) => setFormData({ ...formData, companion_guest_count: parseInt(e.target.value) || 0 })}
+                                    className="w-20 rounded-xl border border-border bg-white px-3 py-2 text-sm text-center focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                            </div>
                         </div>
 
                         {formData.rsvp_status === "accepted" && (
