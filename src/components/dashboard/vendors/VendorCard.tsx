@@ -1,13 +1,14 @@
-"use client";
-
 import { Vendor, VendorStatus } from "@/types/vendors";
-import { Phone, Mail, Globe, MapPin, MoreHorizontal, Pencil, Trash2, ExternalLink } from "lucide-react";
+import { Phone, Mail, Globe, MapPin, MoreHorizontal, Pencil, Trash2, ExternalLink, CheckSquare, Square } from "lucide-react";
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 
 interface VendorCardProps {
     vendor: Vendor;
     onEdit: (vendor: Vendor) => void;
     onDelete: (id: string) => void;
+    isSelected?: boolean;
+    onToggleSelect?: (id: string) => void;
 }
 
 const statusColors: Record<VendorStatus, string> = {
@@ -17,12 +18,25 @@ const statusColors: Record<VendorStatus, string> = {
     declined: "bg-gray-100 text-gray-700",
 };
 
-export default function VendorCard({ vendor, onEdit, onDelete }: VendorCardProps) {
+export default function VendorCard({ vendor, onEdit, onDelete, isSelected, onToggleSelect }: VendorCardProps) {
     const [showActions, setShowActions] = useState(false);
 
     return (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow relative group">
-            <div className="flex justify-between items-start mb-3">
+        <div className={cn(
+            "bg-white rounded-xl border shadow-sm p-5 hover:shadow-md transition-all relative group",
+            isSelected ? "border-primary ring-1 ring-primary bg-primary/5" : "border-gray-100"
+        )}>
+            {/* Selection Checkbox */}
+            {onToggleSelect && (
+                <button
+                    onClick={() => onToggleSelect(vendor.id)}
+                    className="absolute top-4 left-4 z-10 text-muted-foreground hover:text-primary transition-colors"
+                >
+                    {isSelected ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
+                </button>
+            )}
+
+            <div className={`flex justify-between items-start mb-3 ${onToggleSelect ? 'pl-8' : ''}`}>
                 <div>
                     <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                         {vendor.category}
