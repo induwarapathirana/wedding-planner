@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Heart } from "lucide-react";
+import { HowToGuide } from "@/components/HowToGuide";
 
 export default function Home() {
   return (
@@ -66,7 +67,7 @@ export default function Home() {
                 “We loved personalizing every detail together. Vow & Venue kept our budget honest and our families informed without
                 endless spreadsheets.”
               </p>
-              <footer className="mt-3 text-sm font-semibold text-foreground">— Tasha & Morgan, Charleston</footer>
+              <footer className="mt-3 text-sm font-semibold text-foreground">— Tasha & Kamil, Colombo</footer>
             </blockquote>
           </div>
         </div>
