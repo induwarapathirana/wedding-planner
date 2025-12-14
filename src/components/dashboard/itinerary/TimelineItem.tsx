@@ -1,4 +1,4 @@
-```
+
 "use client";
 
 import { Event } from "@/types/itinerary";
@@ -31,9 +31,9 @@ export default function TimelineItem({ event, isLast, onEdit, onDelete, isSelect
 
     return (
         <div className="relative pl-8 pb-8 group">
-             {/* Selection Checkbox - positioned left of the line */}
-             {onToggleSelect && (
-                <button 
+            {/* Selection Checkbox - positioned left of the line */}
+            {onToggleSelect && (
+                <button
                     onClick={() => onToggleSelect(event.id)}
                     className="absolute -left-10 top-0 p-1 text-muted-foreground hover:text-primary transition-colors"
                 >
@@ -48,7 +48,7 @@ export default function TimelineItem({ event, isLast, onEdit, onDelete, isSelect
                     <div className="absolute top-[12px] bottom-0 w-0.5 bg-gray-200 group-hover:bg-gray-300 transition-colors" />
                 )}
             </div>
-            
+
             {/* Content Card */}
             <div className={cn(
                 "relative flex gap-4 p-4 rounded-xl border bg-white transition-all hover:shadow-md",

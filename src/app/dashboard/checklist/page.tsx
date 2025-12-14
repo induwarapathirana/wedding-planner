@@ -1,4 +1,4 @@
-```javascript
+
 "use client";
 
 import { useMode } from "@/context/mode-context";
@@ -164,12 +164,12 @@ function ChecklistContent() {
 
     const handleDelete = async (id: string) => {
         if (!confirm("Are you sure you want to delete this task?")) return;
-        
+
         const { error } = await supabase.from('checklist_items').delete().eq('id', id);
         if (error) {
             alert("Error deleting: " + error.message);
         } else {
-             if (weddingId) fetchItems(weddingId);
+            if (weddingId) fetchItems(weddingId);
             setSelectedIds(prev => {
                 const next = new Set(prev);
                 next.delete(id);
@@ -179,11 +179,11 @@ function ChecklistContent() {
     };
 
     const handleBulkDelete = async () => {
-        if (!confirm(`Are you sure you want to delete ${ selectedIds.size } tasks ? `)) return;
+        if (!confirm(`Are you sure you want to delete ${selectedIds.size} tasks ? `)) return;
 
         const ids = Array.from(selectedIds);
         const { error } = await supabase.from('checklist_items').delete().in('id', ids);
-        
+
         if (error) {
             alert("Error deleting: " + error.message);
         } else {
@@ -215,8 +215,8 @@ function ChecklistContent() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                     {/* Title */}
-                     <h2 className="font-serif text-3xl font-bold text-foreground">Checklist & Timeline</h2>
+                    {/* Title */}
+                    <h2 className="font-serif text-3xl font-bold text-foreground">Checklist & Timeline</h2>
                     <p className="mt-1 text-muted-foreground">Stay organized every step of the way.</p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -229,7 +229,7 @@ function ChecklistContent() {
                             Delete ({selectedIds.size})
                         </button>
                     )}
-                     <button
+                    <button
                         onClick={handleOpenAdd}
                         className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all">
                         <Plus className="w-4 h-4" />
@@ -240,19 +240,19 @@ function ChecklistContent() {
 
             {/* Selection Status Bar */}
             {items.length > 0 && (
-               <div className="flex justify-end">
+                <div className="flex justify-end">
                     <button onClick={toggleSelectAll} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-2">
                         {selectedIds.size > 0 && selectedIds.size === items.length ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
                         {selectedIds.size === items.length ? "Deselect All" : "Select All"}
                     </button>
-               </div>
+                </div>
             )}
 
             {/* Progress Bar */}
             <div className="relative h-4 w-full rounded-full bg-muted overflow-hidden">
                 <div
                     className="absolute top-0 left-0 h-full bg-primary transition-all duration-500 ease-out"
-                    style={{ width: `${ items.length > 0 ? (completedItems.length / items.length) * 100 : 0 }% ` }}
+                    style={{ width: `${items.length > 0 ? (completedItems.length / items.length) * 100 : 0}% ` }}
                 />
             </div>
             <div className="flex justify-between text-sm text-muted-foreground -mt-4">
@@ -284,7 +284,7 @@ function ChecklistContent() {
                                             <p className="text-xs text-muted-foreground">{item.category} • {item.due_date ? new Date(item.due_date).toLocaleDateString() : 'No Date'}</p>
                                         </div>
                                         <div className="flex gap-1 opactiy-0 group-hover:opacity-100 transition-opacity">
-                                             <button onClick={() => handleOpenEdit(item)} className="p-1.5 text-muted-foreground hover:text-primary transition-all">
+                                            <button onClick={() => handleOpenEdit(item)} className="p-1.5 text-muted-foreground hover:text-primary transition-all">
                                                 <Edit2 className="w-3.5 h-3.5" />
                                             </button>
                                             <button onClick={() => handleDelete(item.id)} className="p-1.5 text-muted-foreground hover:text-red-600 transition-all">
@@ -316,7 +316,7 @@ function ChecklistContent() {
                                             <p className="text-xs text-muted-foreground">{item.category}</p>
                                         </div>
                                         <div className="flex gap-1 opactiy-0 group-hover:opacity-100 transition-opacity">
-                                             <button onClick={() => handleOpenEdit(item)} className="p-1.5 text-muted-foreground hover:text-primary transition-all">
+                                            <button onClick={() => handleOpenEdit(item)} className="p-1.5 text-muted-foreground hover:text-primary transition-all">
                                                 <Edit2 className="w-3.5 h-3.5" />
                                             </button>
                                             <button onClick={() => handleDelete(item.id)} className="p-1.5 text-muted-foreground hover:text-red-600 transition-all">
@@ -346,7 +346,7 @@ function ChecklistContent() {
                                                 item.is_completed ? "bg-muted/20 border-border opacity-75" : "bg-white border-border",
                                                 selectedIds.has(item.id) && "ring-1 ring-primary border-primary bg-primary/5"
                                             )}>
-                                                 <button 
+                                                <button
                                                     onClick={() => toggleSelect(item.id)}
                                                     className="absolute top-4 left-4 z-10 text-muted-foreground hover:text-primary transition-colors"
                                                 >
@@ -364,7 +364,7 @@ function ChecklistContent() {
                                                         <button onClick={() => handleOpenEdit(item)} className="text-muted-foreground hover:text-primary transition-colors">
                                                             <Edit2 className="w-4 h-4" />
                                                         </button>
-                                                         <button onClick={() => handleDelete(item.id)} className="text-muted-foreground hover:text-red-600 transition-colors">
+                                                        <button onClick={() => handleDelete(item.id)} className="text-muted-foreground hover:text-red-600 transition-colors">
                                                             <Trash2 className="w-4 h-4" />
                                                         </button>
                                                     </div>

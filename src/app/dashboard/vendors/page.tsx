@@ -1,14 +1,66 @@
-// ... imports
-import { Plus, Search, Filter, Trash2, CheckSquare, Square } from "lucide-react";
-// ...
+"use client";
+
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { Plus, Search, Filter } from "lucide-react";
+import { Vendor } from "@/types/vendors";
+import VendorCard from "@/components/dashboard/vendors/VendorCard";
+import VendorForm from "@/components/dashboard/vendors/VendorForm";
+import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
+
+import { LimitModal } from "@/components/dashboard/limit-modal";
 
 export default function VendorsPage() {
-    // ... existing state
+    const [vendors, setVendors] = useState<Vendor[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [weddingId, setWeddingId] = useState<string | null>(null);
+    const [showForm, setShowForm] = useState(false);
+    const [editingVendor, setEditingVendor] = useState<Vendor | undefined>(undefined);
+    const [filterCategory, setFilterCategory] = useState<string>("All");
+    const [tier, setTier] = useState<PlanTier>('free');
+    const [showLimitModal, setShowLimitModal] = useState(false);
+
+    useEffect(() => {
+        const storedWeddingId = localStorage.getItem("current_wedding_id");
+        if (storedWeddingId) {
+            setWeddingId(storedWeddingId);
+            fetchVendors(storedWeddingId);
+            // Fetch Tier
+            supabase.from('weddings').select('tier').eq('id', storedWeddingId).single()
+                .then(({ data }) => { if (data) setTier((data.tier as PlanTier) || 'free'); });
+        }
+    }, []);
+
+    const fetchVendors = async (id: string) => {
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('vendors')
+            .select('*')
+            .eq('wedding_id', id)
+            .order('created_at', { ascending: false });
+
+        if (!error && data) {
+            setVendors(data as Vendor[]);
+        }
+        setLoading(false);
+    };
+
+    const handleDelete = async (id: string) => {
+        const { error } = await supabase.from('vendors').delete().eq('id', id);
+        if (!error) {
+            setVendors(prev => prev.filter(v => v.id !== id));
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+        } else {
+            alert("Failed to delete vendor");
+        }
+    };
+
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-    // ... useEffect ... fetchVendors ...
-
-    // Selection Logic
     const toggleSelectAll = () => {
         if (selectedIds.size === vendors.length) {
             setSelectedIds(new Set());
@@ -27,8 +79,6 @@ export default function VendorsPage() {
         setSelectedIds(newSelected);
     };
 
-    // ... handleDelete (single) ...
-
     const handleBulkDelete = async () => {
         if (!confirm(`Are you sure you want to delete ${selectedIds.size} vendors?`)) return;
 
@@ -43,40 +93,32 @@ export default function VendorsPage() {
         }
     };
 
-    // ... 
+    const categories = ["All", ...Array.from(new Set(vendors.map(v => v.category)))];
+    const filteredVendors = filterCategory === "All"
+        ? vendors
+        : vendors.filter(v => v.category === filterCategory);
 
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    {/* Title */}
+                    <h2 className="font-serif text-3xl font-bold text-foreground">Vendors</h2>
+                    <p className="mt-1 text-muted-foreground">Manage your wedding team.</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    {selectedIds.size > 0 && (
-                        <button
-                            onClick={handleBulkDelete}
-                            className="flex items-center gap-2 rounded-xl bg-red-100 px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 transition-all"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                            Delete ({selectedIds.size})
-                        </button>
-                    )}
-
-                    <button
-                        onClick={() => {
-                            if (!checkLimit(tier, 'vendors', vendors.length)) {
-                                setShowLimitModal(true);
-                                return;
-                            }
-                            setEditingVendor(undefined);
-                            setShowForm(true);
-                        }}
-                        className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
-                    >
-                        <Plus className="w-4 h-4" />
-                        Add Vendor
-                    </button>
-                </div>
+                <button
+                    onClick={() => {
+                        if (!checkLimit(tier, 'vendors', vendors.length)) {
+                            setShowLimitModal(true);
+                            return;
+                        }
+                        setEditingVendor(undefined);
+                        setShowForm(true);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
+                >
+                    <Plus className="w-4 h-4" />
+                    Add Vendor
+                </button>
             </div>
 
             {/* Filters */}
@@ -106,13 +148,11 @@ export default function VendorsPage() {
 
             {/* Content */}
             {loading ? (
-                // ... loading ...
                 <div className="text-center py-12">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
                     <p className="text-gray-500">Loading vendors...</p>
                 </div>
             ) : vendors.length === 0 ? (
-                // ... empty ...
                 <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
                     <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Search className="w-8 h-8 text-gray-400" />
