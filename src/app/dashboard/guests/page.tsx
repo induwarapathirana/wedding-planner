@@ -1,7 +1,7 @@
 "use client";
 
 import { useMode } from "@/context/mode-context";
-import { Users, UserPlus, Check, X, HelpCircle, Utensils, Armchair, Edit2 } from "lucide-react";
+import { Users, UserPlus, Check, X, HelpCircle, Utensils, Armchair, Edit2, Trash2, CheckSquare, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -18,6 +18,7 @@ type Guest = {
     meal_preference?: string;
     table_assignment?: string;
     plus_one: boolean;
+    companion_guest_count?: number; // Added for companion count
 };
 
 export default function GuestPage() {
@@ -28,6 +29,7 @@ export default function GuestPage() {
     const [showLimitModal, setShowLimitModal] = useState(false); // Added state
     const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState<"name" | "priority" | "status">("priority");
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     // Dialog State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -105,6 +107,58 @@ export default function GuestPage() {
         fetchGuests(weddingId);
     };
 
+    // Selection Logic
+    const toggleSelectAll = () => {
+        if (selectedIds.size === guests.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(guests.map(g => g.id)));
+        }
+    };
+
+    const toggleSelect = (id: string) => {
+        const newSelected = new Set(selectedIds);
+        if (newSelected.has(id)) {
+            newSelected.delete(id);
+        } else {
+            newSelected.add(id);
+        }
+        setSelectedIds(newSelected);
+    };
+
+    // Delete Logic
+    const handleDelete = async (id: string) => {
+        if (!confirm("Are you sure you want to delete this guest?")) return;
+
+        const { error } = await supabase.from('guests').delete().eq('id', id);
+        if (error) {
+            alert("Error deleting: " + error.message);
+        } else {
+            const weddingId = localStorage.getItem("current_wedding_id");
+            if (weddingId) fetchGuests(weddingId);
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (!confirm(`Are you sure you want to delete ${selectedIds.size} guests ? `)) return;
+
+        const ids = Array.from(selectedIds);
+        const { error } = await supabase.from('guests').delete().in('id', ids);
+
+        if (error) {
+            alert("Error deleting: " + error.message);
+        } else {
+            const weddingId = localStorage.getItem("current_wedding_id");
+            if (weddingId) fetchGuests(weddingId);
+            setSelectedIds(new Set());
+        }
+    };
+
     // Stats Calculation
     const totalHeadcount = guests.reduce((sum, guest) => sum + 1 + (guest.companion_guest_count || 0), 0);
     const acceptedCount = guests
@@ -154,6 +208,15 @@ export default function GuestPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
+                    {selectedIds.size > 0 && (
+                        <button
+                            onClick={handleBulkDelete}
+                            className="flex items-center gap-2 rounded-xl bg-red-100 px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-200 transition-all mr-2"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            Delete ({selectedIds.size})
+                        </button>
+                    )}
                     <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value as any)}
@@ -182,7 +245,7 @@ export default function GuestPage() {
                     <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
                         <div
                             className={cn("h-full transition-all duration-500 rounded-full", isOverLimit ? "bg-amber-500" : "bg-primary")}
-                            style={{ width: `${progressPercent}%` }}
+                            style={{ width: `${progressPercent}% ` }}
                         />
                     </div>
                     {isOverLimit && <p className="text-xs text-amber-600 font-medium">You have exceeded your target headcount.</p>}
@@ -226,8 +289,12 @@ export default function GuestPage() {
                     /* SIMPLE MODE: Clean List */
                     <div className="divide-y divide-border">
                         {sortedGuests.map((guest) => (
-                            <div key={guest.id} className="flex items-center justify-between p-6 hover:bg-muted/30 transition-colors">
+                            <div key={guest.id} className={cn("flex items-center justify-between p-6 hover:bg-muted/30 transition-colors", selectedIds.has(guest.id) && "bg-muted/50")}>
                                 <div className="flex items-center gap-4">
+                                    <button onClick={() => toggleSelect(guest.id)} className="text-muted-foreground hover:text-primary">
+                                        {selectedIds.has(guest.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
+                                    </button>
+
                                     <div className={cn(
                                         "h-10 w-10 rounded-full flex items-center justify-center font-bold text-xs ring-2 ring-white shadow-sm",
                                         guest.priority === 'A' ? "bg-red-100 text-red-700" :
@@ -236,7 +303,14 @@ export default function GuestPage() {
                                         {guest.priority || 'B'}
                                     </div>
                                     <div>
-                                        <p className="font-medium text-foreground">{guest.name}</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-medium text-foreground">{guest.name}</p>
+                                            {guest.companion_guest_count > 0 && (
+                                                <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                                                    +{guest.companion_guest_count}
+                                                </span>
+                                            )}
+                                        </div>
                                         <p className="text-sm text-muted-foreground">{guest.group_category || 'Uncategorized'}</p>
                                     </div>
                                 </div>
@@ -251,6 +325,9 @@ export default function GuestPage() {
                                     <button onClick={() => handleOpenEdit(guest)} className="p-2 text-muted-foreground hover:text-primary transition-colors">
                                         <Edit2 className="w-4 h-4" />
                                     </button>
+                                    <button onClick={() => handleDelete(guest.id)} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
                                 </div>
                             </div>
                         ))}
@@ -261,19 +338,29 @@ export default function GuestPage() {
                         <table className="w-full text-sm text-left">
                             <thead className="bg-muted text-muted-foreground font-medium uppercase text-xs">
                                 <tr>
+                                    <th className="px-6 py-4 w-12">
+                                        <button onClick={toggleSelectAll} className="flex items-center">
+                                            {selectedIds.size > 0 && selectedIds.size === guests.length ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
+                                        </button>
+                                    </th>
                                     <th className="px-6 py-4 w-1/4">Guest Name</th>
                                     <th className="px-6 py-4">Group</th>
                                     <th className="px-6 py-4">Priority</th>
                                     <th className="px-6 py-4">Status</th>
                                     <th className="px-6 py-4">Meal Choice</th>
                                     <th className="px-6 py-4">Seating</th>
-                                    <th className="px-6 py-4">Plus One</th>
+                                    <th className="px-6 py-4">Total Party</th>
                                     <th className="px-6 py-4">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
                                 {sortedGuests.map((guest) => (
-                                    <tr key={guest.id} className="hover:bg-muted/30 transition-colors">
+                                    <tr key={guest.id} className={cn("hover:bg-muted/30 transition-colors", selectedIds.has(guest.id) && "bg-muted/50")}>
+                                        <td className="px-6 py-4">
+                                            <button onClick={() => toggleSelect(guest.id)} className="text-muted-foreground hover:text-primary">
+                                                {selectedIds.has(guest.id) ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
+                                            </button>
+                                        </td>
                                         <td className="px-6 py-4 font-medium text-foreground">
                                             <div className="flex items-center gap-3">
                                                 <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary uppercase">
@@ -318,11 +405,17 @@ export default function GuestPage() {
                                             ) : <span className="text-muted-foreground text-xs italic">Unassigned</span>}
                                         </td>
                                         <td className="px-6 py-4 text-muted-foreground">
-                                            {guest.plus_one ? "Yes" : "No"}
+                                            <div className="flex items-center gap-2">
+                                                <Users className="w-3.5 h-3.5 text-muted-foreground/70" />
+                                                <span>{1 + (guest.companion_guest_count || 0)}</span>
+                                            </div>
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-6 py-4 flex items-center gap-2">
                                             <button onClick={() => handleOpenEdit(guest)} className="text-muted-foreground hover:text-primary transition-colors">
                                                 <Edit2 className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={() => handleDelete(guest.id)} className="text-muted-foreground hover:text-red-600 transition-colors">
+                                                <Trash2 className="w-4 h-4" />
                                             </button>
                                         </td>
                                     </tr>
@@ -342,4 +435,3 @@ export default function GuestPage() {
         </div>
     );
 }
-
