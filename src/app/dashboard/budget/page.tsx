@@ -1,7 +1,7 @@
 "use client";
 
 import { useMode } from "@/context/mode-context";
-import { DollarSign, PieChart, TrendingUp, Plus, Edit2, Wallet } from "lucide-react";
+import { DollarSign, PieChart, TrendingUp, Plus, Edit2, Wallet, Trash2, CheckSquare, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -30,6 +30,7 @@ export default function BudgetPage() {
     const [weddingId, setWeddingId] = useState<string | null>(null);
     const [tier, setTier] = useState<PlanTier>('free');
     const [showLimitModal, setShowLimitModal] = useState(false); // Added state
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     // Dialog State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -84,6 +85,56 @@ export default function BudgetPage() {
         }
         setLoading(false);
     }
+
+    // Selection Logic
+    const toggleSelectAll = () => {
+        if (selectedIds.size === budgetItems.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(budgetItems.map(i => i.id)));
+        }
+    };
+
+    const toggleSelect = (id: string) => {
+        const newSelected = new Set(selectedIds);
+        if (newSelected.has(id)) {
+            newSelected.delete(id);
+        } else {
+            newSelected.add(id);
+        }
+        setSelectedIds(newSelected);
+    };
+
+    // Delete Logic
+    const handleDelete = async (id: string) => {
+        if (!confirm("Are you sure you want to delete this budget item?")) return;
+
+        const { error } = await supabase.from('budget_items').delete().eq('id', id);
+        if (error) {
+            alert("Error deleting: " + error.message);
+        } else {
+            if (weddingId) fetchBudget(weddingId);
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (!confirm(`Are you sure you want to delete ${selectedIds.size} items?`)) return;
+
+        const ids = Array.from(selectedIds);
+        const { error } = await supabase.from('budget_items').delete().in('id', ids);
+
+        if (error) {
+            alert("Error deleting: " + error.message);
+        } else {
+            if (weddingId) fetchBudget(weddingId);
+            setSelectedIds(new Set());
+        }
+    };
 
     const handleOpenAdd = () => {
         const canAdd = checkLimit(tier, 'budget_items', budgetItems.length);
@@ -149,6 +200,15 @@ export default function BudgetPage() {
                     <p className="mt-1 text-muted-foreground">Keep your expenses on track.</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    {selectedIds.size > 0 && (
+                        <button
+                            onClick={handleBulkDelete}
+                            className="flex items-center gap-2 rounded-xl bg-red-100 px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-200 transition-all mr-2"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            Delete ({selectedIds.size})
+                        </button>
+                    )}
                     {/* Currency Selector */}
                     <select
                         value={currency}
@@ -212,8 +272,12 @@ export default function BudgetPage() {
                     /* SIMPLE MODE: Grouped by Category Summary (Simplified) or just clean list */
                     <div className="divide-y divide-border">
                         {budgetItems.map((item) => (
-                            <div key={item.id} className="flex items-center justify-between p-6 hover:bg-muted/30 transition-colors">
+                            <div key={item.id} className={cn("flex items-center justify-between p-6 hover:bg-muted/30 transition-colors", selectedIds.has(item.id) && "bg-muted/50")}>
                                 <div className="flex items-center gap-4">
+                                    <button onClick={() => toggleSelect(item.id)} className="text-muted-foreground hover:text-primary">
+                                        {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
+                                    </button>
+
                                     <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
                                         <Wallet className="w-5 h-5" />
                                     </div>
@@ -226,8 +290,11 @@ export default function BudgetPage() {
                                     <span className={cn("font-medium", item.is_paid ? "text-green-600" : "text-foreground")}>
                                         {formatMoney(item.estimated_cost)}
                                     </span>
-                                    <button onClick={() => handleOpenEdit(item)} className="p-2 text-muted-foreground hover:text-primary transition-colors">
+                                    <button onClick={() => handleOpenEdit(item)} className="text-muted-foreground hover:text-primary transition-colors">
                                         <Edit2 className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => handleDelete(item.id)} className="text-muted-foreground hover:text-red-600 transition-colors">
+                                        <Trash2 className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
@@ -240,6 +307,11 @@ export default function BudgetPage() {
                         <table className="w-full text-sm text-left">
                             <thead className="bg-muted text-muted-foreground font-medium uppercase text-xs">
                                 <tr>
+                                    <th className="px-6 py-4 w-12">
+                                        <button onClick={toggleSelectAll} className="flex items-center">
+                                            {selectedIds.size > 0 && selectedIds.size === budgetItems.length ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
+                                        </button>
+                                    </th>
                                     <th className="px-6 py-4">Item</th>
                                     <th className="px-6 py-4">Category</th>
                                     <th className="px-6 py-4">Est. Cost</th>
@@ -252,7 +324,12 @@ export default function BudgetPage() {
                             </thead>
                             <tbody className="divide-y divide-border">
                                 {budgetItems.map((item) => (
-                                    <tr key={item.id} className="hover:bg-muted/30 transition-colors">
+                                    <tr key={item.id} className={cn("hover:bg-muted/30 transition-colors", selectedIds.has(item.id) && "bg-muted/50")}>
+                                        <td className="px-6 py-4">
+                                            <button onClick={() => toggleSelect(item.id)} className="text-muted-foreground hover:text-primary">
+                                                {selectedIds.has(item.id) ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
+                                            </button>
+                                        </td>
                                         <td className="px-6 py-4 font-medium text-foreground">{item.item_name}</td>
                                         <td className="px-6 py-4 text-muted-foreground">{item.category}</td>
                                         <td className="px-6 py-4 text-foreground">{formatMoney(item.estimated_cost)}</td>
@@ -267,16 +344,19 @@ export default function BudgetPage() {
                                                 {item.is_paid ? "Paid" : "Pending"}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-6 py-4 flex items-center gap-2">
                                             <button onClick={() => handleOpenEdit(item)} className="text-muted-foreground hover:text-primary transition-colors">
                                                 <Edit2 className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={() => handleDelete(item.id)} className="text-muted-foreground hover:text-red-600 transition-colors">
+                                                <Trash2 className="w-4 h-4" />
                                             </button>
                                         </td>
                                     </tr>
                                 ))}
                                 {budgetItems.length === 0 && (
                                     <tr>
-                                        <td colSpan={8} className="p-8 text-center text-muted-foreground">No budget items yet. Add one to get started!</td>
+                                        <td colSpan={9} className="p-8 text-center text-muted-foreground">No budget items yet. Add one to get started!</td>
                                     </tr>
                                 )}
                             </tbody>
