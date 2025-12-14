@@ -105,12 +105,21 @@ export default function GuestPage() {
         fetchGuests(weddingId);
     };
 
+    // Stats Calculation
+    const totalHeadcount = guests.reduce((sum, guest) => sum + 1 + (guest.companion_guest_count || 0), 0);
+    const acceptedCount = guests
+        .filter(g => g.rsvp_status === 'accepted')
+        .reduce((sum, guest) => sum + 1 + (guest.companion_guest_count || 0), 0);
+    const declinedCount = guests
+        .filter(g => g.rsvp_status === 'declined')
+        .reduce((sum, guest) => sum + 1 + (guest.companion_guest_count || 0), 0);
+    const pendingCount = totalHeadcount - acceptedCount - declinedCount;
 
     const stats = {
-        accepted: guests.filter((g) => g.rsvp_status === "accepted").length,
-        declined: guests.filter((g) => g.rsvp_status === "declined").length,
-        pending: guests.filter((g) => g.rsvp_status === "pending").length,
-        total: guests.length,
+        accepted: acceptedCount,
+        declined: declinedCount,
+        pending: pendingCount,
+        total: totalHeadcount,
     };
 
     // Sorting Logic
