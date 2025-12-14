@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Outfit, Cormorant_Garamond } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { HowToGuide } from "@/components/HowToGuide";
 
@@ -31,6 +32,7 @@ export default function RootLayout({
       >
         <HowToGuide />
         {children}
+        <Analytics />
       </body>
     </html>
   );

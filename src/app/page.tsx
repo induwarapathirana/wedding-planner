@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Heart } from "lucide-react";
+import { HowToGuide } from "@/components/HowToGuide";
 
 export default function Home() {
   return (
