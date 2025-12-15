@@ -305,7 +305,7 @@ export default function GuestPage() {
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <p className="font-medium text-foreground">{guest.name}</p>
-                                            {guest.companion_guest_count > 0 && (
+                                            {(guest.companion_guest_count || 0) > 0 && (
                                                 <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                                                     +{guest.companion_guest_count}
                                                 </span>
