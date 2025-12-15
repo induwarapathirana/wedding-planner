@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Plus, Calendar as CalendarIcon, Filter } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, Filter, Trash2, CheckSquare, Square } from "lucide-react";
 import { Event } from "@/types/itinerary";
 import TimelineItem from "@/components/dashboard/itinerary/TimelineItem";
 import EventForm from "@/components/dashboard/itinerary/EventForm";
