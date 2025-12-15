@@ -10,6 +10,8 @@ export interface Event {
     created_at: string;
 }
 
+export type EventType = "ceremony" | "reception" | "meal" | "photo" | "transport" | "prep" | "other";
+
 export interface NewEvent {
     title: string;
     start_time: string;

@@ -1,9 +1,10 @@
-
 "use client";
 
-import { Event } from "@/types/itinerary";
+import { Event, EventType } from "@/types/itinerary";
 import { MapPin, Clock, Edit2, Trash2, CheckSquare, Square } from "lucide-react";
+import { useState } from "react";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface TimelineItemProps {
     event: Event;

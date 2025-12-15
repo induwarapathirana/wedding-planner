@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Plus, Search, Filter } from "lucide-react";
+import { Plus, Search, Filter, Trash2, CheckSquare, Square } from "lucide-react";
 import { Vendor } from "@/types/vendors";
 import VendorCard from "@/components/dashboard/vendors/VendorCard";
 import VendorForm from "@/components/dashboard/vendors/VendorForm";

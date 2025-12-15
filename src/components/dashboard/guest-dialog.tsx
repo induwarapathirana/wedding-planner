@@ -12,7 +12,7 @@ type Guest = {
     rsvp_status: "accepted" | "declined" | "pending";
     meal_preference?: string;
     table_assignment?: string;
-    companion_guest_count: number;
+    companion_guest_count?: number;
 };
 
 interface GuestDialogProps {
