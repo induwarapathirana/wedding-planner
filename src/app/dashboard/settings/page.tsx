@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Save, ArrowLeft, Trash2, UserPlus, X } from "lucide-react";
 import Link from "next/link";
 import { PayHereButton } from "@/components/payhere-button";
+import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 
 type WeddingData = {
@@ -25,21 +26,19 @@ export default function SettingsPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [confirmState, setConfirmState] = useState<{ isOpen: boolean; action: 'delete_wedding' | null }>({ isOpen: false, action: null });
     const router = useRouter();
 
     useEffect(() => {
         fetchWedding();
     }, []);
 
-    const handleDeleteWedding = async () => {
+    const confirmDeleteWedding = () => {
+        setConfirmState({ isOpen: true, action: 'delete_wedding' });
+    };
+
+    const executeDeleteWedding = async () => {
         if (!wedding?.id) return;
-
-        const confirmed = window.confirm(
-            "Are you sure you want to delete this wedding? This action is irreversible and will delete all guests, budget items, and data."
-        );
-
-        if (!confirmed) return;
-
         setIsDeleting(true);
         try {
             const { error } = await supabase.rpc('delete_wedding_cascade', {
@@ -59,6 +58,7 @@ export default function SettingsPage() {
             alert("An unexpected error occurred.");
         } finally {
             setIsDeleting(false);
+            setConfirmState({ isOpen: false, action: null });
         }
     };
 
@@ -302,7 +302,7 @@ export default function SettingsPage() {
                                     </p>
                                 </div>
                                 <button
-                                    onClick={handleDeleteWedding}
+                                    onClick={confirmDeleteWedding}
                                     disabled={isDeleting}
                                     className="px-4 py-2 bg-white border border-red-200 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors"
                                 >
@@ -318,6 +318,15 @@ export default function SettingsPage() {
                     <TeamMembers weddingId={wedding?.id || ''} tier={wedding?.tier || 'free'} />
                 </div>
             </div>
+
+            <ConfirmDialog
+                isOpen={confirmState.isOpen && confirmState.action === 'delete_wedding'}
+                onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
+                onConfirm={executeDeleteWedding}
+                title="Delete Wedding?"
+                description="Are you sure you want to delete this wedding? This action is irreversible and will delete all guests, budget items, and data."
+                variant="danger"
+            />
         </div>
     );
 }
@@ -333,10 +342,48 @@ function TeamMembers({ weddingId, tier }: { weddingId: string, tier: string }) {
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [showLimitModal, setShowLimitModal] = useState(false);
 
+    // Team Confirm State
+    const [teamConfirm, setTeamConfirm] = useState<{
+        isOpen: boolean;
+        type: 'revoke' | 'remove_member' | null;
+        id?: string;
+    }>({ isOpen: false, type: null });
+
     useEffect(() => {
         if (weddingId) fetchData();
     }, [weddingId]);
 
+    // ... (keep fetchData)
+
+    // Handlers
+    const confirmRevoke = (id: string) => {
+        setTeamConfirm({ isOpen: true, type: 'revoke', id });
+    };
+
+    const confirmRemoveMember = (userId: string) => {
+        setTeamConfirm({ isOpen: true, type: 'remove_member', id: userId });
+    };
+
+    const executeTeamAction = async () => {
+        if (teamConfirm.type === 'revoke' && teamConfirm.id) {
+            await supabase.from('invitations').delete().eq('id', teamConfirm.id);
+            fetchData();
+        } else if (teamConfirm.type === 'remove_member' && teamConfirm.id) {
+            const { error } = await supabase
+                .from('collaborators')
+                .delete()
+                .eq('wedding_id', weddingId)
+                .eq('user_id', teamConfirm.id);
+
+            if (error) {
+                console.error(error);
+                alert("Failed to remove member. Ensure you are an owner.");
+            } else {
+                fetchData();
+            }
+        }
+        setTeamConfirm({ isOpen: false, type: null, id: undefined });
+    };
     const fetchData = async () => {
         setLoading(true);
 
@@ -403,28 +450,8 @@ function TeamMembers({ weddingId, tier }: { weddingId: string, tier: string }) {
         setSending(false);
     };
 
-    const handleRevoke = async (id: string) => {
-        if (!confirm("Revoke this invitation?")) return;
-        await supabase.from('invitations').delete().eq('id', id);
-        fetchData();
-    };
-
-    const handleRemoveMember = async (userId: string) => {
-        if (!confirm("Are you sure you want to remove this person from the team?")) return;
-
-        const { error } = await supabase
-            .from('collaborators')
-            .delete()
-            .eq('wedding_id', weddingId)
-            .eq('user_id', userId);
-
-        if (error) {
-            console.error(error);
-            alert("Failed to remove member. Ensure you are an owner.");
-        } else {
-            fetchData();
-        }
-    };
+    // Handlers
+    // Removed old confirm handlers
 
     if (loading) return <div className="text-sm text-gray-500">Loading team...</div>;
 
@@ -508,7 +535,7 @@ See you there!`);
                             <div key={inv.id} className="flex items-center justify-between text-sm">
                                 <span className="text-gray-600 truncate mr-2" title={inv.email}>{inv.email}</span>
                                 <button
-                                    onClick={() => handleRevoke(inv.id)}
+                                    onClick={() => confirmRevoke(inv.id)}
                                     className="text-xs text-red-500 hover:text-red-700"
                                 >
                                     Revoke
@@ -542,11 +569,11 @@ See you there!`);
                                 </span>
                                 {isCurrentUserOwner && member.user_id !== currentUserId && (
                                     <button
-                                        onClick={() => handleRemoveMember(member.user_id)}
+                                        onClick={() => confirmRemoveMember(member.user_id)}
                                         className="text-gray-400 hover:text-red-500 transition-colors p-1"
                                         title="Remove Member"
                                     >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
+                                        <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                 )}
                             </div>
@@ -554,7 +581,18 @@ See you there!`);
                     ))}
                 </div>
             </div>
-            
+
+            <ConfirmDialog
+                isOpen={teamConfirm.isOpen}
+                onClose={() => setTeamConfirm({ ...teamConfirm, isOpen: false })}
+                onConfirm={executeTeamAction}
+                title={teamConfirm.type === 'revoke' ? "Revoke Invitation?" : "Remove Member?"}
+                description={teamConfirm.type === 'revoke'
+                    ? "Are you sure you want to revoke this invitation?"
+                    : "Are you sure you want to remove this person from the team?"}
+                variant="danger"
+            />
+
             <LimitModal
                 isOpen={showLimitModal}
                 onClose={() => setShowLimitModal(false)}

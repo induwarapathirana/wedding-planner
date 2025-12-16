@@ -22,20 +22,25 @@ type Guest = {
     companion_guest_count?: number; // Added for companion count
 };
 
+import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+
 export default function GuestPage() {
     const { mode } = useMode();
     const [guests, setGuests] = useState<Guest[]>([]);
     const [targetCount, setTargetCount] = useState(0);
     const [tier, setTier] = useState<PlanTier>('free');
-    const [showLimitModal, setShowLimitModal] = useState(false); // Added state
+    const [showLimitModal, setShowLimitModal] = useState(false);
     const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState<"name" | "priority" | "status">("priority");
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     // Dialog State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [isGroupModalOpen, setIsGroupModalOpen] = useState(false); // New State
+    const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
     const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
+
+    // Confirm Modal State
+    const [confirmState, setConfirmState] = useState<{ isOpen: boolean; type: 'single' | 'bulk'; id?: string }>({ isOpen: false, type: 'single' });
 
     // Initial Data Load
     useEffect(() => {
@@ -129,36 +134,42 @@ export default function GuestPage() {
     };
 
     // Delete Logic
-    const handleDelete = async (id: string) => {
-        if (!confirm("Are you sure you want to delete this guest?")) return;
-
-        const { error } = await supabase.from('guests').delete().eq('id', id);
-        if (error) {
-            alert("Error deleting: " + error.message);
-        } else {
-            const weddingId = localStorage.getItem("current_wedding_id");
-            if (weddingId) fetchGuests(weddingId);
-            setSelectedIds(prev => {
-                const next = new Set(prev);
-                next.delete(id);
-                return next;
-            });
-        }
+    // Delete Logic
+    const confirmDelete = (id: string) => {
+        setConfirmState({ isOpen: true, type: 'single', id });
     };
 
-    const handleBulkDelete = async () => {
-        if (!confirm(`Are you sure you want to delete ${selectedIds.size} guests ? `)) return;
+    const confirmBulkDelete = () => {
+        setConfirmState({ isOpen: true, type: 'bulk' });
+    };
 
-        const ids = Array.from(selectedIds);
-        const { error } = await supabase.from('guests').delete().in('id', ids);
+    const executeDelete = async () => {
+        if (confirmState.type === 'single' && confirmState.id) {
+            const { error } = await supabase.from('guests').delete().eq('id', confirmState.id);
+            if (error) {
+                alert("Error deleting: " + error.message);
+            } else {
+                const weddingId = localStorage.getItem("current_wedding_id");
+                if (weddingId) fetchGuests(weddingId);
+                setSelectedIds(prev => {
+                    const next = new Set(prev);
+                    next.delete(confirmState.id!);
+                    return next;
+                });
+            }
+        } else if (confirmState.type === 'bulk') {
+            const ids = Array.from(selectedIds);
+            const { error } = await supabase.from('guests').delete().in('id', ids);
 
-        if (error) {
-            alert("Error deleting: " + error.message);
-        } else {
-            const weddingId = localStorage.getItem("current_wedding_id");
-            if (weddingId) fetchGuests(weddingId);
-            setSelectedIds(new Set());
+            if (error) {
+                alert("Error deleting: " + error.message);
+            } else {
+                const weddingId = localStorage.getItem("current_wedding_id");
+                if (weddingId) fetchGuests(weddingId);
+                setSelectedIds(new Set());
+            }
         }
+        setConfirmState({ ...confirmState, isOpen: false });
     };
 
     // Stats Calculation
@@ -212,7 +223,7 @@ export default function GuestPage() {
                 <div className="flex items-center gap-3">
                     {selectedIds.size > 0 && (
                         <button
-                            onClick={handleBulkDelete}
+                            onClick={confirmBulkDelete}
                             className="flex items-center gap-2 rounded-xl bg-red-100 px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-200 transition-all mr-2"
                         >
                             <Trash2 className="w-4 h-4" />
@@ -334,7 +345,7 @@ export default function GuestPage() {
                                     <button onClick={() => handleOpenEdit(guest)} className="p-2 text-muted-foreground hover:text-primary transition-colors">
                                         <Edit2 className="w-4 h-4" />
                                     </button>
-                                    <button onClick={() => handleDelete(guest.id)} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
+                                    <button onClick={() => confirmDelete(guest.id)} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
                                         <Trash2 className="w-4 h-4" />
                                     </button>
                                 </div>
@@ -423,7 +434,7 @@ export default function GuestPage() {
                                             <button onClick={() => handleOpenEdit(guest)} className="text-muted-foreground hover:text-primary transition-colors">
                                                 <Edit2 className="w-4 h-4" />
                                             </button>
-                                            <button onClick={() => handleDelete(guest.id)} className="text-muted-foreground hover:text-red-600 transition-colors">
+                                            <button onClick={() => confirmDelete(guest.id)} className="text-muted-foreground hover:text-red-600 transition-colors">
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </td>
@@ -446,6 +457,25 @@ export default function GuestPage() {
                 isOpen={isGroupModalOpen}
                 onClose={() => setIsGroupModalOpen(false)}
                 guests={guests}
+            />
+
+            <ConfirmDialog
+                isOpen={confirmState.isOpen}
+                onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
+                onConfirm={executeDelete}
+                title={confirmState.type === 'bulk' ? "Delete Guests?" : "Delete Guest?"}
+                description={confirmState.type === 'bulk'
+                    ? `Are you sure you want to delete ${selectedIds.size} guests? This action cannot be undone.`
+                    : "Are you sure you want to delete this guest? This action cannot be undone."}
+                variant="danger"
+            />
+
+            <LimitModal
+                isOpen={showLimitModal}
+                onClose={() => setShowLimitModal(false)}
+                feature="Guests"
+                limit={PLAN_LIMITS[tier].guests}
+                tier={tier}
             />
         </div>
     );

@@ -9,6 +9,7 @@ import EventForm from "@/components/dashboard/itinerary/EventForm";
 import { format } from "date-fns";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 
+import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 
 export default function ItineraryPage() {
@@ -20,6 +21,10 @@ export default function ItineraryPage() {
     const [editingEvent, setEditingEvent] = useState<Event | undefined>(undefined);
     const [tier, setTier] = useState<PlanTier>('free');
     const [showLimitModal, setShowLimitModal] = useState(false);
+
+    // Confirm Modal State
+    const [confirmState, setConfirmState] = useState<{ isOpen: boolean; type: 'single' | 'bulk'; id?: string }>({ isOpen: false, type: 'single' });
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         const storedWeddingId = localStorage.getItem("current_wedding_id");
@@ -54,21 +59,41 @@ export default function ItineraryPage() {
         setLoading(false);
     };
 
-    const handleDelete = async (id: string) => {
-        const { error } = await supabase.from('events').delete().eq('id', id);
-        if (!error) {
-            setEvents(prev => prev.filter(e => e.id !== id));
-            setSelectedIds(prev => {
-                const next = new Set(prev);
-                next.delete(id);
-                return next;
-            });
-        } else {
-            alert("Failed to delete event");
-        }
+    // Delete Logic
+    const confirmDelete = (id: string) => {
+        setConfirmState({ isOpen: true, type: 'single', id });
     };
 
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const confirmBulkDelete = () => {
+        setConfirmState({ isOpen: true, type: 'bulk' });
+    };
+
+    const executeDelete = async () => {
+        if (confirmState.type === 'single' && confirmState.id) {
+            const { error } = await supabase.from('events').delete().eq('id', confirmState.id);
+            if (!error) {
+                setEvents(prev => prev.filter(e => e.id !== confirmState.id));
+                setSelectedIds(prev => {
+                    const next = new Set(prev);
+                    next.delete(confirmState.id!);
+                    return next;
+                });
+            } else {
+                alert("Failed to delete event");
+            }
+        } else if (confirmState.type === 'bulk') {
+            const ids = Array.from(selectedIds);
+            const { error } = await supabase.from('events').delete().in('id', ids);
+
+            if (error) {
+                alert("Error deleting: " + error.message);
+            } else {
+                if (weddingId) fetchEvents(weddingId);
+                setSelectedIds(new Set());
+            }
+        }
+        setConfirmState({ ...confirmState, isOpen: false });
+    };
 
     const toggleSelectAll = () => {
         if (selectedIds.size === events.length) {
@@ -88,20 +113,6 @@ export default function ItineraryPage() {
         setSelectedIds(newSelected);
     };
 
-    const handleBulkDelete = async () => {
-        if (!confirm(`Are you sure you want to delete ${selectedIds.size} events?`)) return;
-
-        const ids = Array.from(selectedIds);
-        const { error } = await supabase.from('events').delete().in('id', ids);
-
-        if (error) {
-            alert("Error deleting: " + error.message);
-        } else {
-            if (weddingId) fetchEvents(weddingId);
-            setSelectedIds(new Set());
-        }
-    };
-
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -112,7 +123,7 @@ export default function ItineraryPage() {
                 <div className="flex items-center gap-3">
                     {selectedIds.size > 0 && (
                         <button
-                            onClick={handleBulkDelete}
+                            onClick={confirmBulkDelete}
                             className="flex items-center gap-2 rounded-xl bg-red-100 px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 transition-all mr-2"
                         >
                             <Trash2 className="w-4 h-4" />
@@ -189,7 +200,7 @@ export default function ItineraryPage() {
                                         setEditingEvent(e);
                                         setShowForm(true);
                                     }}
-                                    onDelete={handleDelete}
+                                    onDelete={confirmDelete}
                                     isSelected={selectedIds.has(event.id)}
                                     onToggleSelect={toggleSelect}
                                 />
@@ -210,6 +221,16 @@ export default function ItineraryPage() {
                     />
                 )
             }
+            <ConfirmDialog
+                isOpen={confirmState.isOpen}
+                onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
+                onConfirm={executeDelete}
+                title={confirmState.type === 'bulk' ? "Delete Events?" : "Delete Event?"}
+                description={confirmState.type === 'bulk'
+                    ? `Are you sure you want to delete ${selectedIds.size} events? This action cannot be undone.`
+                    : "Are you sure you want to delete this event? This action cannot be undone."}
+                variant="danger"
+            />
             <LimitModal
                 isOpen={showLimitModal}
                 onClose={() => setShowLimitModal(false)}

@@ -11,6 +11,8 @@ import { CURRENCIES } from "@/lib/constants"; // Added import
 
 import { LimitModal } from "@/components/dashboard/limit-modal";
 
+import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+
 export default function VendorsPage() {
     const [vendors, setVendors] = useState<Vendor[]>([]);
     const [loading, setLoading] = useState(true);
@@ -21,6 +23,10 @@ export default function VendorsPage() {
     const [tier, setTier] = useState<PlanTier>('free');
     const [currency, setCurrency] = useState("USD"); // Added currency state
     const [showLimitModal, setShowLimitModal] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    // Confirm Modal State
+    const [confirmState, setConfirmState] = useState<{ isOpen: boolean; type: 'single' | 'bulk'; id?: string }>({ isOpen: false, type: 'single' });
 
     useEffect(() => {
         const storedWeddingId = localStorage.getItem("current_wedding_id");
@@ -52,21 +58,41 @@ export default function VendorsPage() {
         setLoading(false);
     };
 
-    const handleDelete = async (id: string) => {
-        const { error } = await supabase.from('vendors').delete().eq('id', id);
-        if (!error) {
-            setVendors(prev => prev.filter(v => v.id !== id));
-            setSelectedIds(prev => {
-                const next = new Set(prev);
-                next.delete(id);
-                return next;
-            });
-        } else {
-            alert("Failed to delete vendor");
-        }
+    // Delete Logic
+    const confirmDelete = (id: string) => {
+        setConfirmState({ isOpen: true, type: 'single', id });
     };
 
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const confirmBulkDelete = () => {
+        setConfirmState({ isOpen: true, type: 'bulk' });
+    };
+
+    const executeDelete = async () => {
+        if (confirmState.type === 'single' && confirmState.id) {
+            const { error } = await supabase.from('vendors').delete().eq('id', confirmState.id);
+            if (!error) {
+                setVendors(prev => prev.filter(v => v.id !== confirmState.id));
+                setSelectedIds(prev => {
+                    const next = new Set(prev);
+                    next.delete(confirmState.id!);
+                    return next;
+                });
+            } else {
+                alert("Failed to delete vendor");
+            }
+        } else if (confirmState.type === 'bulk') {
+            const ids = Array.from(selectedIds);
+            const { error } = await supabase.from('vendors').delete().in('id', ids);
+
+            if (error) {
+                alert("Error deleting: " + error.message);
+            } else {
+                if (weddingId) fetchVendors(weddingId);
+                setSelectedIds(new Set());
+            }
+        }
+        setConfirmState({ ...confirmState, isOpen: false });
+    };
 
     const toggleSelectAll = () => {
         if (selectedIds.size === vendors.length) {
@@ -86,20 +112,7 @@ export default function VendorsPage() {
         setSelectedIds(newSelected);
     };
 
-    const handleBulkDelete = async () => {
-        if (!confirm(`Are you sure you want to delete ${selectedIds.size} vendors?`)) return;
-
-        const ids = Array.from(selectedIds);
-        const { error } = await supabase.from('vendors').delete().in('id', ids);
-
-        if (error) {
-            alert("Error deleting: " + error.message);
-        } else {
-            if (weddingId) fetchVendors(weddingId);
-            setSelectedIds(new Set());
-        }
-    };
-
+    // Derived State
     const categories = ["All", ...Array.from(new Set(vendors.map(v => v.category)))];
     const filteredVendors = filterCategory === "All"
         ? vendors
@@ -117,20 +130,31 @@ export default function VendorsPage() {
                     <h2 className="font-serif text-3xl font-bold text-foreground">Vendors</h2>
                     <p className="mt-1 text-muted-foreground">Manage your wedding team.</p>
                 </div>
-                <button
-                    onClick={() => {
-                        if (!checkLimit(tier, 'vendors', vendors.length)) {
-                            setShowLimitModal(true);
-                            return;
-                        }
-                        setEditingVendor(undefined);
-                        setShowForm(true);
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
-                >
-                    <Plus className="w-4 h-4" />
-                    Add Vendor
-                </button>
+                <div className="flex items-center gap-3">
+                    {selectedIds.size > 0 && (
+                        <button
+                            onClick={confirmBulkDelete}
+                            className="flex items-center gap-2 rounded-xl bg-red-100 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-200 transition-all mr-2"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            Delete ({selectedIds.size})
+                        </button>
+                    )}
+                    <button
+                        onClick={() => {
+                            if (!checkLimit(tier, 'vendors', vendors.length)) {
+                                setShowLimitModal(true);
+                                return;
+                            }
+                            setEditingVendor(undefined);
+                            setShowForm(true);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Add Vendor
+                    </button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -188,7 +212,7 @@ export default function VendorsPage() {
                                 setEditingVendor(v);
                                 setShowForm(true);
                             }}
-                            onDelete={handleDelete}
+                            onDelete={confirmDelete}
                             isSelected={selectedIds.has(vendor.id)}
                             onToggleSelect={toggleSelect}
                             currencySymbol={symbol}
@@ -205,6 +229,18 @@ export default function VendorsPage() {
                     onSuccess={() => fetchVendors(weddingId)}
                 />
             )}
+
+            <ConfirmDialog
+                isOpen={confirmState.isOpen}
+                onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
+                onConfirm={executeDelete}
+                title={confirmState.type === 'bulk' ? "Delete Vendors?" : "Delete Vendor?"}
+                description={confirmState.type === 'bulk'
+                    ? `Are you sure you want to delete ${selectedIds.size} vendors? This action cannot be undone.`
+                    : "Are you sure you want to delete this vendor? This action cannot be undone."}
+                variant="danger"
+            />
+
             <LimitModal
                 isOpen={showLimitModal}
                 onClose={() => setShowLimitModal(false)}
