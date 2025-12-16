@@ -8,6 +8,7 @@ interface InventoryItemProps {
     onEdit: (item: InventoryItem) => void;
     onDelete: (id: string) => void;
     onToggleStatus: (item: InventoryItem) => void;
+    currencySymbol?: string;
 }
 
 const statusBadges: Record<ItemStatus, { label: string; className: string }> = {
@@ -18,7 +19,7 @@ const statusBadges: Record<ItemStatus, { label: string; className: string }> = {
     packed: { label: 'Packed', className: 'bg-green-100 text-green-700' },
 };
 
-export default function InventoryItemRow({ item, onEdit, onDelete, onToggleStatus }: InventoryItemProps) {
+export default function InventoryItemRow({ item, onEdit, onDelete, onToggleStatus, currencySymbol = '$' }: InventoryItemProps) {
     const totalCost = (item.quantity * item.unit_cost);
     const badge = statusBadges[item.status];
 
@@ -29,8 +30,8 @@ export default function InventoryItemRow({ item, onEdit, onDelete, onToggleStatu
                     <button
                         onClick={() => onToggleStatus(item)}
                         className={`p-1 rounded-full transition-colors ${item.status === 'packed'
-                                ? 'text-green-600 bg-green-50'
-                                : 'text-gray-300 hover:text-gray-400'
+                            ? 'text-green-600 bg-green-50'
+                            : 'text-gray-300 hover:text-gray-400'
                             }`}
                         title="Mark as Packed"
                     >
@@ -56,9 +57,9 @@ export default function InventoryItemRow({ item, onEdit, onDelete, onToggleStatu
                 {item.quantity}
             </td>
             <td className="px-6 py-4 text-right text-sm">
-                <div className="font-medium text-gray-900">${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div className="font-medium text-gray-900">{currencySymbol}{totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                 {item.quantity > 1 && (
-                    <div className="text-xs text-gray-500">${item.unit_cost}/ea</div>
+                    <div className="text-xs text-gray-500">{currencySymbol}{item.unit_cost}/ea</div>
                 )}
             </td>
             <td className="px-6 py-4 text-right">

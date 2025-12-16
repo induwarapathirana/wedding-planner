@@ -6,6 +6,7 @@ import { Plus, Package, Search } from "lucide-react";
 import { InventoryItem } from "@/types/inventory";
 import InventoryItemRow from "@/components/dashboard/inventory/InventoryItem";
 import InventoryForm from "@/components/dashboard/inventory/InventoryForm";
+import { CURRENCIES } from "@/lib/constants";
 
 export default function InventoryPage() {
     const [items, setItems] = useState<InventoryItem[]>([]);
@@ -14,12 +15,18 @@ export default function InventoryPage() {
     const [showForm, setShowForm] = useState(false);
     const [editingItem, setEditingItem] = useState<InventoryItem | undefined>(undefined);
     const [searchTerm, setSearchTerm] = useState("");
+    const [currency, setCurrency] = useState("USD");
 
     useEffect(() => {
         const storedWeddingId = localStorage.getItem("current_wedding_id");
         if (storedWeddingId) {
             setWeddingId(storedWeddingId);
             fetchItems(storedWeddingId);
+            // Fetch Currency
+            supabase.from('weddings').select('currency').eq('id', storedWeddingId).single()
+                .then(({ data }) => {
+                    if (data && data.currency) setCurrency(data.currency);
+                });
         }
     }, []);
 
@@ -66,6 +73,11 @@ export default function InventoryPage() {
         item.category?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const getCurrencySymbol = (code: string) => {
+        return CURRENCIES.find(c => c.code === code)?.symbol || '$';
+    };
+    const symbol = getCurrencySymbol(currency);
+
     const totalItems = items.reduce((acc, item) => acc + item.quantity, 0);
     const totalCost = items.reduce((acc, item) => acc + (item.quantity * item.unit_cost), 0);
     const packedCount = items.filter(i => i.status === 'packed').length;
@@ -98,7 +110,7 @@ export default function InventoryPage() {
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                     <div className="text-sm text-gray-500 font-medium">Estimated Cost</div>
                     <div className="text-2xl font-bold text-gray-900 mt-1">
-                        ${totalCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                        {symbol}{totalCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </div>
                 </div>
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
@@ -165,6 +177,7 @@ export default function InventoryPage() {
                                         }}
                                         onDelete={handleDelete}
                                         onToggleStatus={handleToggleStatus}
+                                        currencySymbol={symbol} // Passing symbol
                                     />
                                 ))}
                             </tbody>
