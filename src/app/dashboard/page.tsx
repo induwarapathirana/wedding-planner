@@ -16,6 +16,16 @@ type WeddingData = {
 };
 
 export default function DashboardPage() {
+    const [wedding, setWedding] = useState<WeddingData | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState({
+        guestCount: 0,
+        targetGuest: 0,
+        totalBudget: 0,
+        estBudget: 0,
+        currency: 'USD'
+    });
+    const [inviteCode, setInviteCode] = useState("");
     const [upcomingTasks, setUpcomingTasks] = useState<any[]>([]);
     const [pendingPayments, setPendingPayments] = useState<any[]>([]);
     const [pendingGuests, setPendingGuests] = useState<any[]>([]);
