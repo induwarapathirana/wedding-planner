@@ -55,6 +55,26 @@ export default function WeddingSelector() {
         window.location.reload();
     }
 
+    const [showJoinInput, setShowJoinInput] = useState(false);
+    const [inviteCode, setInviteCode] = useState("");
+    const [joining, setJoining] = useState(false);
+
+    async function handleJoin(e: React.FormEvent) {
+        e.preventDefault();
+        setJoining(true);
+
+        const { data, error } = await supabase.rpc('accept_invitation', { lookup_token: inviteCode });
+
+        if (error || (data && data.error)) {
+            alert(error?.message || "Invalid or expired invitation code.");
+            setJoining(false);
+        } else {
+            alert("Successfully joined wedding!");
+            setIsOpen(false);
+            window.location.reload();
+        }
+    }
+
     if (weddings.length === 0) {
         return (
             <Link
@@ -84,7 +104,7 @@ export default function WeddingSelector() {
             </button>
 
             {isOpen && (
-                <div className="absolute top-full mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+                <div className="absolute top-full mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
                     {weddings.map((wedding) => (
                         <button
                             key={wedding.id}
@@ -100,13 +120,53 @@ export default function WeddingSelector() {
                             </div>
                         </button>
                     ))}
-                    <Link
-                        href="/onboarding"
-                        className="flex items-center gap-2 w-full px-4 py-3 text-sm font-medium text-primary hover:bg-primary/10 transition-colors"
-                    >
-                        <Plus className="w-4 h-4" />
-                        Create New Wedding
-                    </Link>
+
+                    <div className="p-2 space-y-2 bg-gray-50/50">
+                        <Link
+                            href="/onboarding"
+                            className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10 rounded-md transition-colors"
+                        >
+                            <Plus className="w-4 h-4" />
+                            Create New Wedding
+                        </Link>
+
+                        {!showJoinInput ? (
+                            <button
+                                onClick={() => setShowJoinInput(true)}
+                                className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-md transition-colors"
+                            >
+                                <span className="text-xs">🔗</span>
+                                Join via Code
+                            </button>
+                        ) : (
+                            <form onSubmit={handleJoin} className="p-2 bg-white border border-gray-200 rounded-md">
+                                <input
+                                    type="text"
+                                    placeholder="Enter Code"
+                                    className="w-full text-xs p-2 border border-gray-200 rounded mb-2 focus:outline-none focus:border-primary"
+                                    value={inviteCode}
+                                    onChange={(e) => setInviteCode(e.target.value)}
+                                    autoFocus
+                                />
+                                <div className="flex gap-2">
+                                    <button
+                                        type="submit"
+                                        disabled={joining || !inviteCode}
+                                        className="flex-1 bg-primary text-white text-xs py-1.5 rounded hover:bg-primary/90 disabled:opacity-50"
+                                    >
+                                        {joining ? '...' : 'Join'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowJoinInput(false)}
+                                        className="px-2 text-gray-500 hover:bg-gray-100 rounded"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+                    </div>
                 </div>
             )}
         </div>
