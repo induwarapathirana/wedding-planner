@@ -274,7 +274,7 @@ export default function SettingsPage() {
                                     <PayHereButton
                                         orderId={`ORDER_${wedding?.id}_${Date.now()}`}
                                         items="Wedding Planner Premium"
-                                        amount={99}
+                                        amount={990}
                                         currency="LKR"
                                         first_name={wedding?.couple_name_1.split(' ')[0] || 'User'}
                                         last_name={wedding?.couple_name_1.split(' ')[1] || 'Name'}
@@ -285,7 +285,7 @@ export default function SettingsPage() {
                                         country="Sri Lanka"
                                         className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors"
                                     >
-                                        Upgrade for 99 LKR
+                                        Upgrade for 990 LKR
                                     </PayHereButton>
                                 )}
                             </div>

@@ -47,7 +47,7 @@ export function LimitModal({ isOpen, onClose, feature, limit, tier }: LimitModal
                                 href="/dashboard/settings"
                                 className="flex items-center justify-center w-full py-3 px-4 bg-gray-900 text-white font-medium rounded-xl hover:bg-gray-800 transition-colors shadow-lg hover:shadow-xl hover:-translate-y-0.5 transform duration-200"
                             >
-                                Upgrade Now for 99 LKR
+                                Upgrade Now for 990 LKR
                             </Link>
                             <button
                                 onClick={onClose}
