@@ -205,9 +205,16 @@ function ChecklistContent() {
     }, {} as Record<string, ChecklistItem[]>);
 
     // Custom sort order for categories
-    const categoryOrder = [
+    const preferredOrder = [
         "12+ Months Out", "9-12 Months Out", "6-9 Months Out", "4-6 Months Out",
         "2-4 Months Out", "1 Month Out", "Final Week", "Wedding Day", "Uncategorized"
+    ];
+
+    const existingCategories = Object.keys(groupedItems);
+
+    const displayCategories = [
+        ...preferredOrder,
+        ...existingCategories.filter(c => !preferredOrder.includes(c))
     ];
 
     return (
@@ -332,7 +339,7 @@ function ChecklistContent() {
                     /* ADVANCED MODE: Timeline Layout */
                     <div className="p-8">
                         <div className="relative border-l border-border ml-3 space-y-10">
-                            {categoryOrder.filter(cat => groupedItems[cat] && groupedItems[cat].length > 0).map((category) => (
+                            {displayCategories.filter(cat => groupedItems[cat] && groupedItems[cat].length > 0).map((category) => (
                                 <div key={category} className="relative pl-8">
                                     {/* Timeline Dot */}
                                     <div className="absolute -left-1.5 top-1 h-3 w-3 rounded-full bg-primary ring-4 ring-white" />
