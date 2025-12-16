@@ -75,6 +75,10 @@ export default function LoginPage() {
 
     //Google OAuth
     const handleGoogleSignIn = async () => {
+        if (isSignUp && !agreedToPolicy) {
+            alert("Please agree to the Privacy Policy to create an account.");
+            return;
+        }
         setLoading(true);
 
         const params = new URLSearchParams(window.location.search);
@@ -206,6 +210,21 @@ export default function LoginPage() {
                 </div>
 
                 <div className="rounded-2xl bg-white p-8 shadow-xl">
+                    {isSignUp && (
+                        <div className="flex items-center gap-2 mb-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                            <input
+                                id="privacy-policy"
+                                type="checkbox"
+                                checked={agreedToPolicy}
+                                onChange={(e) => setAgreedToPolicy(e.target.checked)}
+                                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                            />
+                            <label htmlFor="privacy-policy" className="text-sm text-muted-foreground">
+                                I agree to the <Link href="/privacy-policy" target="_blank" className="text-primary hover:underline">Privacy Policy</Link>
+                            </label>
+                        </div>
+                    )}
+
                     <button
                         type="button"
                         onClick={handleGoogleSignIn}
@@ -249,21 +268,6 @@ export default function LoginPage() {
                                 required
                             />
                         </div>
-
-                        {isSignUp && (
-                            <div className="flex items-center gap-2 mb-4">
-                                <input
-                                    id="privacy-policy"
-                                    type="checkbox"
-                                    checked={agreedToPolicy}
-                                    onChange={(e) => setAgreedToPolicy(e.target.checked)}
-                                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                                />
-                                <label htmlFor="privacy-policy" className="text-sm text-muted-foreground">
-                                    I agree to the <Link href="/privacy-policy" target="_blank" className="text-primary hover:underline">Privacy Policy</Link>
-                                </label>
-                            </div>
-                        )}
 
                         <button
                             type="submit"
