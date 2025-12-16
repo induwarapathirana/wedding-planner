@@ -24,6 +24,7 @@ import WeddingSelector from "./WeddingSelector";
 import { supabase } from "@/lib/supabase";
 
 const navItems = [
+    { name: "Overview", href: "/dashboard", icon: DollarSign },
     { name: "Budget", href: "/dashboard/budget", icon: DollarSign },
     { name: "Guest List", href: "/dashboard/guests", icon: Users },
     { name: "Vendors", href: "/dashboard/vendors", icon: HeartHandshake },
