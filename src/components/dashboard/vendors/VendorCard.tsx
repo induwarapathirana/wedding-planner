@@ -9,6 +9,7 @@ interface VendorCardProps {
     onDelete: (id: string) => void;
     isSelected?: boolean;
     onToggleSelect?: (id: string) => void;
+    currencySymbol?: string;
 }
 
 const statusColors: Record<VendorStatus, string> = {
@@ -18,7 +19,7 @@ const statusColors: Record<VendorStatus, string> = {
     declined: "bg-gray-100 text-gray-700",
 };
 
-export default function VendorCard({ vendor, onEdit, onDelete, isSelected, onToggleSelect }: VendorCardProps) {
+export default function VendorCard({ vendor, onEdit, onDelete, isSelected, onToggleSelect, currencySymbol = '$' }: VendorCardProps) {
     const [showActions, setShowActions] = useState(false);
 
     return (
@@ -81,7 +82,7 @@ export default function VendorCard({ vendor, onEdit, onDelete, isSelected, onTog
                 )}
                 {vendor.price_estimate && (
                     <div className="pt-2 mt-2 border-t border-gray-50 text-gray-900 font-medium">
-                        Est: ${vendor.price_estimate.toLocaleString()}
+                        Est: {currencySymbol}{vendor.price_estimate.toLocaleString()}
                     </div>
                 )}
             </div>

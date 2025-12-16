@@ -7,6 +7,7 @@ import { Vendor } from "@/types/vendors";
 import VendorCard from "@/components/dashboard/vendors/VendorCard";
 import VendorForm from "@/components/dashboard/vendors/VendorForm";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
+import { CURRENCIES } from "@/lib/constants"; // Added import
 
 import { LimitModal } from "@/components/dashboard/limit-modal";
 
@@ -18,6 +19,7 @@ export default function VendorsPage() {
     const [editingVendor, setEditingVendor] = useState<Vendor | undefined>(undefined);
     const [filterCategory, setFilterCategory] = useState<string>("All");
     const [tier, setTier] = useState<PlanTier>('free');
+    const [currency, setCurrency] = useState("USD"); // Added currency state
     const [showLimitModal, setShowLimitModal] = useState(false);
 
     useEffect(() => {
@@ -25,9 +27,14 @@ export default function VendorsPage() {
         if (storedWeddingId) {
             setWeddingId(storedWeddingId);
             fetchVendors(storedWeddingId);
-            // Fetch Tier
-            supabase.from('weddings').select('tier').eq('id', storedWeddingId).single()
-                .then(({ data }) => { if (data) setTier((data.tier as PlanTier) || 'free'); });
+            // Fetch Tier & Currency
+            supabase.from('weddings').select('tier, currency').eq('id', storedWeddingId).single()
+                .then(({ data }) => {
+                    if (data) {
+                        setTier((data.tier as PlanTier) || 'free');
+                        if (data.currency) setCurrency(data.currency);
+                    }
+                });
         }
     }, []);
 
@@ -97,6 +104,11 @@ export default function VendorsPage() {
     const filteredVendors = filterCategory === "All"
         ? vendors
         : vendors.filter(v => v.category === filterCategory);
+
+    const getCurrencySymbol = (code: string) => {
+        return CURRENCIES.find(c => c.code === code)?.symbol || '$';
+    };
+    const symbol = getCurrencySymbol(currency);
 
     return (
         <div className="space-y-6">
@@ -179,6 +191,7 @@ export default function VendorsPage() {
                             onDelete={handleDelete}
                             isSelected={selectedIds.has(vendor.id)}
                             onToggleSelect={toggleSelect}
+                            currencySymbol={symbol}
                         />
                     ))}
                 </div>
