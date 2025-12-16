@@ -19,6 +19,7 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [isSignUp, setIsSignUp] = useState(false);
     const [redirecting, setRedirecting] = useState(false);
+    const [agreedToPolicy, setAgreedToPolicy] = useState(false);
 
     // Handle OAuth hash tokens (implicit flow)
     useEffect(() => {
@@ -107,6 +108,12 @@ export default function LoginPage() {
         const inviteToken = params.get('invite_token') || localStorage.getItem('pending_invite_token');
 
         if (isSignUp) {
+            if (!agreedToPolicy) {
+                alert("Please agree to the Privacy Policy to create an account.");
+                setLoading(false);
+                return;
+            }
+
             const options: any = {
                 emailRedirectTo: `${window.location.origin}/auth/callback`,
             };
@@ -242,6 +249,21 @@ export default function LoginPage() {
                                 required
                             />
                         </div>
+
+                        {isSignUp && (
+                            <div className="flex items-center gap-2 mb-4">
+                                <input
+                                    id="privacy-policy"
+                                    type="checkbox"
+                                    checked={agreedToPolicy}
+                                    onChange={(e) => setAgreedToPolicy(e.target.checked)}
+                                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                />
+                                <label htmlFor="privacy-policy" className="text-sm text-muted-foreground">
+                                    I agree to the <Link href="/privacy-policy" target="_blank" className="text-primary hover:underline">Privacy Policy</Link>
+                                </label>
+                            </div>
+                        )}
 
                         <button
                             type="submit"
