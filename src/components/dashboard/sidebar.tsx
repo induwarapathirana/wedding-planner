@@ -24,14 +24,13 @@ import WeddingSelector from "./WeddingSelector";
 import { supabase } from "@/lib/supabase";
 
 const navItems = [
-    { name: "Overview", href: "/dashboard", icon: DollarSign },
+    { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
     { name: "Budget", href: "/dashboard/budget", icon: DollarSign },
+    { name: "Checklist", href: "/dashboard/checklist", icon: CheckSquare },
     { name: "Guest List", href: "/dashboard/guests", icon: Users },
     { name: "Vendors", href: "/dashboard/vendors", icon: HeartHandshake },
-    { name: "Itinerary", href: "/dashboard/itinerary", icon: CalendarClock },
-    { name: "Checklist", href: "/dashboard/checklist", icon: CheckSquare },
     { name: "Inventory", href: "/dashboard/inventory", icon: Package },
-    //{ name: "Settings", href: "/dashboard/settings", icon: Settings },
+    { name: "Itinerary", href: "/dashboard/itinerary", icon: CalendarClock },
 ];
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
