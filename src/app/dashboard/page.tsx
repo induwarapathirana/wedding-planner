@@ -16,16 +16,9 @@ type WeddingData = {
 };
 
 export default function DashboardPage() {
-    const [wedding, setWedding] = useState<WeddingData | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [stats, setStats] = useState({
-        guestCount: 0,
-        targetGuest: 0,
-        totalBudget: 0,
-        estBudget: 0,
-        currency: 'USD'
-    });
-    const [inviteCode, setInviteCode] = useState("");
+    const [upcomingTasks, setUpcomingTasks] = useState<any[]>([]);
+    const [pendingPayments, setPendingPayments] = useState<any[]>([]);
+    const [pendingGuests, setPendingGuests] = useState<any[]>([]);
     const router = useRouter();
 
     useEffect(() => {
@@ -51,10 +44,30 @@ export default function DashboardPage() {
                     localStorage.setItem("current_wedding_id", weddingData.id);
 
                     try {
-                        // Fetch Counts concurrently
-                        const [guestsResult, budgetResult] = await Promise.all([
+                        // Fetch Stats & Widgets concurrently
+                        const [guestsResult, budgetResult, tasksRes, paymentsRes, guestsListRes] = await Promise.all([
                             supabase.from('guests').select('id', { count: 'exact', head: true }).eq('wedding_id', weddingData.id),
-                            supabase.from('budget_items').select('estimated_cost').eq('wedding_id', weddingData.id)
+                            supabase.from('budget_items').select('estimated_cost').eq('wedding_id', weddingData.id),
+                            // Widget 1: Upcoming Tasks
+                            supabase.from('checklist_items')
+                                .select('*')
+                                .eq('wedding_id', weddingData.id)
+                                .eq('is_completed', false)
+                                .order('due_date', { ascending: true, nullsFirst: false }) // Put no-date items last? Or filter items with due_date? ordered
+                                .limit(5),
+                            // Widget 2: Pending Payments
+                            supabase.from('budget_items')
+                                .select('*')
+                                .eq('wedding_id', weddingData.id)
+                                .is('paid_at', null)
+                                .order('due_date', { ascending: true, nullsFirst: false })
+                                .limit(5),
+                            // Widget 3: Pending Guests
+                            supabase.from('guests')
+                                .select('*')
+                                .eq('wedding_id', weddingData.id)
+                                .eq('rsvp_status', 'pending')
+                                .limit(5)
                         ]);
 
                         const guestCount = guestsResult.count || 0;
@@ -69,6 +82,11 @@ export default function DashboardPage() {
                             estBudget: weddingData.estimated_budget || 0,
                             currency: (weddingData as WeddingData).currency || 'USD'
                         });
+
+                        if (tasksRes.data) setUpcomingTasks(tasksRes.data);
+                        if (paymentsRes.data) setPendingPayments(paymentsRes.data);
+                        if (guestsListRes.data) setPendingGuests(guestsListRes.data);
+
                     } catch (err) {
                         console.error("Dashboard Stats Error:", err);
                         // Fallback to basic stats
@@ -86,6 +104,7 @@ export default function DashboardPage() {
 
     if (!wedding) {
         return (
+            /* ... existing empty state ... */
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
                 <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center text-4xl mb-4">
                     ✨
@@ -136,7 +155,7 @@ export default function DashboardPage() {
     const daysToGo = differenceInDays(parseISO(wedding.wedding_date), new Date());
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8">
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="font-serif text-3xl font-bold text-foreground">
@@ -154,34 +173,124 @@ export default function DashboardPage() {
 
             {/* Content Placeholder */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                <div className="h-40 rounded-2xl border border-border bg-white p-6 shadow-sm">
-                    <h3 className="font-medium text-foreground">Budget (Actual / Est.)</h3>
-                    <p className="mt-2 text-2xl font-bold text-primary">
-                        {stats.currency} {stats.totalBudget.toLocaleString()} <span className="text-muted-foreground text-lg font-normal">/ {stats.estBudget.toLocaleString()}</span>
+                <div className="h-40 rounded-2xl border border-border bg-white p-6 shadow-sm relative overflow-hidden group">
+                    <div className="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <span className="text-6xl">💰</span>
+                    </div>
+                    <h3 className="font-medium text-foreground relative z-10">Budget</h3>
+                    <p className="mt-2 text-3xl font-bold text-primary relative z-10">
+                        {stats.currency}{stats.totalBudget.toLocaleString()} <span className="text-muted-foreground text-lg font-normal">/ {stats.estBudget.toLocaleString()}</span>
                     </p>
-                    <div className="mt-3 h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                    <div className="mt-4 h-2 w-full bg-gray-100 rounded-full overflow-hidden relative z-10">
                         <div
                             className="h-full bg-primary rounded-full transition-all"
                             style={{ width: `${stats.estBudget > 0 ? Math.min((stats.totalBudget / stats.estBudget) * 100, 100) : 0}%` }}
                         />
                     </div>
                 </div>
-                <div className="h-40 rounded-2xl border border-border bg-white p-6 shadow-sm">
-                    <h3 className="font-medium text-foreground">Guest Count (Confirmed / Target)</h3>
-                    <p className="mt-2 text-2xl font-bold text-secondary-foreground">
+                <div className="h-40 rounded-2xl border border-border bg-white p-6 shadow-sm relative overflow-hidden group">
+                    <div className="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <span className="text-6xl">👥</span>
+                    </div>
+                    <h3 className="font-medium text-foreground relative z-10">Guest Count</h3>
+                    <p className="mt-2 text-3xl font-bold text-secondary-foreground relative z-10">
                         {stats.guestCount} <span className="text-muted-foreground text-lg font-normal">/ {stats.targetGuest}</span>
                     </p>
-                    <div className="mt-3 h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                    <div className="mt-4 h-2 w-full bg-gray-100 rounded-full overflow-hidden relative z-10">
                         <div
                             className="h-full bg-secondary-foreground rounded-full transition-all"
                             style={{ width: `${stats.targetGuest > 0 ? Math.min((stats.guestCount / stats.targetGuest) * 100, 100) : 0}%` }}
                         />
                     </div>
                 </div>
-                <div className="h-40 rounded-2xl border border-border bg-white p-6 shadow-sm">
-                    <h3 className="font-medium text-foreground">Days to Go</h3>
-                    <p className="mt-2 text-2xl font-bold text-foreground">{daysToGo > 0 ? daysToGo : "Big Day!"}</p>
-                    <p className="text-sm text-muted-foreground mt-1">{new Date(wedding.wedding_date).toDateString()}</p>
+                <div className="h-40 rounded-2xl border border-border bg-white p-6 shadow-sm relative overflow-hidden group">
+                    <div className="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <span className="text-6xl">📅</span>
+                    </div>
+                    <h3 className="font-medium text-foreground relative z-10">Days to Go</h3>
+                    <p className="mt-2 text-3xl font-bold text-foreground relative z-10">{daysToGo > 0 ? daysToGo : "Big Day!"}</p>
+                    <p className="text-sm text-muted-foreground mt-1 relative z-10">{new Date(wedding.wedding_date).toDateString()}</p>
+                </div>
+            </div>
+
+            {/* Actionable Widgets */}
+            <h3 className="font-medium text-lg text-gray-900 border-b pb-2">At a Glance</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Widget 1: Upcoming Tasks */}
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex flex-col h-full">
+                    <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+                            <span className="bg-amber-100 text-amber-700 p-1 rounded">📋</span> Upcoming Tasks
+                        </h4>
+                        <button onClick={() => router.push('/dashboard/checklist')} className="text-xs text-primary hover:underline">View All</button>
+                    </div>
+                    <div className="space-y-3 flex-1">
+                        {upcomingTasks.length === 0 ? (
+                            <p className="text-sm text-gray-400 italic">No upcoming tasks.</p>
+                        ) : upcomingTasks.map(task => (
+                            <div key={task.id} className="flex items-start gap-3 border-b border-gray-50 last:border-0 pb-2 last:pb-0">
+                                <div className="mt-0.5 w-2 h-2 rounded-full bg-amber-400 flex-shrink-0"></div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-700 line-clamp-1">{task.title}</p>
+                                    <p className="text-xs text-gray-500">
+                                        Due: {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No date'}
+                                    </p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Widget 2: Pending Payments */}
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex flex-col h-full">
+                    <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+                            <span className="bg-rose-100 text-rose-700 p-1 rounded">💸</span> Pending Payments
+                        </h4>
+                        <button onClick={() => router.push('/dashboard/budget')} className="text-xs text-primary hover:underline">View All</button>
+                    </div>
+                    <div className="space-y-3 flex-1">
+                        {pendingPayments.length === 0 ? (
+                            <p className="text-sm text-gray-400 italic">No pending payments.</p>
+                        ) : pendingPayments.map(payment => (
+                            <div key={payment.id} className="flex items-start gap-3 border-b border-gray-50 last:border-0 pb-2 last:pb-0">
+                                <div className="mt-0.5 w-2 h-2 rounded-full bg-rose-400 flex-shrink-0"></div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-700 line-clamp-1">{payment.name}</p>
+                                    <p className="text-xs text-gray-500">
+                                        Amt: {stats.currency}{payment.estimated_cost.toLocaleString()} • Due: {payment.due_date ? new Date(payment.due_date).toLocaleDateString() : 'No date'}
+                                    </p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Widget 3: Pending RSVPs */}
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex flex-col h-full">
+                    <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+                            <span className="bg-blue-100 text-blue-700 p-1 rounded">📩</span> Pending RSVPs
+                        </h4>
+                        <button onClick={() => router.push('/dashboard/guests')} className="text-xs text-primary hover:underline">View All</button>
+                    </div>
+                    <div className="space-y-3 flex-1">
+                        {pendingGuests.length === 0 ? (
+                            <p className="text-sm text-gray-400 italic">All caught up on RSVPs!</p>
+                        ) : pendingGuests.map(guest => (
+                            <div key={guest.id} className="flex items-center gap-3 border-b border-gray-50 last:border-0 pb-2 last:pb-0">
+                                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">
+                                    {guest.name.charAt(0)}
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-700 line-clamp-1">{guest.name}</p>
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 uppercase">
+                                        Pending
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
         </div>
