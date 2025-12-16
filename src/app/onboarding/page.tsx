@@ -24,15 +24,27 @@ export default function OnboardingPage() {
             return;
         }
 
-        // 1. Create Profile first (if using RLS this forces profile existence)
-        // We try to upsert profile just in case
-        const updates = {
-            id: user.id,
-            email: user.email,
-            full_name: partnerOne, // defaults
-            created_at: new Date(),
+        // 1. Check/Create Profile
+        // We only likely need to create this if it's the very first time (and trigger didn't catch it)
+        // OR if we want to ensure their name is set.
+        // BUT we must NOT overwrite an existing name if they are a planner creating multiple weddings.
+
+        const { data: existingProfile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (!existingProfile) {
+            // New user (or missing profile) - Set name to input
+            await supabase.from('profiles').insert({
+                id: user.id,
+                email: user.email,
+                full_name: partnerOne,
+                created_at: new Date().toISOString(),
+            });
         }
-        await supabase.from('profiles').upsert(updates);
+        // If profile exists, we leave it alone. The user's "global identity" is stable.
 
         // 2. Create Wedding
         const { data: wedding, error } = await supabase.from('weddings').insert({
@@ -58,7 +70,7 @@ export default function OnboardingPage() {
             localStorage.setItem("current_wedding_id", wedding.id);
 
             // Force full page reload to ensure session and cookies are properly synced
-            window.location.href = "/dashboard";
+            window.location.href = "/dashboard?welcome=true";
         }
     };
 

@@ -17,7 +17,7 @@ export const PLAN_LIMITS = {
         checklist_items: Infinity,
         collaborators: Infinity
     }
-};
+} as const;
 
 export function checkLimit(tier: PlanTier = 'free', feature: keyof typeof PLAN_LIMITS.free, currentCount: number): boolean {
     const limit = PLAN_LIMITS[tier][feature];

@@ -4,20 +4,24 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { differenceInDays, parseISO } from "date-fns";
+import { PlanComparisonModal } from "@/components/dashboard/plan-comparison-modal";
 
 type WeddingData = {
-    id: string; // Added id for localStorage
+    id: string;
     couple_name_1: string;
     couple_name_2: string;
     wedding_date: string;
     currency?: string;
     target_guest_count?: number;
     estimated_budget?: number;
+    tier?: 'free' | 'premium';
 };
 
 export default function DashboardPage() {
     const [wedding, setWedding] = useState<WeddingData | null>(null);
     const [loading, setLoading] = useState(true);
+    const [showPlanModal, setShowPlanModal] = useState(false);
+    
     const [stats, setStats] = useState({
         guestCount: 0,
         targetGuest: 0,
@@ -25,96 +29,130 @@ export default function DashboardPage() {
         estBudget: 0,
         currency: 'USD'
     });
+
     const [inviteCode, setInviteCode] = useState("");
     const [upcomingTasks, setUpcomingTasks] = useState<any[]>([]);
     const [pendingPayments, setPendingPayments] = useState<any[]>([]);
     const [pendingGuests, setPendingGuests] = useState<any[]>([]);
+    
     const router = useRouter();
 
     useEffect(() => {
+        // Check for welcome param
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('welcome') === 'true') {
+                setShowPlanModal(true);
+                // Clean URL
+                window.history.replaceState({}, '', '/dashboard');
+            }
+        }
+
         async function fetchWedding() {
+            setLoading(true);
+            const weddingId = localStorage.getItem("current_wedding_id");
             const { data: { user } } = await supabase.auth.getUser();
+            
             if (!user) {
                 router.push("/login");
                 return;
             }
 
-            // Find the wedding this user owns/collaborates on
-            const { data: collaboration } = await supabase
-                .from('collaborators')
-                .select('wedding_id')
-                .eq('user_id', user.id)
-                .limit(1)
-                .maybeSingle();
+            if (!weddingId) {
+                // If no stored ID, try to find one
+                 const { data: collaboration } = await supabase
+                    .from('collaborators')
+                    .select('wedding_id')
+                    .eq('user_id', user.id)
+                    .limit(1)
+                    .maybeSingle();
 
-            if (collaboration) {
-                const { data: weddingData } = await supabase.from('weddings').select('*').eq('id', collaboration.wedding_id).single();
-                if (weddingData) {
-                    setWedding(weddingData as WeddingData);
-                    localStorage.setItem("current_wedding_id", weddingData.id);
-
-                    try {
-                        // Fetch Stats & Widgets concurrently
-                        const [guestsResult, budgetResult, tasksRes, paymentsRes, guestsListRes] = await Promise.all([
-                            supabase.from('guests').select('id', { count: 'exact', head: true }).eq('wedding_id', weddingData.id),
-                            supabase.from('budget_items').select('estimated_cost').eq('wedding_id', weddingData.id),
-                            // Widget 1: Upcoming Tasks
-                            supabase.from('checklist_items')
-                                .select('*')
-                                .eq('wedding_id', weddingData.id)
-                                .eq('is_completed', false)
-                                .order('due_date', { ascending: true, nullsFirst: false }) // Put no-date items last? Or filter items with due_date? ordered
-                                .limit(5),
-                            // Widget 2: Pending Payments
-                            supabase.from('budget_items')
-                                .select('*')
-                                .eq('wedding_id', weddingData.id)
-                                .is('paid_at', null)
-                                .order('due_date', { ascending: true, nullsFirst: false })
-                                .limit(5),
-                            // Widget 3: Pending Guests
-                            supabase.from('guests')
-                                .select('*')
-                                .eq('wedding_id', weddingData.id)
-                                .eq('rsvp_status', 'pending')
-                                .limit(5)
-                        ]);
-
-                        const guestCount = guestsResult.count || 0;
-                        const totalBudget = budgetResult.data
-                            ? budgetResult.data.reduce((acc, item) => acc + item.estimated_cost, 0)
-                            : 0;
-
-                        setStats({
-                            guestCount,
-                            targetGuest: weddingData.target_guest_count || 0,
-                            totalBudget,
-                            estBudget: weddingData.estimated_budget || 0,
-                            currency: (weddingData as WeddingData).currency || 'USD'
-                        });
-
-                        if (tasksRes.data) setUpcomingTasks(tasksRes.data);
-                        if (paymentsRes.data) setPendingPayments(paymentsRes.data);
-                        if (guestsListRes.data) setPendingGuests(guestsListRes.data);
-
-                    } catch (err) {
-                        console.error("Dashboard Stats Error:", err);
-                        // Fallback to basic stats
-                        setStats({ guestCount: 0, targetGuest: 0, totalBudget: 0, estBudget: 0, currency: 'USD' });
-                    }
+                if (collaboration) {
+                    localStorage.setItem("current_wedding_id", collaboration.wedding_id);
+                    // Recursively call or just let the next render/effect pick it up? 
+                    // Better to just continue here with the new ID
+                    return fetchWeddingDetails(collaboration.wedding_id);
+                } else {
+                    setLoading(false); // No wedding found
+                    return;
                 }
+            } else {
+                await fetchWeddingDetails(weddingId);
             }
-            // If no wedding, we simply stay on this page and render the empty state
+        }
+
+        async function fetchWeddingDetails(id: string) {
+            
+            const { data: weddingData, error } = await supabase
+                .from('weddings')
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (weddingData) {
+                setWedding(weddingData as WeddingData);
+                
+                try {
+                    // Fetch Stats & Widgets concurrently
+                    const [guestsResult, budgetResult, tasksRes, paymentsRes, guestsListRes] = await Promise.all([
+                        supabase.from('guests').select('id', { count: 'exact', head: true }).eq('wedding_id', id),
+                        supabase.from('budget_items').select('estimated_cost').eq('wedding_id', id),
+                        // Widget 1: Upcoming Tasks
+                        supabase.from('checklist_items')
+                            .select('*')
+                            .eq('wedding_id', id)
+                            .eq('is_completed', false)
+                            .order('due_date', { ascending: true, nullsFirst: false })
+                            .limit(5),
+                        // Widget 2: Pending Payments
+                        supabase.from('budget_items')
+                            .select('*')
+                            .eq('wedding_id', id)
+                            .is('paid_at', null)
+                            .order('due_date', { ascending: true, nullsFirst: false })
+                            .limit(5),
+                        // Widget 3: Pending Guests
+                        supabase.from('guests')
+                            .select('*')
+                            .eq('wedding_id', id)
+                            .eq('rsvp_status', 'pending')
+                            .limit(5)
+                    ]);
+
+                    const guestCount = guestsResult.count || 0;
+                    const totalBudget = budgetResult.data
+                        ? budgetResult.data.reduce((acc, item) => acc + item.estimated_cost, 0)
+                        : 0;
+
+                    setStats({
+                        guestCount,
+                        targetGuest: weddingData.target_guest_count || 0,
+                        totalBudget,
+                        estBudget: weddingData.estimated_budget || 0,
+                        currency: weddingData.currency || 'USD'
+                    });
+
+                    if (tasksRes.data) setUpcomingTasks(tasksRes.data);
+                    if (paymentsRes.data) setPendingPayments(paymentsRes.data);
+                    if (guestsListRes.data) setPendingGuests(guestsListRes.data);
+
+                } catch (err) {
+                    console.error("Dashboard Stats Error:", err);
+                }
+            } else {
+                // ID might be invalid, clear it
+                localStorage.removeItem("current_wedding_id");
+            }
             setLoading(false);
         }
+
         fetchWedding();
     }, [router]);
 
-    if (loading) return <div className="p-10 text-center text-muted-foreground">Loading specific details...</div>;
+    if (loading) return <div className="p-10 text-center text-muted-foreground">Loading dashboard...</div>;
 
     if (!wedding) {
         return (
-            /* ... existing empty state ... */
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
                 <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center text-4xl mb-4">
                     ✨
@@ -303,6 +341,11 @@ export default function DashboardPage() {
                     </div>
                 </div>
             </div>
+
+            <PlanComparisonModal 
+                isOpen={showPlanModal}
+                onClose={() => setShowPlanModal(false)}
+            />
         </div>
     );
 }
