@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Plus, Search, Filter, Trash2, CheckSquare, Square } from "lucide-react";
+import { Plus, Search, Filter, Trash2, CheckSquare, Square, BookUser } from "lucide-react";
 import { Vendor } from "@/types/vendors";
 import VendorCard from "@/components/dashboard/vendors/VendorCard";
 import VendorForm from "@/components/dashboard/vendors/VendorForm";
@@ -12,6 +12,7 @@ import { CURRENCIES } from "@/lib/constants"; // Added import
 import { LimitModal } from "@/components/dashboard/limit-modal";
 
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+import { DirectoryImportModal } from "@/components/dashboard/vendors/DirectoryImportModal";
 
 export default function VendorsPage() {
     const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -23,6 +24,8 @@ export default function VendorsPage() {
     const [tier, setTier] = useState<PlanTier>('free');
     const [currency, setCurrency] = useState("USD"); // Added currency state
     const [showLimitModal, setShowLimitModal] = useState(false);
+    // Import Modal State
+    const [showImportModal, setShowImportModal] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     // Confirm Modal State
@@ -141,6 +144,13 @@ export default function VendorsPage() {
                         </button>
                     )}
                     <button
+                        onClick={() => setShowImportModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm font-medium"
+                    >
+                        <BookUser className="w-4 h-4" />
+                        Import from Directory
+                    </button>
+                    <button
                         onClick={() => {
                             if (!checkLimit(tier, 'vendors', vendors.length)) {
                                 setShowLimitModal(true);
@@ -149,7 +159,7 @@ export default function VendorsPage() {
                             setEditingVendor(undefined);
                             setShowForm(true);
                         }}
-                        className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
+                        className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm font-medium"
                     >
                         <Plus className="w-4 h-4" />
                         Add Vendor
@@ -229,7 +239,16 @@ export default function VendorsPage() {
                     onSuccess={() => fetchVendors(weddingId)}
                 />
             )}
-
+            {
+                showImportModal && weddingId && (
+                    <DirectoryImportModal
+                        isOpen={showImportModal}
+                        onClose={() => setShowImportModal(false)}
+                        weddingId={weddingId}
+                        onImportSuccess={() => fetchVendors(weddingId)}
+                    />
+                )
+            }
             <ConfirmDialog
                 isOpen={confirmState.isOpen}
                 onClose={() => setConfirmState({ ...confirmState, isOpen: false })}

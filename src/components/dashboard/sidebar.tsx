@@ -13,20 +13,23 @@ import {
     Package,
     Settings,
     LogOut,
-    HeartHandshake
+    HeartHandshake,
+    CalendarClock, // New icon import
+    CheckSquare, // New icon import
+    BookUser // New icon import
 } from "lucide-react";
 import { ModeToggle } from "./mode-toggle";
 import WeddingSelector from "./WeddingSelector";
 import { supabase } from "@/lib/supabase";
 
 const navItems = [
-    { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Checklist", href: "/dashboard/checklist", icon: LayoutList },
-    { name: "Budget", href: "/dashboard/budget", icon: Store },
+    { name: "Itinerary", href: "/dashboard/itinerary", icon: CalendarClock },
+    { name: "Checklist", href: "/dashboard/checklist", icon: CheckSquare },
+    { name: "Directory", href: "/dashboard/directory", icon: BookUser }, // New Directory Item
+    { name: "Settings", href: "/dashboard/settings", icon: Settings },
     { name: "Guest List", href: "/dashboard/guests", icon: Users },
     { name: "Vendors", href: "/dashboard/vendors", icon: HeartHandshake },
     { name: "Inventory", href: "/dashboard/inventory", icon: Package },
-    { name: "Itinerary", href: "/dashboard/itinerary", icon: CalendarDays },
 ];
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
