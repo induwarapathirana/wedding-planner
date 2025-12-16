@@ -39,6 +39,9 @@ export default function VendorForm({ weddingId, onClose, onSuccess, initialData 
         price_estimate: initialData?.price_estimate || undefined,
         notes: initialData?.notes || "",
     });
+    
+    // New state for directory checkbox
+    const [addToDirectory, setAddToDirectory] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -52,10 +55,31 @@ export default function VendorForm({ weddingId, onClose, onSuccess, initialData 
                     .eq('id', initialData.id);
                 if (error) throw error;
             } else {
-                const { error } = await supabase
+                const { error, data } = await supabase
                     .from('vendors')
-                    .insert([{ ...formData, wedding_id: weddingId }]);
+                    .insert([{ ...formData, wedding_id: weddingId }])
+                    .select()
+                    .single();
+                
                 if (error) throw error;
+
+                // If checkbox is checked, add to Directory
+                if (addToDirectory) {
+                     const { data: { user } } = await supabase.auth.getUser();
+                     if (user) {
+                        await supabase.from('vendor_directory').insert([{
+                            user_id: user.id,
+                            category: formData.category,
+                            company_name: formData.company_name,
+                            contact_name: formData.contact_name,
+                            email: formData.email,
+                            phone: formData.phone,
+                            website: formData.website,
+                            price_estimate: formData.price_estimate,
+                            notes: formData.notes
+                        }]);
+                     }
+                }
             }
             onSuccess();
             onClose();
@@ -176,7 +200,23 @@ export default function VendorForm({ weddingId, onClose, onSuccess, initialData 
                                 placeholder="Add specific package details or questions..."
                             />
                         </div>
-                    </div>
+                        </div>
+
+
+                    {!initialData && (
+                        <div className="flex items-center gap-2 pt-2">
+                             <input 
+                                type="checkbox"
+                                id="addToDirectory"
+                                checked={addToDirectory}
+                                onChange={(e) => setAddToDirectory(e.target.checked)}
+                                className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                             />
+                             <label htmlFor="addToDirectory" className="text-sm text-gray-700 cursor-pointer select-none">
+                                Also save to my <strong>Vendor Directory</strong> for future weddings
+                             </label>
+                        </div>
+                    )}
 
                     <div className="flex justify-end gap-3 pt-4 border-t">
                         <button

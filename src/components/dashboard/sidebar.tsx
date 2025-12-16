@@ -25,7 +25,6 @@ import { supabase } from "@/lib/supabase";
 const navItems = [
     { name: "Itinerary", href: "/dashboard/itinerary", icon: CalendarClock },
     { name: "Checklist", href: "/dashboard/checklist", icon: CheckSquare },
-    { name: "Directory", href: "/dashboard/directory", icon: BookUser }, // New Directory Item
     { name: "Settings", href: "/dashboard/settings", icon: Settings },
     { name: "Guest List", href: "/dashboard/guests", icon: Users },
     { name: "Vendors", href: "/dashboard/vendors", icon: HeartHandshake },
