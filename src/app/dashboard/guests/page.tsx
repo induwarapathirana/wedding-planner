@@ -1,11 +1,12 @@
 "use client";
 
 import { useMode } from "@/context/mode-context";
-import { Users, UserPlus, Check, X, HelpCircle, Utensils, Armchair, Edit2, Trash2, CheckSquare, Square } from "lucide-react";
+import { Users, UserPlus, Check, X, HelpCircle, Utensils, Armchair, Edit2, Trash2, CheckSquare, Square, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { GuestDialog } from "@/components/dashboard/guest-dialog";
+import { GroupSummaryModal } from "@/components/dashboard/group-summary-modal"; // New Import
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 
@@ -33,6 +34,7 @@ export default function GuestPage() {
 
     // Dialog State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [isGroupModalOpen, setIsGroupModalOpen] = useState(false); // New State
     const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
 
     // Initial Data Load
@@ -217,6 +219,13 @@ export default function GuestPage() {
                             Delete ({selectedIds.size})
                         </button>
                     )}
+                    <button
+                        onClick={() => setIsGroupModalOpen(true)}
+                        className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all mr-2"
+                    >
+                        <LayoutGrid className="w-4 h-4 text-gray-500" />
+                        Groups
+                    </button>
                     <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value as any)}
@@ -431,6 +440,12 @@ export default function GuestPage() {
                 onClose={() => setIsDialogOpen(false)}
                 onSubmit={handleSaveGuest}
                 initialData={editingGuest}
+            />
+
+            <GroupSummaryModal
+                isOpen={isGroupModalOpen}
+                onClose={() => setIsGroupModalOpen(false)}
+                guests={guests}
             />
         </div>
     );
