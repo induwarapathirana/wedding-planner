@@ -14,21 +14,23 @@ import {
     Settings,
     LogOut,
     HeartHandshake,
-    CalendarClock, // New icon import
-    CheckSquare, // New icon import
-    BookUser // New icon import
+    CalendarClock, 
+    CheckSquare,
+    BookUser,
+    DollarSign // New icon import
 } from "lucide-react";
 import { ModeToggle } from "./mode-toggle";
 import WeddingSelector from "./WeddingSelector";
 import { supabase } from "@/lib/supabase";
 
 const navItems = [
-    { name: "Itinerary", href: "/dashboard/itinerary", icon: CalendarClock },
-    { name: "Checklist", href: "/dashboard/checklist", icon: CheckSquare },
-    { name: "Settings", href: "/dashboard/settings", icon: Settings },
+    { name: "Budget", href: "/dashboard/budget", icon: DollarSign },
     { name: "Guest List", href: "/dashboard/guests", icon: Users },
     { name: "Vendors", href: "/dashboard/vendors", icon: HeartHandshake },
+    { name: "Itinerary", href: "/dashboard/itinerary", icon: CalendarClock },
+    { name: "Checklist", href: "/dashboard/checklist", icon: CheckSquare },
     { name: "Inventory", href: "/dashboard/inventory", icon: Package },
+    //{ name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
