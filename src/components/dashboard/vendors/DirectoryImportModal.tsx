@@ -15,6 +15,7 @@ interface DirectoryImportModalProps {
 
 export function DirectoryImportModal({ isOpen, onClose, weddingId, onImportSuccess }: DirectoryImportModalProps) {
     const [vendors, setVendors] = useState<DirectoryVendor[]>([]);
+    const [existingVendorNames, setExistingVendorNames] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -23,10 +24,22 @@ export function DirectoryImportModal({ isOpen, onClose, weddingId, onImportSucce
     useEffect(() => {
         if (isOpen) {
             fetchDirectory();
+            fetchExistingVendors();
             setSelectedIds(new Set());
             setSearchTerm("");
         }
     }, [isOpen]);
+
+    const fetchExistingVendors = async () => {
+        const { data } = await supabase
+            .from('vendors')
+            .select('company_name')
+            .eq('wedding_id', weddingId);
+        
+        if (data) {
+            setExistingVendorNames(new Set(data.map(v => v.company_name.toLowerCase())));
+        }
+    };
 
     const fetchDirectory = async () => {
         setLoading(true);
@@ -132,32 +145,48 @@ export function DirectoryImportModal({ isOpen, onClose, weddingId, onImportSucce
                             </a>
                         </div>
                     ) : (
-                        filteredVendors.map(vendor => (
-                            <div
-                                key={vendor.id}
-                                onClick={() => toggleSelect(vendor.id)}
-                                className={`
-                                    flex items-center p-4 rounded-xl border cursor-pointer transition-all
-                                    ${selectedIds.has(vendor.id)
-                                        ? 'border-primary bg-primary/5 shadow-sm'
-                                        : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'}
-                                `}
-                            >
-                                <div className={`
-                                    w-5 h-5 rounded-md border flex items-center justify-center mr-4 transition-colors
-                                    ${selectedIds.has(vendor.id) ? 'bg-primary border-primary text-white' : 'border-gray-300 bg-white'}
-                                `}>
-                                    {selectedIds.has(vendor.id) && <Check className="w-3.5 h-3.5" />}
+                        filteredVendors.map(vendor => {
+                            const isAdded = existingVendorNames.has(vendor.company_name.toLowerCase());
+                            return (
+                                <div
+                                    key={vendor.id}
+                                    onClick={() => !isAdded && toggleSelect(vendor.id)}
+                                    className={`
+                                        flex items-center p-4 rounded-xl border transition-all
+                                        ${isAdded 
+                                            ? 'bg-gray-50 border-gray-100 opacity-60 cursor-not-allowed'
+                                            : selectedIds.has(vendor.id)
+                                                ? 'border-primary bg-primary/5 shadow-sm cursor-pointer'
+                                                : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50 cursor-pointer'
+                                        }
+                                    `}
+                                >
+                                    <div className={`
+                                        w-5 h-5 rounded-md border flex items-center justify-center mr-4 transition-colors shrink-0
+                                        ${isAdded 
+                                            ? 'bg-gray-100 border-gray-200' 
+                                            : selectedIds.has(vendor.id) ? 'bg-primary border-primary text-white' : 'border-gray-300 bg-white'
+                                        }
+                                    `}>
+                                        {isAdded ? <Check className="w-3.5 h-3.5 text-gray-400" /> : selectedIds.has(vendor.id) && <Check className="w-3.5 h-3.5" />}
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-start">
+                                            <h4 className="font-semibold text-gray-900">{vendor.company_name}</h4>
+                                            {isAdded && (
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
+                                                    Added
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
+                                            <span className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">{vendor.category}</span>
+                                            {vendor.contact_name}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h4 className="font-semibold text-gray-900">{vendor.company_name}</h4>
-                                    <p className="text-xs text-gray-500 flex items-center gap-2">
-                                        <span className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">{vendor.category}</span>
-                                        {vendor.contact_name}
-                                    </p>
-                                </div>
-                            </div>
-                        ))
+                            );
+                        })
                     )}
                 </div>
 
