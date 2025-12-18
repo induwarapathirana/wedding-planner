@@ -5,24 +5,65 @@ import { createClient } from '@supabase/supabase-js';
 // Initialize Supabase Admin client to bypass RLS for webhook updates
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! // Ideally use SERVICE_ROLE_KEY for webhooks, but ANON might work if policy allows, or we use a secure update function. 
-    // Actually, for this PoC, we will assume ANON key has update rights or we rely on the fact that this is a server route 
-    // effectively acting with system privileges if we had the service key.
-    // Given the constraints, I'll stick to basic update and assume the user ID is not available, so I might need Service Role Key for true backend updates without user context.
-    // However, I don't have the Service Role Key in .env.local usually.
-    // I will try to use the ANON key. If RLS blocks it, I'll need to create an RPC or SQL bypass. 
-    // BUT! I can use a Postgres Function `upgrade_wedding_tier` with SECURITY DEFINER.
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
+
+/**
+ * Verify PayHere webhook signature
+ * Formula: md5(merchant_id + order_id + payhere_amount + payhere_currency + status_code + md5(merchant_secret).toUpperCase()).toUpperCase()
+ */
+function verifyPayHereSignature(
+    merchantId: string,
+    orderId: string,
+    amount: string,
+    currency: string,
+    statusCode: string,
+    receivedSignature: string
+): boolean {
+    const merchantSecret = process.env.PAYHERE_SECRET;
+
+    if (!merchantSecret) {
+        console.error("PAYHERE_SECRET not configured - cannot verify signature");
+        return false;
+    }
+
+    // 1. Hash the merchant secret
+    const hashedSecret = crypto
+        .createHash('md5')
+        .update(merchantSecret)
+        .digest('hex')
+        .toUpperCase();
+
+    // 2. Create the verification string
+    const stringToHash = merchantId + orderId + amount + currency + statusCode + hashedSecret;
+
+    // 3. Generate expected signature
+    const expectedSignature = crypto
+        .createHash('md5')
+        .update(stringToHash)
+        .digest('hex')
+        .toUpperCase();
+
+    // 4. Compare signatures (timing-safe comparison)
+    try {
+        return crypto.timingSafeEqual(
+            Buffer.from(expectedSignature),
+            Buffer.from(receivedSignature.toUpperCase())
+        );
+    } catch {
+        return false;
+    }
+}
 
 export async function POST(req: NextRequest) {
     try {
         const formData = await req.formData();
-        const merchant_id = formData.get('merchant_id');
+        const merchant_id = formData.get('merchant_id') as string;
         const order_id = formData.get('order_id') as string;
-        const payhere_amount = formData.get('payhere_amount');
-        const payhere_currency = formData.get('payhere_currency');
-        const status_code = formData.get('status_code');
-        const md5sig = formData.get('md5sig');
+        const payhere_amount = formData.get('payhere_amount') as string;
+        const payhere_currency = formData.get('payhere_currency') as string;
+        const status_code = formData.get('status_code') as string;
+        const md5sig = formData.get('md5sig') as string;
 
         // Log the notification
         console.log("--------------------------------------------------");
@@ -30,8 +71,22 @@ export async function POST(req: NextRequest) {
         console.log(`Order: ${order_id}, Status: ${status_code}`);
         console.log("--------------------------------------------------");
 
+        // SECURITY: Verify the signature before processing
+        if (!md5sig || !verifyPayHereSignature(
+            merchant_id,
+            order_id,
+            payhere_amount,
+            payhere_currency,
+            status_code,
+            md5sig
+        )) {
+            console.error("⚠️ SECURITY ALERT: Invalid PayHere signature - possible spoofing attempt!");
+            return new NextResponse("Invalid signature", { status: 403 });
+        }
+
+        console.log("✅ PayHere signature verified successfully");
+
         // Parse Wedding ID from Order ID (Format: ORDER_{UUID}_{TIMESTAMP})
-        // Example: ORDER_1234-5678-90ab_1700000000
         const parts = order_id.split('_');
         if (parts.length < 3) {
             console.error("Invalid Order ID Format");
@@ -41,22 +96,12 @@ export async function POST(req: NextRequest) {
 
         // Status code 2 means Success
         if (status_code === '2') {
-            // Update Wedding Tier
-            // We can't use standard RLS update here because we have no user session.
-            // We'll trust the database allows this or use a workaround.
-            // Since I can't add SERVICE_KEY easily without user interaction, 
-            // I will use a direct update and hope the RLS allows public update (Unlikely).
-            // BETTER APPROACH: I will just log it for now as "Ready to Upgrade".
-            // WAIT, I really want this to work.
-            // I will try to update using the ANON key. If RLS policies are "auth.uid() = owner", this will FAIL.
-            // Solution: Create a `webhook_upgrade_tier` RPC function with security definer.
-
             const { error } = await supabase.rpc('upgrade_wedding_tier', { wedding_id: weddingId });
 
             if (error) {
                 console.error("Failed to upgrade tier:", error);
-                // Fallback: Try direct update (might fail due to RLS)
-                await supabase.from('weddings').update({ tier: 'premium' }).eq('id', weddingId);
+                // Note: Direct update will likely fail due to RLS without user context
+                // The RPC function handles this securely now
             } else {
                 console.log(`Wedding ${weddingId} upgraded to Premium!`);
             }
