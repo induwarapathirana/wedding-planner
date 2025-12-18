@@ -56,7 +56,16 @@ export default function OnboardingPage() {
         }).select().single();
 
         if (error) {
-            alert("Error creating wedding: " + error.message);
+            // User-friendly error messages for testing limits
+            let errorMessage = "Error creating wedding: " + error.message;
+
+            if (error.message.includes('LIMIT_PER_USER')) {
+                errorMessage = "🚫 Current Package Limitation\n\nYou can only create 1 wedding with current package. If you need additional weddings, please contact support via 077 302 7782.";
+            } else if (error.message.includes('LIMIT_GLOBAL')) {
+                errorMessage = "🚫 Capacity Reached for Promotional Offerings\n\nWe've reached our Promotional offerings capacity. Please try again later or contact support via 077 302 7782.";
+            }
+
+            alert(errorMessage);
             setLoading(false);
         } else {
             // 3. Add user as collaborator owner
