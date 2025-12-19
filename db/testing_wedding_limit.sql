@@ -20,7 +20,7 @@ begin
   where created_by = new.created_by;
   
   if user_count >= max_per_user then
-    raise exception 'LIMIT_PER_USER: You can only create % wedding with current package. Please contact support via 077 302 7782 if you need more.', max_per_user
+    raise exception 'LIMIT_PER_USER: You can only create % wedding during the testing phase. Please contact support if you need more.', max_per_user
       using errcode = 'P0001';
   end if;
 
@@ -28,7 +28,7 @@ begin
   select count(*) into global_count from weddings;
   
   if global_count >= max_global then
-    raise exception 'LIMIT_GLOBAL: We have reached promotional offering limit. Please try again later or contact support via 077 302 7782.', max_global
+    raise exception 'LIMIT_GLOBAL: We have reached our testing capacity (% weddings). Please try again later or contact support.', max_global
       using errcode = 'P0002';
   end if;
   
