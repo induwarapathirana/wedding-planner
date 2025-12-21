@@ -14,6 +14,7 @@ type Guest = {
     table_assignment?: string;
     plus_one: boolean;
     companion_guest_count?: number;
+    companion_names?: string[];
 };
 
 interface GroupSummaryModalProps {
@@ -187,12 +188,18 @@ export function GroupSummaryModal({ isOpen, onClose, guests }: GroupSummaryModal
                                         </td>
                                         <td className="px-6 py-4 text-gray-600">
                                             <div className="flex flex-wrap gap-1">
-                                                {table.guests.map((g, i) => (
-                                                    <span key={g.id} className="text-xs">
-                                                        {g.name}{g.companion_guest_count ? ` (+${g.companion_guest_count})` : ''}
-                                                        {i < table.guests.length - 1 ? ', ' : ''}
-                                                    </span>
-                                                ))}
+                                                {table.guests.map((g, i) => {
+                                                    const displayNames = [g.name, ...(g.companion_names || [])].join(", ");
+                                                    const remainingCount = (g.companion_guest_count || 0) - (g.companion_names?.length || 0);
+                                                    const countStr = remainingCount > 0 ? ` (+${remainingCount})` : "";
+
+                                                    return (
+                                                        <span key={g.id} className="text-xs">
+                                                            {displayNames}{countStr}
+                                                            {i < table.guests.length - 1 ? ", " : ""}
+                                                        </span>
+                                                    );
+                                                })}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-right font-medium">{table.total}</td>
@@ -217,11 +224,18 @@ export function GroupSummaryModal({ isOpen, onClose, guests }: GroupSummaryModal
                                         </td>
                                         <td className="px-6 py-4 text-amber-600/80">
                                             <div className="flex flex-wrap gap-1">
-                                                {unassignedTable.guests.slice(0, 5).map((g, i) => (
-                                                    <span key={g.id} className="text-xs">
-                                                        {g.name}{i < Math.min(unassignedTable.guests.length - 1, 4) ? ', ' : ''}
-                                                    </span>
-                                                ))}
+                                                {unassignedTable.guests.slice(0, 5).map((g, i) => {
+                                                    const displayNames = [g.name, ...(g.companion_names || [])].join(", ");
+                                                    const remainingCount = (g.companion_guest_count || 0) - (g.companion_names?.length || 0);
+                                                    const countStr = remainingCount > 0 ? ` (+${remainingCount})` : "";
+
+                                                    return (
+                                                        <span key={g.id} className="text-xs">
+                                                            {displayNames}{countStr}
+                                                            {i < Math.min(unassignedTable.guests.length - 1, 4) ? ", " : ""}
+                                                        </span>
+                                                    );
+                                                })}
                                                 {unassignedTable.guests.length > 5 && (
                                                     <span className="text-xs font-medium">+{unassignedTable.guests.length - 5} more</span>
                                                 )}
