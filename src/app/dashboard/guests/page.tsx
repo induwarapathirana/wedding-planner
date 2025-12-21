@@ -1,7 +1,7 @@
 "use client";
 
 import { useMode } from "@/context/mode-context";
-import { Users, UserPlus, Check, X, HelpCircle, Utensils, Armchair, Edit2, Trash2, CheckSquare, Square, LayoutGrid } from "lucide-react";
+import { Users, UserPlus, Check, X, HelpCircle, Utensils, Armchair, Edit2, Trash2, CheckSquare, Square, LayoutGrid, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -34,7 +34,8 @@ export default function GuestPage() {
     const [showLimitModal, setShowLimitModal] = useState(false);
     const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState<"name" | "priority" | "status">("priority");
-    const [filterGroup, setFilterGroup] = useState<string>("All"); // Added: Group filter state
+    const [filterGroup, setFilterGroup] = useState<string>("All");
+    const [searchQuery, setSearchQuery] = useState(""); // Added: Search state
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     // Dialog State
@@ -211,8 +212,9 @@ export default function GuestPage() {
 
     // Filtering and Sorting Logic
     const filteredGuests = guests.filter(g => {
-        if (filterGroup === "All") return true;
-        return g.group_category === filterGroup;
+        const matchesGroup = filterGroup === "All" || g.group_category === filterGroup;
+        const matchesSearch = g.name.toLowerCase().includes(searchQuery.toLowerCase());
+        return matchesGroup && matchesSearch;
     });
 
     const sortedGuests = [...filteredGuests].sort((a, b) => {
@@ -283,6 +285,18 @@ export default function GuestPage() {
                         <LayoutGrid className="w-4 h-4 text-gray-500" />
                         Groups
                     </button>
+
+                    {/* Search Bar */}
+                    <div className="relative flex-1 max-w-xs">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <input
+                            type="text"
+                            placeholder="Search guests..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                        />
+                    </div>
 
                     {/* Filter Dropdown */}
                     <div className="flex items-center gap-2">
