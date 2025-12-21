@@ -20,6 +20,8 @@ type BudgetItem = {
     due_date?: string;
     is_paid: boolean;
     notes?: string;
+    unit_price?: number;
+    units?: number;
 };
 
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
@@ -294,7 +296,12 @@ export default function BudgetPage() {
                                     </div>
                                     <div>
                                         <p className="font-medium text-foreground">{item.item_name}</p>
-                                        <p className="text-sm text-muted-foreground">{item.category}</p>
+                                        <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold">{item.category}</p>
+                                        {item.unit_price && item.unit_price > 0 && (
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                {formatMoney(item.unit_price)} × {item.units || 1}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-4">
@@ -341,9 +348,16 @@ export default function BudgetPage() {
                                                 {selectedIds.has(item.id) ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
                                             </button>
                                         </td>
-                                        <td className="px-6 py-4 font-medium text-foreground">{item.item_name}</td>
-                                        <td className="px-6 py-4 text-muted-foreground">{item.category}</td>
-                                        <td className="px-6 py-4 text-foreground">{formatMoney(item.estimated_cost)}</td>
+                                        <td className="px-6 py-4 font-medium text-foreground">
+                                            <div>{item.item_name}</div>
+                                            {item.unit_price && item.unit_price > 0 && (
+                                                <div className="text-[10px] text-muted-foreground font-normal">
+                                                    {formatMoney(item.unit_price)} × {item.units || 1}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4 text-muted-foreground uppercase text-[10px] font-bold tracking-tight">{item.category}</td>
+                                        <td className="px-6 py-4 text-foreground font-medium">{formatMoney(item.estimated_cost)}</td>
                                         <td className="px-6 py-4 text-foreground">{item.actual_cost > 0 ? formatMoney(item.actual_cost) : '-'}</td>
                                         <td className="px-6 py-4 text-green-600 font-medium">{item.paid_amount > 0 ? formatMoney(item.paid_amount) : '-'}</td>
                                         <td className="px-6 py-4 text-muted-foreground">{item.due_date ? new Date(item.due_date).toLocaleDateString() : '-'}</td>

@@ -14,6 +14,8 @@ type BudgetItem = {
     due_date?: string;
     is_paid: boolean;
     notes?: string;
+    unit_price?: number; // Added: price per unit
+    units?: number;      // Added: quantity
 };
 
 interface BudgetDialogProps {
@@ -32,13 +34,19 @@ export function BudgetDialog({ isOpen, onClose, onSubmit, initialData, currencyS
         actual_cost: 0,
         paid_amount: 0,
         is_paid: false,
-        notes: ""
+        notes: "",
+        unit_price: 0,
+        units: 1
     });
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         if (initialData) {
-            setFormData(initialData);
+            setFormData({
+                ...initialData,
+                unit_price: initialData.unit_price || 0,
+                units: initialData.units || 1
+            });
         } else {
             setFormData({
                 category: "Venue",
@@ -47,10 +55,23 @@ export function BudgetDialog({ isOpen, onClose, onSubmit, initialData, currencyS
                 actual_cost: 0,
                 paid_amount: 0,
                 is_paid: false,
-                notes: ""
+                notes: "",
+                unit_price: 0,
+                units: 1
             });
         }
     }, [initialData, isOpen]);
+
+    // Handle auto-calculation
+    useEffect(() => {
+        if (formData.unit_price !== undefined && formData.units !== undefined) {
+            const calculated = formData.unit_price * formData.units;
+            // Only update if it actually changed and we have values to calculate
+            if (calculated > 0 && calculated !== formData.estimated_cost) {
+                setFormData(prev => ({ ...prev, estimated_cost: calculated }));
+            }
+        }
+    }, [formData.unit_price, formData.units]);
 
     if (!isOpen) return null;
 
@@ -68,7 +89,7 @@ export function BudgetDialog({ isOpen, onClose, onSubmit, initialData, currencyS
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl animate-in zoom-in-95 duration-200">
+            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl animate-in zoom-in-95 duration-200 overflow-y-auto max-h-[90vh]">
                 <div className="flex items-center justify-between mb-6">
                     <h3 className="font-serif text-2xl font-bold text-foreground">
                         {initialData ? "Edit Budget Item" : "Add Budget Item"}
@@ -103,9 +124,42 @@ export function BudgetDialog({ isOpen, onClose, onSubmit, initialData, currencyS
                         </div>
                     </div>
 
+                    {/* Unit Pricing Section */}
+                    <div className="rounded-xl border border-dashed border-border bg-muted/20 p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3">Unit-Based Pricing (Auto-Calculates Estimate)</p>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-sm font-medium text-foreground">Price per Unit</label>
+                                <div className="relative mt-1">
+                                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground text-sm">{currencySymbol}</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={formData.unit_price}
+                                        onChange={(e) => setFormData({ ...formData, unit_price: parseFloat(e.target.value) || 0 })}
+                                        className="block w-full rounded-xl border border-border bg-white pl-8 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-foreground">Quantity / Units</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={formData.units}
+                                    onChange={(e) => setFormData({ ...formData, units: parseInt(e.target.value) || 0 })}
+                                    className="mt-1 block w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                    placeholder="1"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-3 gap-4">
                         <div>
-                            <label className="text-sm font-medium text-foreground">Estimated</label>
+                            <label className="text-sm font-medium text-foreground">Estimated Total</label>
                             <div className="relative mt-1">
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground text-sm">{currencySymbol}</span>
                                 <input
@@ -115,12 +169,12 @@ export function BudgetDialog({ isOpen, onClose, onSubmit, initialData, currencyS
                                     required
                                     value={formData.estimated_cost}
                                     onChange={(e) => setFormData({ ...formData, estimated_cost: parseFloat(e.target.value) || 0 })}
-                                    className="block w-full rounded-xl border border-border bg-white pl-8 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                    className="block w-full rounded-xl border border-border bg-white pl-8 px-3 py-2 text-sm font-bold text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                                 />
                             </div>
                         </div>
                         <div>
-                            <label className="text-sm font-medium text-foreground">Actual</label>
+                            <label className="text-sm font-medium text-foreground">Actual Cost</label>
                             <div className="relative mt-1">
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground text-sm">{currencySymbol}</span>
                                 <input
@@ -134,7 +188,7 @@ export function BudgetDialog({ isOpen, onClose, onSubmit, initialData, currencyS
                             </div>
                         </div>
                         <div>
-                            <label className="text-sm font-medium text-foreground">Paid</label>
+                            <label className="text-sm font-medium text-foreground">Paid Amount</label>
                             <div className="relative mt-1">
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground text-sm">{currencySymbol}</span>
                                 <input
