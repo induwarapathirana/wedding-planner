@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { GuestDialog } from "@/components/dashboard/guest-dialog";
-import { GroupSummaryModal } from "@/components/dashboard/group-summary-modal"; // New Import
+import { GroupSummaryModal } from "@/components/dashboard/group-summary-modal";
+import { BulkSeatingDialog } from "@/components/dashboard/bulk-seating-dialog"; // New Import
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 
@@ -39,6 +40,7 @@ export default function GuestPage() {
     // Dialog State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+    const [isSeatingDialogOpen, setIsSeatingDialogOpen] = useState(false); // New State
     const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
 
     // Confirm Modal State
@@ -174,6 +176,22 @@ export default function GuestPage() {
         setConfirmState({ ...confirmState, isOpen: false });
     };
 
+    const handleBulkSeating = async (tableNo: string) => {
+        const ids = Array.from(selectedIds);
+        const { error } = await supabase
+            .from('guests')
+            .update({ table_assignment: tableNo })
+            .in('id', ids);
+
+        if (error) {
+            alert("Error updating seating: " + error.message);
+        } else {
+            const weddingId = localStorage.getItem("current_wedding_id");
+            if (weddingId) fetchGuests(weddingId);
+            setSelectedIds(new Set());
+        }
+    };
+
     // Stats Calculation
     const totalHeadcount = guests.reduce((sum, guest) => sum + 1 + (guest.companion_guest_count || 0), 0);
     const acceptedCount = guests
@@ -214,6 +232,12 @@ export default function GuestPage() {
     const progressPercent = targetCount > 0 ? Math.min((stats.total / targetCount) * 100, 100) : 0;
     const isOverLimit = targetCount > 0 && stats.total > targetCount;
 
+    // Selected Headcount Calculation
+    const selectedHeadcount = Array.from(selectedIds).reduce((sum, id) => {
+        const guest = guests.find(g => g.id === id);
+        return sum + (guest ? 1 + (guest.companion_guest_count || 0) : 0);
+    }, 0);
+
     const groupCategories = ["All", "Bride Family", "Groom Family", "Bride Friends", "Groom Friends", "Mutual", "Work"];
 
     return (
@@ -230,13 +254,27 @@ export default function GuestPage() {
                 </div>
                 <div className="flex items-center gap-3">
                     {selectedIds.size > 0 && (
-                        <button
-                            onClick={confirmBulkDelete}
-                            className="flex items-center gap-2 rounded-xl bg-red-100 px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-200 transition-all mr-2"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                            Delete ({selectedIds.size})
-                        </button>
+                        <div className="flex items-center bg-muted/50 rounded-xl px-1 py-1 mr-2 border border-border">
+                            <span className="text-xs font-bold px-3 text-muted-foreground uppercase tracking-tight">
+                                {selectedHeadcount} Selected
+                            </span>
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={() => setIsSeatingDialogOpen(true)}
+                                    className="flex items-center gap-2 rounded-lg bg-white border border-border px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-gray-50 transition-all shadow-sm"
+                                >
+                                    <Armchair className="w-3.5 h-3.5 text-primary" />
+                                    Assign Table
+                                </button>
+                                <button
+                                    onClick={confirmBulkDelete}
+                                    className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition-all shadow-sm"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
                     )}
                     <button
                         onClick={() => setIsGroupModalOpen(true)}
@@ -497,6 +535,13 @@ export default function GuestPage() {
                     ? `Are you sure you want to delete ${selectedIds.size} guests? This action cannot be undone.`
                     : "Are you sure you want to delete this guest? This action cannot be undone."}
                 variant="danger"
+            />
+
+            <BulkSeatingDialog
+                isOpen={isSeatingDialogOpen}
+                onClose={() => setIsSeatingDialogOpen(false)}
+                onConfirm={handleBulkSeating}
+                selectedCount={selectedHeadcount}
             />
 
             <LimitModal
