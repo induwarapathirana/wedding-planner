@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { differenceInDays, parseISO } from "date-fns";
 import { PlanComparisonModal } from "@/components/dashboard/plan-comparison-modal";
 
@@ -21,7 +22,7 @@ export default function DashboardPage() {
     const [wedding, setWedding] = useState<WeddingData | null>(null);
     const [loading, setLoading] = useState(true);
     const [showPlanModal, setShowPlanModal] = useState(false);
-    
+
     const [stats, setStats] = useState({
         guestCount: 0,
         targetGuest: 0,
@@ -34,7 +35,7 @@ export default function DashboardPage() {
     const [upcomingTasks, setUpcomingTasks] = useState<any[]>([]);
     const [pendingPayments, setPendingPayments] = useState<any[]>([]);
     const [pendingGuests, setPendingGuests] = useState<any[]>([]);
-    
+
     const router = useRouter();
 
     useEffect(() => {
@@ -52,7 +53,7 @@ export default function DashboardPage() {
             setLoading(true);
             const weddingId = localStorage.getItem("current_wedding_id");
             const { data: { user } } = await supabase.auth.getUser();
-            
+
             if (!user) {
                 router.push("/login");
                 return;
@@ -60,7 +61,7 @@ export default function DashboardPage() {
 
             if (!weddingId) {
                 // If no stored ID, try to find one
-                 const { data: collaboration } = await supabase
+                const { data: collaboration } = await supabase
                     .from('collaborators')
                     .select('wedding_id')
                     .eq('user_id', user.id)
@@ -82,7 +83,7 @@ export default function DashboardPage() {
         }
 
         async function fetchWeddingDetails(id: string) {
-            
+
             const { data: weddingData, error } = await supabase
                 .from('weddings')
                 .select('*')
@@ -91,7 +92,7 @@ export default function DashboardPage() {
 
             if (weddingData) {
                 setWedding(weddingData as WeddingData);
-                
+
                 try {
                     // Fetch Stats & Widgets concurrently
                     const [guestsResult, budgetResult, tasksRes, paymentsRes, guestsListRes] = await Promise.all([
@@ -221,44 +222,52 @@ export default function DashboardPage() {
 
             {/* Content Placeholder */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                <div className="h-40 rounded-2xl border border-border bg-white p-6 shadow-sm relative overflow-hidden group">
-                    <div className="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <span className="text-6xl">💰</span>
+                <Link href="/dashboard/budget" className="block">
+                    <div className="h-40 rounded-2xl border border-border bg-white p-6 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-primary/30 transition-all cursor-pointer">
+                        <div className="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <span className="text-6xl">💰</span>
+                        </div>
+                        <h3 className="font-medium text-foreground relative z-10 group-hover:text-primary transition-colors">Budget</h3>
+                        <p className="mt-2 text-3xl font-bold text-primary relative z-10">
+                            {stats.currency}{stats.totalBudget.toLocaleString()} <span className="text-muted-foreground text-lg font-normal">/ {stats.estBudget.toLocaleString()}</span>
+                        </p>
+                        <div className="mt-4 h-2 w-full bg-gray-100 rounded-full overflow-hidden relative z-10">
+                            <div
+                                className="h-full bg-primary rounded-full transition-all"
+                                style={{ width: `${stats.estBudget > 0 ? Math.min((stats.totalBudget / stats.estBudget) * 100, 100) : 0}%` }}
+                            />
+                        </div>
                     </div>
-                    <h3 className="font-medium text-foreground relative z-10">Budget</h3>
-                    <p className="mt-2 text-3xl font-bold text-primary relative z-10">
-                        {stats.currency}{stats.totalBudget.toLocaleString()} <span className="text-muted-foreground text-lg font-normal">/ {stats.estBudget.toLocaleString()}</span>
-                    </p>
-                    <div className="mt-4 h-2 w-full bg-gray-100 rounded-full overflow-hidden relative z-10">
-                        <div
-                            className="h-full bg-primary rounded-full transition-all"
-                            style={{ width: `${stats.estBudget > 0 ? Math.min((stats.totalBudget / stats.estBudget) * 100, 100) : 0}%` }}
-                        />
+                </Link>
+
+                <Link href="/dashboard/guests" className="block">
+                    <div className="h-40 rounded-2xl border border-border bg-white p-6 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-secondary-foreground/30 transition-all cursor-pointer">
+                        <div className="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <span className="text-6xl">👥</span>
+                        </div>
+                        <h3 className="font-medium text-foreground relative z-10 group-hover:text-secondary-foreground transition-colors">Guest Count</h3>
+                        <p className="mt-2 text-3xl font-bold text-secondary-foreground relative z-10">
+                            {stats.guestCount} <span className="text-muted-foreground text-lg font-normal">/ {stats.targetGuest}</span>
+                        </p>
+                        <div className="mt-4 h-2 w-full bg-gray-100 rounded-full overflow-hidden relative z-10">
+                            <div
+                                className="h-full bg-secondary-foreground rounded-full transition-all"
+                                style={{ width: `${stats.targetGuest > 0 ? Math.min((stats.guestCount / stats.targetGuest) * 100, 100) : 0}%` }}
+                            />
+                        </div>
                     </div>
-                </div>
-                <div className="h-40 rounded-2xl border border-border bg-white p-6 shadow-sm relative overflow-hidden group">
-                    <div className="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <span className="text-6xl">👥</span>
+                </Link>
+
+                <Link href="/dashboard/itinerary" className="block">
+                    <div className="h-40 rounded-2xl border border-border bg-white p-6 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-purple-500/30 transition-all cursor-pointer">
+                        <div className="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <span className="text-6xl">📅</span>
+                        </div>
+                        <h3 className="font-medium text-foreground relative z-10 group-hover:text-purple-600 transition-colors">Days to Go</h3>
+                        <p className="mt-2 text-3xl font-bold text-foreground relative z-10">{daysToGo > 0 ? daysToGo : "Big Day!"}</p>
+                        <p className="text-sm text-muted-foreground mt-1 relative z-10">{new Date(wedding.wedding_date).toDateString()}</p>
                     </div>
-                    <h3 className="font-medium text-foreground relative z-10">Guest Count</h3>
-                    <p className="mt-2 text-3xl font-bold text-secondary-foreground relative z-10">
-                        {stats.guestCount} <span className="text-muted-foreground text-lg font-normal">/ {stats.targetGuest}</span>
-                    </p>
-                    <div className="mt-4 h-2 w-full bg-gray-100 rounded-full overflow-hidden relative z-10">
-                        <div
-                            className="h-full bg-secondary-foreground rounded-full transition-all"
-                            style={{ width: `${stats.targetGuest > 0 ? Math.min((stats.guestCount / stats.targetGuest) * 100, 100) : 0}%` }}
-                        />
-                    </div>
-                </div>
-                <div className="h-40 rounded-2xl border border-border bg-white p-6 shadow-sm relative overflow-hidden group">
-                    <div className="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <span className="text-6xl">📅</span>
-                    </div>
-                    <h3 className="font-medium text-foreground relative z-10">Days to Go</h3>
-                    <p className="mt-2 text-3xl font-bold text-foreground relative z-10">{daysToGo > 0 ? daysToGo : "Big Day!"}</p>
-                    <p className="text-sm text-muted-foreground mt-1 relative z-10">{new Date(wedding.wedding_date).toDateString()}</p>
-                </div>
+                </Link>
             </div>
 
             {/* Actionable Widgets */}
@@ -342,7 +351,7 @@ export default function DashboardPage() {
                 </div>
             </div>
 
-            <PlanComparisonModal 
+            <PlanComparisonModal
                 isOpen={showPlanModal}
                 onClose={() => setShowPlanModal(false)}
             />

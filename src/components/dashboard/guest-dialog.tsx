@@ -13,6 +13,7 @@ type Guest = {
     meal_preference?: string;
     table_assignment?: string;
     companion_guest_count?: number;
+    companion_names?: string[]; // Added: Optional names for companions
 };
 
 interface GuestDialogProps {
@@ -31,6 +32,7 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
         meal_preference: "",
         table_assignment: "",
         companion_guest_count: 0,
+        companion_names: [],
     });
     const [loading, setLoading] = useState(false);
 
@@ -38,7 +40,9 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
         if (initialData) {
             setFormData({
                 ...initialData,
-                companion_guest_count: initialData.companion_guest_count || 0
+                companion_guest_count: initialData.companion_guest_count || 0,
+                // Ensure array exists and matches count size if data is inconsistent
+                companion_names: initialData.companion_names || []
             });
         } else {
             setFormData({
@@ -49,23 +53,52 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
                 meal_preference: "",
                 table_assignment: "",
                 companion_guest_count: 0,
+                companion_names: [],
             });
         }
     }, [initialData, isOpen]);
+
+    // Helper to update specific companion name
+    const handleCompanionNameChange = (index: number, value: string) => {
+        const currentNames = [...(formData.companion_names || [])];
+        // Ensure array is large enough
+        while (currentNames.length <= index) currentNames.push("");
+        currentNames[index] = value;
+        setFormData({ ...formData, companion_names: currentNames });
+    };
+
+    // Helper to change count and resize name array safely
+    const handleCountChange = (newCount: number) => {
+        const count = Math.max(0, Math.min(50, newCount));
+        const currentNames = [...(formData.companion_names || [])];
+
+        // Resize array to match new count (keep existing names if shrinking)
+        // Actually, better to keep names even if count shrinks temporarily? 
+        // Let's just create a slider/input and map over the count.
+
+        setFormData({ ...formData, companion_guest_count: count });
+    };
 
     if (!isOpen) return null;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        await onSubmit(formData);
+        // Clean up names array to match count exactly before submitting
+        const count = formData.companion_guest_count || 0;
+        const finalNames = (formData.companion_names || []).slice(0, count);
+
+        await onSubmit({
+            ...formData,
+            companion_names: finalNames
+        });
         setLoading(false);
         onClose();
     };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl animate-in zoom-in-95 duration-200">
+            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between mb-6">
                     <h3 className="font-serif text-2xl font-bold text-foreground">
                         {initialData ? "Edit Guest" : "Add New Guest"}
@@ -151,14 +184,35 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
                                     min="0"
                                     max="50"
                                     value={formData.companion_guest_count}
-                                    onChange={(e) => setFormData({ ...formData, companion_guest_count: parseInt(e.target.value) || 0 })}
+                                    onChange={(e) => handleCountChange(parseInt(e.target.value) || 0)}
                                     className="w-20 rounded-xl border border-border bg-white px-3 py-2 text-sm text-center focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                                 />
                             </div>
                         </div>
 
+                        {/* Optional Companion Names */}
+                        {(formData.companion_guest_count || 0) > 0 && (
+                            <div className="space-y-2 pt-2 border-t border-dashed border-border/50 animate-in fade-in slide-in-from-top-2">
+                                <label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-2 block">
+                                    Guest Names (Optional)
+                                </label>
+                                {Array.from({ length: formData.companion_guest_count || 0 }).map((_, idx) => (
+                                    <div key={idx} className="flex items-center gap-2">
+                                        <span className="text-xs text-muted-foreground w-6 font-medium">#{idx + 1}</span>
+                                        <input
+                                            type="text"
+                                            value={(formData.companion_names || [])[idx] || ""}
+                                            onChange={(e) => handleCompanionNameChange(idx, e.target.value)}
+                                            className="flex-1 rounded-lg border border-border bg-white px-2 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                            placeholder={`Guest ${idx + 1} Name`}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
                         {formData.rsvp_status === "accepted" && (
-                            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border/50">
+                            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border/50">
                                 <div>
                                     <label className="text-sm font-medium text-foreground">Meal Choice</label>
                                     <select

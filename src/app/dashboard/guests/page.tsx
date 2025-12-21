@@ -20,6 +20,7 @@ type Guest = {
     table_assignment?: string;
     plus_one: boolean;
     companion_guest_count?: number; // Added for companion count
+    companion_names?: string[]; // Added: Optional names for companions
 };
 
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
