@@ -188,12 +188,6 @@ export default function BudgetPage() {
         fetchBudget(weddingId);
     };
 
-    const handleCurrencyChange = async (newCurrency: string) => {
-        setCurrency(newCurrency);
-        if (weddingId) {
-            await supabase.from('weddings').update({ currency: newCurrency }).eq('id', weddingId);
-        }
-    };
 
     const getCurrencySymbol = (code: string) => {
         return CURRENCIES.find(c => c.code === code)?.symbol || '$';
@@ -222,16 +216,6 @@ export default function BudgetPage() {
                             Delete ({selectedIds.size})
                         </button>
                     )}
-                    {/* Currency Selector */}
-                    <select
-                        value={currency}
-                        onChange={(e) => handleCurrencyChange(e.target.value)}
-                        className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-medium text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary shadow-sm"
-                    >
-                        {CURRENCIES.map(c => (
-                            <option key={c.code} value={c.code}>{c.code} ({c.symbol})</option>
-                        ))}
-                    </select>
 
                     <button
                         onClick={handleOpenAdd}

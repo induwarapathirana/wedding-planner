@@ -33,6 +33,7 @@ export default function GuestPage() {
     const [showLimitModal, setShowLimitModal] = useState(false);
     const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState<"name" | "priority" | "status">("priority");
+    const [filterGroup, setFilterGroup] = useState<string>("All"); // Added: Group filter state
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     // Dialog State
@@ -43,6 +44,7 @@ export default function GuestPage() {
     // Confirm Modal State
     const [confirmState, setConfirmState] = useState<{ isOpen: boolean; type: 'single' | 'bulk'; id?: string }>({ isOpen: false, type: 'single' });
 
+    // ... (fetch logic remains same)
     // Initial Data Load
     useEffect(() => {
         async function loadData() {
@@ -135,7 +137,6 @@ export default function GuestPage() {
     };
 
     // Delete Logic
-    // Delete Logic
     const confirmDelete = (id: string) => {
         setConfirmState({ isOpen: true, type: 'single', id });
     };
@@ -190,10 +191,14 @@ export default function GuestPage() {
         total: totalHeadcount,
     };
 
-    // Sorting Logic
-    const sortedGuests = [...guests].sort((a, b) => {
+    // Filtering and Sorting Logic
+    const filteredGuests = guests.filter(g => {
+        if (filterGroup === "All") return true;
+        return g.group_category === filterGroup;
+    });
+
+    const sortedGuests = [...filteredGuests].sort((a, b) => {
         if (sortBy === 'priority') {
-            // A < B < C (A is highest)
             const prioMap = { A: 1, B: 2, C: 3 };
             const pA = prioMap[a.priority || 'B'];
             const pB = prioMap[b.priority || 'B'];
@@ -208,6 +213,8 @@ export default function GuestPage() {
     // Progress Bar Calcs
     const progressPercent = targetCount > 0 ? Math.min((stats.total / targetCount) * 100, 100) : 0;
     const isOverLimit = targetCount > 0 && stats.total > targetCount;
+
+    const groupCategories = ["All", "Bride Family", "Groom Family", "Bride Friends", "Groom Friends", "Mutual", "Work"];
 
     return (
         <div className="space-y-8">
@@ -238,6 +245,20 @@ export default function GuestPage() {
                         <LayoutGrid className="w-4 h-4 text-gray-500" />
                         Groups
                     </button>
+
+                    {/* Filter Dropdown */}
+                    <div className="flex items-center gap-2">
+                        <select
+                            value={filterGroup}
+                            onChange={(e) => setFilterGroup(e.target.value)}
+                            className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        >
+                            {groupCategories.map(cat => (
+                                <option key={cat} value={cat}>{cat === "All" ? "All Groups" : cat}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value as any)}
@@ -247,6 +268,7 @@ export default function GuestPage() {
                         <option value="name">Sort by Name</option>
                         <option value="status">Sort by Status</option>
                     </select>
+
                     <button
                         onClick={handleOpenAdd}
                         className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all">
@@ -352,6 +374,7 @@ export default function GuestPage() {
                                 </div>
                             </div>
                         ))}
+                        {sortedGuests.length === 0 && <div className="p-8 text-center text-muted-foreground">No guests found matching this filter.</div>}
                     </div>
                 ) : (
                     /* ADVANCED MODE: Detailed Table */
@@ -395,7 +418,7 @@ export default function GuestPage() {
                                             <span className={cn(
                                                 "inline-flex items-center rounded px-2 py-0.5 text-xs font-bold",
                                                 guest.priority === 'A' ? "bg-red-100 text-red-700" :
-                                                    guest.priority === 'C' ? "bg-gray-100 text-gray-600" : "bg-blue-50 text-blue-700"
+                                                    guest.priority === 'C' ? "bg-gray-100 text-gray-600" : "bg-blue-50 text-blue-600"
                                             )}>
                                                 {guest.priority || 'B'}
                                             </span>
@@ -441,6 +464,11 @@ export default function GuestPage() {
                                         </td>
                                     </tr>
                                 ))}
+                                {sortedGuests.length === 0 && (
+                                    <tr>
+                                        <td colSpan={9} className="p-8 text-center text-muted-foreground">No guests found matching this filter.</td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>

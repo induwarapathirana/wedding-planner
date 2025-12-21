@@ -78,8 +78,7 @@ export default function OnboardingPage() {
             // 4. Save to local storage for our minimal context
             localStorage.setItem("current_wedding_id", wedding.id);
 
-            // Force full page reload to ensure session and cookies are properly synced
-            window.location.href = "/dashboard?welcome=true";
+            window.location.href = "/dashboard/settings?welcome=true";
         }
     };
 
