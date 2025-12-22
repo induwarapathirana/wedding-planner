@@ -24,6 +24,7 @@ interface GuestDialogProps {
 }
 
 export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDialogProps) {
+    const DEFAULT_GROUPS = ["Bride Family", "Groom Family", "Bride Friends", "Groom Friends", "Mutual", "Work"];
     const [formData, setFormData] = useState<Guest>({
         name: "",
         group_category: "Bride Family",
@@ -34,17 +35,24 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
         companion_guest_count: 0,
         companion_names: [],
     });
+    const [isCustom, setIsCustom] = useState(false);
+    const [customValue, setCustomValue] = useState("");
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         if (initialData) {
+            const isCustomGroup = !DEFAULT_GROUPS.includes(initialData.group_category);
+            setIsCustom(isCustomGroup);
+            if (isCustomGroup) setCustomValue(initialData.group_category);
+
             setFormData({
                 ...initialData,
                 companion_guest_count: initialData.companion_guest_count || 0,
-                // Ensure array exists and matches count size if data is inconsistent
                 companion_names: initialData.companion_names || []
             });
         } else {
+            setIsCustom(false);
+            setCustomValue("");
             setFormData({
                 name: "",
                 group_category: "Bride Family",
@@ -58,6 +66,7 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
         }
     }, [initialData, isOpen]);
 
+    // ... (utility functions)
     // Helper to update specific companion name
     const handleCompanionNameChange = (index: number, value: string) => {
         const currentNames = [...(formData.companion_names || [])];
@@ -70,12 +79,6 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
     // Helper to change count and resize name array safely
     const handleCountChange = (newCount: number) => {
         const count = Math.max(0, Math.min(50, newCount));
-        const currentNames = [...(formData.companion_names || [])];
-
-        // Resize array to match new count (keep existing names if shrinking)
-        // Actually, better to keep names even if count shrinks temporarily? 
-        // Let's just create a slider/input and map over the count.
-
         setFormData({ ...formData, companion_guest_count: count });
     };
 
@@ -84,12 +87,16 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+
+        const groupCategory = isCustom ? customValue : formData.group_category;
+
         // Clean up names array to match count exactly before submitting
         const count = formData.companion_guest_count || 0;
         const finalNames = (formData.companion_names || []).slice(0, count);
 
         await onSubmit({
             ...formData,
+            group_category: groupCategory,
             companion_names: finalNames
         });
         setLoading(false);
@@ -125,17 +132,34 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
                         <div className="col-span-8">
                             <label className="text-sm font-medium text-foreground">Group</label>
                             <select
-                                value={formData.group_category}
-                                onChange={(e) => setFormData({ ...formData, group_category: e.target.value })}
+                                value={isCustom ? "custom" : formData.group_category}
+                                onChange={(e) => {
+                                    if (e.target.value === "custom") {
+                                        setIsCustom(true);
+                                    } else {
+                                        setIsCustom(false);
+                                        setFormData({ ...formData, group_category: e.target.value });
+                                    }
+                                }}
                                 className="mt-1 block w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                             >
-                                <option value="Bride Family">Bride Family</option>
-                                <option value="Groom Family">Groom Family</option>
-                                <option value="Bride Friends">Bride Friends</option>
-                                <option value="Groom Friends">Groom Friends</option>
-                                <option value="Mutual">Mutual</option>
-                                <option value="Work">Work</option>
+                                {DEFAULT_GROUPS.map(g => (
+                                    <option key={g} value={g}>{g}</option>
+                                ))}
+                                <option value="custom">Custom...</option>
                             </select>
+
+                            {isCustom && (
+                                <input
+                                    autoFocus
+                                    required
+                                    type="text"
+                                    value={customValue}
+                                    onChange={(e) => setCustomValue(e.target.value)}
+                                    className="mt-2 block w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary animate-in fade-in slide-in-from-top-1"
+                                    placeholder="Enter custom group name"
+                                />
+                            )}
                         </div>
                         <div className="col-span-4">
                             <label className="text-sm font-medium text-foreground">Priority</label>

@@ -240,7 +240,14 @@ export default function GuestPage() {
         return sum + (guest ? 1 + (guest.companion_guest_count || 0) : 0);
     }, 0);
 
-    const groupCategories = ["All", "Bride Family", "Groom Family", "Bride Friends", "Groom Friends", "Mutual", "Work"];
+    // Dynamic Group Categories for Filtering
+    const DEFAULT_GROUPS = ["Bride Family", "Groom Family", "Bride Friends", "Groom Friends", "Mutual", "Work"];
+    const existingGroups = Array.from(new Set(guests.map(g => g.group_category).filter(Boolean)));
+    const groupCategories = ["All", ...Array.from(new Set([...DEFAULT_GROUPS, ...existingGroups]))].sort((a, b) => {
+        if (a === "All") return -1;
+        if (b === "All") return 1;
+        return a.localeCompare(b);
+    });
 
     return (
         <div className="space-y-8">
