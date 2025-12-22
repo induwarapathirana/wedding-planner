@@ -179,6 +179,8 @@ export default function GuestPage() {
 
     const handleBulkSeating = async (tableNo: string) => {
         const ids = Array.from(selectedIds);
+        if (ids.length === 0) return;
+
         const { error } = await supabase
             .from('guests')
             .update({ table_assignment: tableNo })
@@ -186,6 +188,24 @@ export default function GuestPage() {
 
         if (error) {
             alert("Error updating seating: " + error.message);
+        } else {
+            const weddingId = localStorage.getItem("current_wedding_id");
+            if (weddingId) fetchGuests(weddingId);
+            setSelectedIds(new Set());
+        }
+    };
+
+    const handleBulkUnassign = async () => {
+        const ids = Array.from(selectedIds);
+        if (ids.length === 0) return;
+
+        const { error } = await supabase
+            .from('guests')
+            .update({ table_assignment: null })
+            .in('id', ids);
+
+        if (error) {
+            alert("Error unassigning seating: " + error.message);
         } else {
             const weddingId = localStorage.getItem("current_wedding_id");
             if (weddingId) fetchGuests(weddingId);
@@ -235,10 +255,9 @@ export default function GuestPage() {
     const isOverLimit = targetCount > 0 && stats.total > targetCount;
 
     // Selected Headcount Calculation
-    const selectedHeadcount = Array.from(selectedIds).reduce((sum, id) => {
-        const guest = guests.find(g => g.id === id);
-        return sum + (guest ? 1 + (guest.companion_guest_count || 0) : 0);
-    }, 0);
+    const selectedGuests = Array.from(selectedIds).map(id => guests.find(g => g.id === id)).filter(Boolean) as Guest[];
+    const selectedHeadcount = selectedGuests.reduce((sum, guest) => sum + 1 + (guest.companion_guest_count || 0), 0);
+    const allSelectedAreAccepted = selectedGuests.every(g => g.rsvp_status === 'accepted');
 
     // Dynamic Group Categories for Filtering
     const DEFAULT_GROUPS = ["Bride Family", "Groom Family", "Bride Friends", "Groom Friends", "Mutual", "Work"];
@@ -269,11 +288,24 @@ export default function GuestPage() {
                             </span>
                             <div className="flex items-center gap-1">
                                 <button
+                                    disabled={!allSelectedAreAccepted}
                                     onClick={() => setIsSeatingDialogOpen(true)}
-                                    className="flex items-center gap-2 rounded-lg bg-white border border-border px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-gray-50 transition-all shadow-sm"
+                                    className={cn(
+                                        "flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition-all shadow-sm",
+                                        allSelectedAreAccepted
+                                            ? "bg-white text-foreground hover:bg-gray-50"
+                                            : "bg-gray-50 text-muted-foreground opacity-50 cursor-not-allowed"
+                                    )}
+                                    title={!allSelectedAreAccepted ? "Only accepted guests can be assigned seating" : ""}
                                 >
                                     <Armchair className="w-3.5 h-3.5 text-primary" />
                                     Assign Table
+                                </button>
+                                <button
+                                    onClick={handleBulkUnassign}
+                                    className="flex items-center gap-2 rounded-lg bg-white border border-border px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-gray-50 transition-all shadow-sm"
+                                >
+                                    Unassign
                                 </button>
                                 <button
                                     onClick={confirmBulkDelete}
