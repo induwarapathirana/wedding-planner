@@ -21,9 +21,10 @@ interface GuestDialogProps {
     onClose: () => void;
     onSubmit: (guest: Guest) => Promise<void>;
     initialData?: Guest | null;
+    customGroups?: string[]; // Added: Persistent custom groups
 }
 
-export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDialogProps) {
+export function GuestDialog({ isOpen, onClose, onSubmit, initialData, customGroups = [] }: GuestDialogProps) {
     const DEFAULT_GROUPS = ["Bride Family", "Groom Family", "Bride Friends", "Groom Friends", "Mutual", "Work"];
     const [formData, setFormData] = useState<Guest>({
         name: "",
@@ -144,6 +145,9 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData }: GuestDia
                                 className="mt-1 block w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                             >
                                 {DEFAULT_GROUPS.map(g => (
+                                    <option key={g} value={g}>{g}</option>
+                                ))}
+                                {customGroups.map(g => (
                                     <option key={g} value={g}>{g}</option>
                                 ))}
                                 <option value="custom">Custom...</option>

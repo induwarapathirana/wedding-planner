@@ -539,6 +539,7 @@ export default function GuestPage() {
                 onClose={() => setIsDialogOpen(false)}
                 onSubmit={handleSaveGuest}
                 initialData={editingGuest}
+                customGroups={Array.from(new Set(guests.map(g => g.group_category).filter(g => g && !DEFAULT_GROUPS.includes(g))))}
             />
 
             <GroupSummaryModal
