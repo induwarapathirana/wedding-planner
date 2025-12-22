@@ -46,6 +46,7 @@ export default function BudgetPage() {
     // Stats
     const [totalEstimated, setTotalEstimated] = useState(0);
     const [totalPaid, setTotalPaid] = useState(0);
+    const [totalActual, setTotalActual] = useState(0);
     // pending = estimated - paid (simplified logic, or actual - paid if actual exists)
     // For this app: Pending Amount usually means "Remaining to be paid"
     const totalPending = budgetItems.reduce((acc, item) => {
@@ -87,8 +88,10 @@ export default function BudgetPage() {
             // Calc Totals
             const est = data.reduce((acc, item) => acc + item.estimated_cost, 0);
             const paid = data.reduce((acc, item) => acc + item.paid_amount, 0);
+            const actual = data.reduce((acc, item) => acc + (item.actual_cost || 0), 0);
             setTotalEstimated(est);
             setTotalPaid(paid);
+            setTotalActual(actual);
         }
         setLoading(false);
     }
@@ -227,7 +230,7 @@ export default function BudgetPage() {
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
                     <div className="flex items-center gap-4">
                         <div className="rounded-full bg-blue-100 p-3 text-blue-600">
@@ -236,6 +239,17 @@ export default function BudgetPage() {
                         <div>
                             <p className="text-sm font-medium text-muted-foreground">Total Estimated</p>
                             <p className="text-2xl font-bold text-foreground">{formatMoney(totalEstimated)}</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+                    <div className="flex items-center gap-4">
+                        <div className="rounded-full bg-purple-100 p-3 text-purple-600">
+                            <TrendingUp className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-muted-foreground">Total Actual</p>
+                            <p className="text-2xl font-bold text-foreground">{formatMoney(totalActual)}</p>
                         </div>
                     </div>
                 </div>
@@ -253,7 +267,7 @@ export default function BudgetPage() {
                 <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
                     <div className="flex items-center gap-4">
                         <div className="rounded-full bg-amber-100 p-3 text-amber-600">
-                            <TrendingUp className="w-6 h-6" />
+                            <Wallet className="w-6 h-6" />
                         </div>
                         <div>
                             <p className="text-sm font-medium text-muted-foreground">Remaining Due</p>

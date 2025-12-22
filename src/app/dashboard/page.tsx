@@ -25,6 +25,8 @@ export default function DashboardPage() {
 
     const [stats, setStats] = useState({
         guestCount: 0,
+        confirmedGuest: 0,
+        pendingGuest: 0,
         targetGuest: 0,
         totalBudget: 0,
         estBudget: 0,
@@ -96,7 +98,7 @@ export default function DashboardPage() {
                 try {
                     // Fetch Stats & Widgets concurrently
                     const [guestsResult, budgetResult, tasksRes, paymentsRes, guestsListRes] = await Promise.all([
-                        supabase.from('guests').select('id', { count: 'exact', head: true }).eq('wedding_id', id),
+                        supabase.from('guests').select('rsvp_status, companion_guest_count').eq('wedding_id', id),
                         supabase.from('budget_items').select('estimated_cost').eq('wedding_id', id),
                         // Widget 1: Upcoming Tasks
                         supabase.from('checklist_items')
@@ -120,13 +122,23 @@ export default function DashboardPage() {
                             .limit(5)
                     ]);
 
-                    const guestCount = guestsResult.count || 0;
+                    const guestData = guestsResult.data || [];
+                    const guestCount = guestData.reduce((acc, g) => acc + 1 + (g.companion_guest_count || 0), 0);
+                    const confirmedGuest = guestData
+                        .filter(g => g.rsvp_status === 'accepted')
+                        .reduce((acc, g) => acc + 1 + (g.companion_guest_count || 0), 0);
+                    const pendingGuest = guestData
+                        .filter(g => g.rsvp_status === 'pending')
+                        .reduce((acc, g) => acc + 1 + (g.companion_guest_count || 0), 0);
+
                     const totalBudget = budgetResult.data
                         ? budgetResult.data.reduce((acc, item) => acc + item.estimated_cost, 0)
                         : 0;
 
                     setStats({
                         guestCount,
+                        confirmedGuest,
+                        pendingGuest,
                         targetGuest: weddingData.target_guest_count || 0,
                         totalBudget,
                         estBudget: weddingData.estimated_budget || 0,
@@ -245,14 +257,19 @@ export default function DashboardPage() {
                         <div className="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                             <span className="text-6xl">👥</span>
                         </div>
-                        <h3 className="font-medium text-foreground relative z-10 group-hover:text-secondary-foreground transition-colors">Guest Count</h3>
+                        <h3 className="font-medium text-foreground relative z-10 group-hover:text-secondary-foreground transition-colors">Confirmed Guests</h3>
                         <p className="mt-2 text-3xl font-bold text-secondary-foreground relative z-10">
-                            {stats.guestCount} <span className="text-muted-foreground text-lg font-normal">/ {stats.targetGuest}</span>
+                            {stats.confirmedGuest} <span className="text-muted-foreground text-lg font-normal">/ {stats.targetGuest}</span>
                         </p>
+                        <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground relative z-10">
+                            <span>Total Guest Count: <span className="font-semibold text-foreground">{stats.guestCount}</span></span>
+                            <span>•</span>
+                            <span>Pending RSVP: <span className="font-semibold text-amber-600">{stats.pendingGuest}</span></span>
+                        </div>
                         <div className="mt-4 h-2 w-full bg-gray-100 rounded-full overflow-hidden relative z-10">
                             <div
                                 className="h-full bg-secondary-foreground rounded-full transition-all"
-                                style={{ width: `${stats.targetGuest > 0 ? Math.min((stats.guestCount / stats.targetGuest) * 100, 100) : 0}%` }}
+                                style={{ width: `${stats.targetGuest > 0 ? Math.min((stats.confirmedGuest / stats.targetGuest) * 100, 100) : 0}%` }}
                             />
                         </div>
                     </div>
