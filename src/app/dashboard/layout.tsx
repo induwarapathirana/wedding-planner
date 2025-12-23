@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Sidebar } from "@/components/dashboard/sidebar";
+import { BottomNav } from "@/components/dashboard/bottom-nav";
 import { ModeProvider } from "@/context/mode-context";
 import { Menu, X } from "lucide-react";
 
@@ -60,11 +61,15 @@ export default function DashboardLayout({
 
                 {/* Main Content */}
                 {/* Add top padding on mobile to account for the header */}
+                {/* Add bottom padding on mobile to account for the bottom nav */}
                 <main className="md:pl-72 w-full transition-all duration-300">
-                    <div className="mx-auto max-w-7xl px-4 py-6 md:px-8 md:py-10">
+                    <div className="mx-auto max-w-7xl px-4 py-6 md:px-8 md:py-10 pb-20 md:pb-10">
                         {children}
                     </div>
                 </main>
+
+                {/* Bottom Navigation - Mobile Only */}
+                <BottomNav onMoreClick={() => setIsMobileOpen(true)} />
             </div>
         </ModeProvider>
     );
