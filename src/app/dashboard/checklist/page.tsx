@@ -2,7 +2,7 @@
 "use client";
 
 import { useMode } from "@/context/mode-context";
-import { CheckCircle2, Circle, Plus, Edit2, CalendarDays, Trash2, CheckSquare, Square } from "lucide-react";
+import { CheckCircle2, Circle, Plus, Edit2, CalendarDays, Trash2, CheckSquare, Square, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState, Suspense } from "react";
 import { supabase } from "@/lib/supabase";
@@ -232,32 +232,53 @@ function ChecklistContent() {
     return (
         <div className="space-y-8">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                 <div className="flex items-center gap-4">
                     <div>
-                        <h2 className="font-serif text-3xl font-bold text-foreground">Checklist & Timeline</h2>
-                        <p className="mt-1 text-muted-foreground">Stay organized every step of the way.</p>
+                        <h2 className="font-serif text-2xl md:text-3xl font-bold text-foreground">Checklist & Timeline</h2>
+                        <p className="mt-1 text-sm md:text-base text-muted-foreground">Stay organized every step of the way.</p>
                     </div>
                     <ModeToggle />
                 </div>
                 <div className="flex items-center gap-3">
-                    {selectedIds.size > 0 && (
-                        <button
-                            onClick={confirmBulkDelete}
-                            className="flex items-center gap-2 rounded-xl bg-red-100 px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 transition-all mr-2"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                            Delete ({selectedIds.size})
-                        </button>
-                    )}
                     <button
                         onClick={handleOpenAdd}
-                        className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all">
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 md:py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all w-full md:w-auto"
+                    >
                         <Plus className="w-4 h-4" />
                         Add Task
                     </button>
                 </div>
             </div>
+
+            {/* Selection Bar - Sticky at bottom for mobile */}
+            {selectedIds.size > 0 && (
+                <div className="fixed bottom-4 left-4 right-4 md:relative md:bottom-auto md:left-auto md:right-auto z-40">
+                    <div className="bg-white/95 backdrop-blur-sm md:bg-muted/50 rounded-2xl md:rounded-xl p-2 border border-primary/20 md:border-border shadow-xl md:shadow-none flex flex-col md:flex-row md:items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        <div className="flex items-center justify-between px-2 md:px-3">
+                            <span className="text-xs font-bold text-primary md:text-muted-foreground uppercase tracking-tight">
+                                {selectedIds.size} Tasks Selected
+                            </span>
+                            <button
+                                onClick={() => setSelectedIds(new Set())}
+                                className="md:hidden text-xs text-muted-foreground hover:text-foreground"
+                            >
+                                Clear
+                            </button>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 md:gap-1">
+                            <button
+                                onClick={confirmBulkDelete}
+                                className="flex-1 md:flex-none flex items-center justify-center gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2 md:py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition-all shadow-sm"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Selection Status Bar */}
             {items.length > 0 && (
@@ -287,61 +308,71 @@ function ChecklistContent() {
                     /* SIMPLE MODE: To Do vs Done */
                     <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border h-full">
                         {/* PENDING */}
-                        <div className="p-6">
-                            <h3 className="flex items-center gap-2 font-medium text-foreground mb-4">
+                        <div className="p-4 md:p-6">
+                            <h3 className="flex items-center gap-2 font-medium text-foreground mb-4 px-2">
                                 <Circle className="w-4 h-4 text-amber-500" /> To Do ({pendingItems.length})
                             </h3>
                             <div className="space-y-3">
                                 {pendingItems.map(item => (
-                                    <div key={item.id} className={cn("group flex items-start gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors border border-transparent hover:border-border/50", selectedIds.has(item.id) && "bg-muted/50 border-border/50")}>
-                                        <button onClick={() => toggleSelect(item.id)} className="mt-1 text-muted-foreground hover:text-primary">
-                                            {selectedIds.has(item.id) ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
-                                        </button>
-                                        <button onClick={() => toggleComplete(item)} className="mt-0.5 text-muted-foreground hover:text-primary transition-colors">
-                                            <Circle className="w-5 h-5" />
-                                        </button>
-                                        <div className="flex-1">
-                                            <p className="font-medium text-foreground">{item.title}</p>
-                                            <p className="text-xs text-muted-foreground">{item.category} • {item.due_date ? new Date(item.due_date).toLocaleDateString() : 'No Date'}</p>
-                                        </div>
-                                        <div className="flex gap-1 opactiy-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => handleOpenEdit(item)} className="p-1.5 text-muted-foreground hover:text-primary transition-all">
-                                                <Edit2 className="w-3.5 h-3.5" />
+                                    <div key={item.id} className={cn("group flex items-start gap-4 p-4 rounded-2xl hover:bg-muted/50 transition-all border border-transparent hover:border-border/50", selectedIds.has(item.id) ? "bg-primary/5 border-primary/20 shadow-sm" : "bg-white md:bg-transparent shadow-sm md:shadow-none border-border/50 md:border-transparent")}>
+                                        <div className="flex items-center h-6">
+                                            <button onClick={() => toggleSelect(item.id)} className="text-muted-foreground hover:text-primary transition-colors">
+                                                {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
                                             </button>
-                                            <button onClick={() => confirmDelete(item.id)} className="p-1.5 text-muted-foreground hover:text-red-600 transition-all">
-                                                <Trash2 className="w-3.5 h-3.5" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <button onClick={() => toggleComplete(item)} className="group/btn flex items-start gap-3 w-full text-left">
+                                                <div className="mt-0.5 rounded-full border-2 border-muted-foreground/30 group-hover/btn:border-primary/50 transition-colors p-0.5">
+                                                    <Circle className="w-4 h-4 text-transparent" />
+                                                </div>
+                                                <div>
+                                                    <p className="font-semibold text-foreground text-sm md:text-base mb-1 leading-snug">{item.title}</p>
+                                                    <p className="text-[11px] md:text-xs text-muted-foreground font-medium">{item.category} • {item.due_date ? new Date(item.due_date).toLocaleDateString() : 'No Date'}</p>
+                                                </div>
+                                            </button>
+                                        </div>
+                                        <div className="flex items-start gap-1">
+                                            <button onClick={() => handleOpenEdit(item)} className="p-2 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-white md:hover:bg-muted">
+                                                <Edit2 className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={() => confirmDelete(item.id)} className="p-2 text-muted-foreground hover:text-red-600 transition-all rounded-lg hover:bg-white md:hover:bg-muted">
+                                                <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
                                     </div>
                                 ))}
-                                {pendingItems.length === 0 && <p className="text-sm text-muted-foreground italic">No pending tasks.</p>}
+                                {pendingItems.length === 0 && <p className="text-sm text-muted-foreground italic px-2">No pending tasks.</p>}
                             </div>
                         </div>
 
                         {/* COMPLETED */}
-                        <div className="p-6 bg-muted/10">
-                            <h3 className="flex items-center gap-2 font-medium text-muted-foreground mb-4">
+                        <div className="p-4 md:p-6 bg-muted/20 md:bg-muted/10">
+                            <h3 className="flex items-center gap-2 font-medium text-muted-foreground mb-4 px-2">
                                 <CheckCircle2 className="w-4 h-4 text-green-600" /> Completed ({completedItems.length})
                             </h3>
                             <div className="space-y-3">
                                 {completedItems.map(item => (
-                                    <div key={item.id} className={cn("group flex items-start gap-3 p-3 rounded-xl opacity-75 hover:opacity-100 transition-opacity", selectedIds.has(item.id) && "bg-muted/20")}>
-                                        <button onClick={() => toggleSelect(item.id)} className="mt-1 text-muted-foreground hover:text-primary">
-                                            {selectedIds.has(item.id) ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
-                                        </button>
-                                        <button onClick={() => toggleComplete(item)} className="mt-0.5 text-green-600 transition-colors">
-                                            <CheckCircle2 className="w-5 h-5" />
-                                        </button>
-                                        <div className="flex-1">
-                                            <p className="font-medium text-foreground line-through decoration-muted-foreground/50">{item.title}</p>
-                                            <p className="text-xs text-muted-foreground">{item.category}</p>
-                                        </div>
-                                        <div className="flex gap-1 opactiy-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => handleOpenEdit(item)} className="p-1.5 text-muted-foreground hover:text-primary transition-all">
-                                                <Edit2 className="w-3.5 h-3.5" />
+                                    <div key={item.id} className={cn("group flex items-start gap-4 p-4 rounded-2xl opacity-80 hover:opacity-100 transition-all border border-transparent hover:border-border/50", selectedIds.has(item.id) ? "bg-primary/5 border-primary/20" : "bg-white/50 md:bg-transparent border-border/30 md:border-transparent shadow-sm md:shadow-none")}>
+                                        <div className="flex items-center h-6">
+                                            <button onClick={() => toggleSelect(item.id)} className="text-muted-foreground hover:text-primary transition-colors">
+                                                {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
                                             </button>
-                                            <button onClick={() => confirmDelete(item.id)} className="p-1.5 text-muted-foreground hover:text-red-600 transition-all">
-                                                <Trash2 className="w-3.5 h-3.5" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <button onClick={() => toggleComplete(item)} className="flex items-start gap-3 w-full text-left">
+                                                <CheckCircle2 className="mt-0.5 w-5 h-5 text-green-600" />
+                                                <div>
+                                                    <p className="font-medium text-foreground text-sm line-through decoration-muted-foreground/50 leading-snug">{item.title}</p>
+                                                    <p className="text-[11px] text-muted-foreground font-medium">{item.category}</p>
+                                                </div>
+                                            </button>
+                                        </div>
+                                        <div className="flex items-start gap-1">
+                                            <button onClick={() => handleOpenEdit(item)} className="p-2 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-white md:hover:bg-muted">
+                                                <Edit2 className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={() => confirmDelete(item.id)} className="p-2 text-muted-foreground hover:text-red-600 transition-all rounded-lg hover:bg-white md:hover:bg-muted">
+                                                <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
                                     </div>
@@ -351,68 +382,77 @@ function ChecklistContent() {
                     </div>
                 ) : (
                     /* ADVANCED MODE: Timeline Layout */
-                    <div className="p-8">
-                        <div className="relative border-l border-border ml-3 space-y-10">
+                    <div className="p-4 md:p-10">
+                        <div className="relative border-l-2 border-primary/10 ml-4 md:ml-6 space-y-12">
                             {displayCategories.filter(cat => groupedItems[cat] && groupedItems[cat].length > 0).map((category) => (
-                                <div key={category} className="relative pl-8">
+                                <div key={category} className="relative pl-8 md:pl-10">
                                     {/* Timeline Dot */}
-                                    <div className="absolute -left-1.5 top-1 h-3 w-3 rounded-full bg-primary ring-4 ring-white" />
+                                    <div className="absolute -left-[11px] md:-left-[13px] top-1.5 h-5 w-5 rounded-full border-4 border-white bg-primary shadow-sm ring-1 ring-primary/20" />
 
-                                    <h3 className="text-lg font-bold text-foreground mb-4">{category}</h3>
+                                    <h3 className="text-xl font-bold text-foreground mb-6 md:mb-8 tracking-tight">{category}</h3>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                                         {groupedItems[category].map(item => (
                                             <div key={item.id} className={cn(
-                                                "relative flex flex-col justify-between rounded-xl border p-4 transition-all hover:shadow-md",
-                                                item.is_completed ? "bg-muted/20 border-border opacity-75" : "bg-white border-border",
-                                                selectedIds.has(item.id) && "ring-1 ring-primary border-primary bg-primary/5"
+                                                "relative flex flex-col justify-between rounded-3xl border-2 p-5 md:p-6 transition-all hover:shadow-xl hover:-translate-y-1",
+                                                item.is_completed ? "bg-muted/10 border-border/50 opacity-80" : "bg-white border-border/40 shadow-sm",
+                                                selectedIds.has(item.id) && "ring-2 ring-primary border-primary bg-primary/5"
                                             )}>
                                                 <button
                                                     onClick={() => toggleSelect(item.id)}
-                                                    className="absolute top-4 left-4 z-10 text-muted-foreground hover:text-primary transition-colors"
+                                                    className="absolute top-5 right-5 z-10 text-muted-foreground hover:text-primary transition-colors"
                                                 >
-                                                    {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
+                                                    {selectedIds.has(item.id) ? <CheckSquare className="w-6 h-6 text-primary" /> : <Square className="w-6 h-6 opacity-40 hover:opacity-100" />}
                                                 </button>
 
-                                                <div className="flex items-start justify-between mb-3 pl-8">
+                                                <div className="flex items-center gap-3 mb-4">
                                                     <span className={cn(
-                                                        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                                                        "inline-flex items-center rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider",
                                                         item.is_completed ? "bg-green-100 text-green-700" : "bg-primary/10 text-primary"
                                                     )}>
                                                         {item.is_completed ? "Done" : "Pending"}
                                                     </span>
+                                                </div>
+
+                                                <h4 className={cn("text-base md:text-lg font-bold text-foreground mb-2 leading-tight pr-8", item.is_completed && "line-through opacity-70")}>
+                                                    {item.title}
+                                                </h4>
+
+                                                <div className="flex flex-col gap-2 mb-6">
+                                                    {item.due_date && (
+                                                        <div className="flex items-center gap-2 text-[11px] md:text-xs font-medium text-muted-foreground">
+                                                            <CalendarDays className="w-3.5 h-3.5" />
+                                                            {new Date(item.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                        </div>
+                                                    )}
+                                                    {item.notes && (
+                                                        <p className="text-[11px] md:text-xs text-muted-foreground line-clamp-2 italic">
+                                                            "{item.notes}"
+                                                        </p>
+                                                    )}
+                                                </div>
+
+                                                <div className="flex items-center gap-2 pt-2 border-t border-border/50">
+                                                    <button
+                                                        onClick={() => toggleComplete(item)}
+                                                        className={cn(
+                                                            "flex-1 rounded-xl py-2.5 text-xs font-bold transition-all shadow-sm",
+                                                            item.is_completed
+                                                                ? "bg-white border border-border text-foreground hover:bg-muted"
+                                                                : "bg-primary text-white hover:bg-primary/90 shadow-primary/20"
+                                                        )}
+                                                    >
+                                                        {item.is_completed ? "Mark Undone" : "Mark Complete"}
+                                                    </button>
                                                     <div className="flex gap-1">
-                                                        <button onClick={() => handleOpenEdit(item)} className="text-muted-foreground hover:text-primary transition-colors">
+                                                        <button onClick={() => handleOpenEdit(item)} className="p-2.5 text-muted-foreground hover:text-primary hover:bg-muted rounded-xl transition-all">
                                                             <Edit2 className="w-4 h-4" />
                                                         </button>
-                                                        <button onClick={() => confirmDelete(item.id)} className="text-muted-foreground hover:text-red-600 transition-colors">
+                                                        <button onClick={() => confirmDelete(item.id)} className="p-2.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
                                                             <Trash2 className="w-4 h-4" />
                                                         </button>
                                                     </div>
                                                 </div>
-
-                                                <h4 className={cn("font-medium text-foreground mb-1", item.is_completed && "line-through")}>
-                                                    {item.title}
-                                                </h4>
-
-                                                {item.due_date && (
-                                                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-4">
-                                                        <CalendarDays className="w-3.5 h-3.5" />
-                                                        {new Date(item.due_date).toLocaleDateString()}
-                                                    </div>
-                                                )}
-
-                                                <button
-                                                    onClick={() => toggleComplete(item)}
-                                                    className={cn(
-                                                        "mt-auto w-full rounded-lg py-2 text-xs font-medium transition-colors",
-                                                        item.is_completed
-                                                            ? "bg-white border border-border text-foreground hover:bg-muted"
-                                                            : "bg-primary text-white hover:bg-primary/90"
-                                                    )}
-                                                >
-                                                    {item.is_completed ? "Mark Undone" : "Mark Complete"}
-                                                </button>
                                             </div>
                                         ))}
                                     </div>
@@ -420,7 +460,8 @@ function ChecklistContent() {
                             ))}
 
                             {Object.keys(groupedItems).length === 0 && (
-                                <div className="pl-8 text-muted-foreground italic">
+                                <div className="pl-8 text-muted-foreground italic flex items-center gap-3">
+                                    <HelpCircle className="w-5 h-5 opacity-40" />
                                     No tasks found. Add a task to start your timeline!
                                 </div>
                             )}
