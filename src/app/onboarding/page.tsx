@@ -46,13 +46,18 @@ export default function OnboardingPage() {
         }
         // If profile exists, we leave it alone. The user's "global identity" is stable.
 
-        // 2. Create Wedding
+        // 2. Create Wedding with Premium Trial
+        const trialEndsAt = new Date();
+        trialEndsAt.setDate(trialEndsAt.getDate() + 14); // 2 weeks from now
+
         const { data: wedding, error } = await supabase.from('weddings').insert({
             created_by: user.id,
             couple_name_1: partnerOne,
             couple_name_2: partnerTwo,
             wedding_date: date,
             style_theme: 'Elegant', // default
+            tier: 'premium', // Start with premium tier during trial
+            premium_trial_ends_at: trialEndsAt.toISOString()
         }).select().single();
 
         if (error) {

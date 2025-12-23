@@ -5,38 +5,50 @@ import { PLAN_LIMITS } from "@/lib/limits";
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col items-center bg-background text-center">
-      
+
       {/* Hero Section */}
       <section className="w-full px-4 pt-20 pb-16 lg:pt-32 lg:pb-24">
         <div className="mx-auto max-w-4xl">
+          {/* Trial Badge */}
+          <div className="mx-auto mb-6 w-fit animate-in fade-in zoom-in duration-300">
+            <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-bold text-primary ring-1 ring-primary/20">
+              ✨ Try Premium FREE for 14 Days
+            </span>
+          </div>
+
           <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20 animate-in fade-in zoom-in duration-500">
             <Heart className="h-10 w-10 fill-current" />
           </div>
 
           <h1 className="font-serif text-5xl font-bold text-foreground sm:text-7xl animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
-            Vow & Venue
+            Start Free,<br />Plan Premium
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground sm:text-xl animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
-            The all-in-one workspace for <span className="text-foreground font-medium">Modern Couples</span> and <span className="text-foreground font-medium">Professional Planners</span>. 
-            Plan weddings, manage vendors, and track budgets with elegance and ease.
+            Get <span className="text-foreground font-bold">2 weeks of unlimited premium features</span> free.
+            Plan weddings, manage vendors, and track budgets with elegance and ease. No credit card required.
           </p>
 
           <div className="mt-10 flex flex-wrap justify-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300">
             <Link
               href="/login"
-              className="group flex items-center gap-2 rounded-xl bg-primary px-8 py-3.5 text-base font-medium text-white shadow-lg shadow-primary/25 transition-all hover:scale-105 hover:bg-primary/90"
+              className="group flex items-center gap-2 rounded-xl bg-primary px-8 py-4 text-base font-semibold text-white shadow-lg shadow-primary/25 transition-all hover:scale-105 hover:bg-primary/90"
             >
-              Start Planning Free
+              Start Your Free Trial
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
-            <Link 
+            <Link
               href="#packages"
-              className="rounded-xl px-8 py-3.5 text-base font-medium text-foreground transition-colors hover:bg-muted"
+              className="rounded-xl px-8 py-4 text-base font-medium text-foreground transition-colors hover:bg-muted"
             >
-              View Packages
+              View Pricing
             </Link>
           </div>
+
+          {/* Trust Badges */}
+          <p className="mt-8 text-sm text-muted-foreground animate-in fade-in duration-500 delay-400">
+            Join 1,000+ couples planning stress-free ✨ No credit card required
+          </p>
         </div>
       </section>
 
@@ -44,7 +56,7 @@ export default function Home() {
       <section className="w-full px-4 py-16 bg-gray-50/50">
         <div className="mx-auto max-w-6xl">
           <div className="grid md:grid-cols-2 gap-12">
-            
+
             {/* For Couples */}
             <div className="text-left space-y-6 p-8 bg-white rounded-3xl shadow-sm border border-gray-100">
               <div className="h-12 w-12 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600">
@@ -103,12 +115,15 @@ export default function Home() {
       <section id="packages" className="w-full px-4 py-20">
         <div className="mx-auto max-w-4xl">
           <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-bold text-primary ring-1 ring-primary/20 mb-4">
+              🎁 14-Day Premium Trial • No Credit Card Required
+            </div>
             <h2 className="text-3xl sm:text-4xl font-serif font-bold text-gray-900 mb-4">Simple, Transparent Pricing</h2>
-            <p className="text-lg text-gray-500">Start for free, upgrade when you need to grow.</p>
+            <p className="text-lg text-gray-500">Experience premium features free for 2 weeks, then choose your plan.</p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-8 items-start">
-            
+
             {/* Free Plan */}
             <div className="rounded-3xl p-8 border border-gray-200 bg-white text-left hover:border-gray-300 transition-colors">
               <h3 className="text-2xl font-bold text-gray-900">Free Starter</h3>
@@ -118,7 +133,7 @@ export default function Home() {
                 <span className="text-gray-500"> / forever</span>
               </div>
               <Link href="/login" className="block w-full py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium rounded-xl text-center transition-colors">
-                Get Started
+                Start Free Trial
               </Link>
               <div className="mt-8 space-y-4">
                 <p className="text-sm font-semibold text-gray-900">Includes:</p>
@@ -154,8 +169,8 @@ export default function Home() {
                 <span className="text-4xl font-bold text-gray-900">LKR 990</span>
                 <span className="text-gray-500"> / one-time</span>
               </div>
-              <Link href="/login" className="block w-full py-3 px-4 bg-primary hover:bg-primary/90 text-white font-medium rounded-xl text-center shadow-lg shadow-primary/25 transition-all">
-                Upgrade Now
+              <Link href="/login" className="block w-full py-3 px-4 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl text-center shadow-lg shadow-primary/25 transition-all">
+                Start Premium Trial
               </Link>
               <div className="mt-8 space-y-4">
                 <p className="text-sm font-semibold text-gray-900">Everything in Free, plus:</p>
@@ -226,16 +241,16 @@ export default function Home() {
 
       {/* Footer CTA */}
       <section className="w-full px-4 py-20 bg-primary/5">
-         <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-serif font-bold text-gray-900 mb-6">Ready to plan the perfect day?</h2>
-            <Link
-              href="/login"
-              className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-8 py-4 text-base font-medium text-white shadow-lg transition-all hover:scale-105 hover:bg-gray-800"
-            >
-              Get Started for Free
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-         </div>
+        <div className="mx-auto max-w-2xl text-center">
+          <h2 className="text-3xl font-serif font-bold text-gray-900 mb-6">Ready to plan the perfect day?</h2>
+          <Link
+            href="/login"
+            className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-8 py-4 text-base font-medium text-white shadow-lg transition-all hover:scale-105 hover:bg-gray-800"
+          >
+            Get Started for Free
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
       </section>
     </div>
   );
