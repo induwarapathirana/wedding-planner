@@ -32,11 +32,11 @@ export default function DashboardLayout({
                     </div>
                 )}
 
-                {/* Floating Hamburger Menu - Other pages */}
+                {/* Floating Hamburger Menu - Other pages (Top-right to avoid covering titles) */}
                 {!isOverviewPage && (
                     <button
                         onClick={() => setIsMobileOpen(true)}
-                        className="md:hidden fixed top-4 left-4 z-30 p-3 bg-white/80 backdrop-blur-xl rounded-2xl shadow-lg border border-border/50 text-gray-600 hover:bg-white transition-all active:scale-95"
+                        className="md:hidden fixed top-4 right-4 z-30 p-3 bg-white/80 backdrop-blur-xl rounded-2xl shadow-lg border border-border/50 text-gray-600 hover:bg-white transition-all active:scale-95"
                     >
                         <Menu className="w-5 h-5" />
                     </button>

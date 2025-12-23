@@ -10,7 +10,8 @@ import {
     CheckSquare,
     HeartHandshake,
     Package,
-    CalendarClock
+    CalendarClock,
+    Settings
 } from "lucide-react";
 
 const navItems = [
@@ -21,6 +22,7 @@ const navItems = [
     { name: "Vendors", href: "/dashboard/vendors", icon: HeartHandshake },
     { name: "Inventory", href: "/dashboard/inventory", icon: Package },
     { name: "Itinerary", href: "/dashboard/itinerary", icon: CalendarClock },
+    { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
 interface BottomNavProps {
