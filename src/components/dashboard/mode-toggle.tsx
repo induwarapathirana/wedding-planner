@@ -11,34 +11,33 @@ export function ModeToggle() {
         <button
             onClick={toggleMode}
             className={cn(
-                "group relative flex items-center justify-between w-full p-1 rounded-full",
-                "bg-muted border border-border transition-all duration-300 pointer-events-auto"
+                "relative flex items-center p-1 rounded-full bg-muted/50 border border-border/50 hover:bg-muted transition-all duration-300 w-32 h-9",
             )}
         >
             <div
                 className={cn(
-                    "absolute inset-y-1 w-[calc(50%-4px)] rounded-full bg-white shadow-sm transition-all duration-300",
-                    mode === "advanced" ? "translate-x-full left-0 ml-1" : "left-0 ml-1"
+                    "absolute h-7 w-[calc(50%-4px)] rounded-full bg-white shadow-sm transition-all duration-300 pointer-events-none",
+                    mode === "advanced" ? "translate-x-full" : "translate-x-0"
                 )}
             />
             <div className="relative z-10 flex w-full">
                 <span
                     className={cn(
-                        "flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium transition-colors duration-300",
-                        mode === "simple" ? "text-primary-foreground" : "text-muted-foreground"
+                        "flex-1 flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors duration-300",
+                        mode === "simple" ? "text-primary" : "text-muted-foreground"
                     )}
                 >
-                    <Sparkles className="w-4 h-4" />
+                    <Sparkles className="w-3 h-3" />
                     Simple
                 </span>
                 <span
                     className={cn(
-                        "flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium transition-colors duration-300",
-                        mode === "advanced" ? "text-primary-foreground" : "text-muted-foreground"
+                        "flex-1 flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors duration-300",
+                        mode === "advanced" ? "text-primary" : "text-muted-foreground"
                     )}
                 >
-                    <FileText className="w-4 h-4" />
-                    Advanced
+                    <FileText className="w-3 h-3" />
+                    Adv.
                 </span>
             </div>
         </button>

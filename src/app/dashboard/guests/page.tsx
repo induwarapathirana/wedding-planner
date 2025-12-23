@@ -25,6 +25,7 @@ type Guest = {
 };
 
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+import { ModeToggle } from "@/components/dashboard/mode-toggle";
 
 export default function GuestPage() {
     const { mode } = useMode();
@@ -273,13 +274,16 @@ export default function GuestPage() {
             <div className="space-y-6 md:space-y-8 pb-20 md:pb-0"> {/* Add padding for sticky bar */}
                 {/* Header */}
                 <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-                    <div>
-                        <h2 className="font-serif text-2xl md:text-3xl font-bold text-foreground">Guest List</h2>
-                        <p className="mt-1 text-sm md:text-base text-muted-foreground">
-                            {mode === "simple"
-                                ? "Manage RSVPs and headcount."
-                                : "Detailed tracking for meals, seating, and groupings."}
-                        </p>
+                    <div className="flex items-center gap-4">
+                        <div>
+                            <h2 className="font-serif text-2xl md:text-3xl font-bold text-foreground">Guest List</h2>
+                            <p className="mt-1 text-sm md:text-base text-muted-foreground">
+                                {mode === "simple"
+                                    ? "Manage RSVPs and headcount."
+                                    : "Detailed tracking for meals, seating, and groupings."}
+                            </p>
+                        </div>
+                        <ModeToggle />
                     </div>
 
                     <button

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMode } from "@/context/mode-context";
-import { DollarSign, PieChart, TrendingUp, Plus, Edit2, Wallet, Trash2, CheckSquare, Square, Search, Filter, LayoutGrid } from "lucide-react";
+import { DollarSign, PieChart, TrendingUp, Plus, Edit2, Wallet, Trash2, CheckSquare, Square, Search, Filter, LayoutGrid, Sparkles } from "lucide-react";
+import { ModeToggle } from "@/components/dashboard/mode-toggle";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -9,6 +10,7 @@ import { BudgetDialog } from "@/components/dashboard/budget-dialog";
 import { CURRENCIES } from "@/lib/constants";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 import { LimitModal } from "@/components/dashboard/limit-modal";
+import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 
 type BudgetItem = {
     id: string;
@@ -24,7 +26,6 @@ type BudgetItem = {
     units?: number;
 };
 
-import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 
 export default function BudgetPage() {
     const { mode } = useMode();
@@ -214,9 +215,12 @@ export default function BudgetPage() {
             {/* Header */}
             <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                    <div>
-                        <h2 className="font-serif text-2xl md:text-3xl font-bold text-foreground">Budget Tracker</h2>
-                        <p className="text-sm md:text-base text-muted-foreground">Keep your expenses on track.</p>
+                    <div className="flex items-center gap-4">
+                        <div>
+                            <h2 className="font-serif text-3xl font-bold text-foreground">Budget Tracker</h2>
+                            <p className="mt-1 text-muted-foreground">Manage your wedding expenses and payments.</p>
+                        </div>
+                        <ModeToggle />
                     </div>
                     <div className="flex items-center gap-2">
                         <button

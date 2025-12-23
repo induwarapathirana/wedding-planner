@@ -13,7 +13,7 @@ interface ModeContextType {
 const ModeContext = createContext<ModeContextType | undefined>(undefined);
 
 export function ModeProvider({ children }: { children: React.ReactNode }) {
-    const [mode, setModeState] = useState<PlannerMode>("simple");
+    const [mode, setModeState] = useState<PlannerMode>("advanced");
 
     // Persist preference (conceptual - implementation simplified for MVP)
     // In a real app, this might sync with User Profile in Supabase

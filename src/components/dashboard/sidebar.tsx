@@ -14,12 +14,11 @@ import {
     Settings,
     LogOut,
     HeartHandshake,
-    CalendarClock, 
+    CalendarClock,
     CheckSquare,
     BookUser,
     DollarSign // New icon import
 } from "lucide-react";
-import { ModeToggle } from "./mode-toggle";
 import WeddingSelector from "./WeddingSelector";
 import { supabase } from "@/lib/supabase";
 
@@ -86,10 +85,6 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                     <WeddingSelector />
                 </div>
 
-                {/* Mode Toggle */}
-                <div className="mb-8">
-                    <ModeToggle />
-                </div>
 
                 {/* Navigation */}
                 <nav className="flex-1 space-y-1 overflow-y-auto">

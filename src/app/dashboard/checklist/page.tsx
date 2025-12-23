@@ -12,6 +12,7 @@ import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+import { ModeToggle } from "@/components/dashboard/mode-toggle";
 
 type ChecklistItem = {
     id: string;
@@ -231,11 +232,13 @@ function ChecklistContent() {
     return (
         <div className="space-y-8">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    {/* Title */}
-                    <h2 className="font-serif text-3xl font-bold text-foreground">Checklist & Timeline</h2>
-                    <p className="mt-1 text-muted-foreground">Stay organized every step of the way.</p>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                    <div>
+                        <h2 className="font-serif text-3xl font-bold text-foreground">Checklist & Timeline</h2>
+                        <p className="mt-1 text-muted-foreground">Stay organized every step of the way.</p>
+                    </div>
+                    <ModeToggle />
                 </div>
                 <div className="flex items-center gap-3">
                     {selectedIds.size > 0 && (
