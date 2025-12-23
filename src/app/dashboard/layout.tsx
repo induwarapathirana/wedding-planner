@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { BottomNav } from "@/components/dashboard/bottom-nav";
 import { ModeProvider } from "@/context/mode-context";
@@ -12,26 +13,34 @@ export default function DashboardLayout({
     children: React.ReactNode;
 }) {
     const [isMobileOpen, setIsMobileOpen] = useState(false);
+    const pathname = usePathname();
+    const isOverviewPage = pathname === '/dashboard';
 
     return (
         <ModeProvider>
             <div className="min-h-screen bg-background text-foreground selection:bg-primary/20">
 
-                {/* Mobile Header */}
-                <div className="md:hidden flex items-center justify-between p-4 border-b border-border bg-white sticky top-0 z-30">
-                    <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                            <span className="font-serif font-bold">V</span>
+                {/* Mobile Header - Only show branding on overview page */}
+                {isOverviewPage && (
+                    <div className="md:hidden flex items-center justify-between p-4 border-b border-border bg-white sticky top-0 z-30">
+                        <div className="flex items-center gap-2">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                <span className="font-serif font-bold">V</span>
+                            </div>
+                            <span className="font-serif font-bold text-lg">Vow & Venue</span>
                         </div>
-                        <span className="font-serif font-bold text-lg">Vow & Venue</span>
                     </div>
+                )}
+
+                {/* Floating Hamburger Menu - Other pages */}
+                {!isOverviewPage && (
                     <button
                         onClick={() => setIsMobileOpen(true)}
-                        className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                        className="md:hidden fixed top-4 left-4 z-30 p-3 bg-white/80 backdrop-blur-xl rounded-2xl shadow-lg border border-border/50 text-gray-600 hover:bg-white transition-all active:scale-95"
                     >
-                        <Menu className="w-6 h-6" />
+                        <Menu className="w-5 h-5" />
                     </button>
-                </div>
+                )}
 
                 {/* Sidebar Container */}
                 {/* Desktop: Fixed, always visible. Mobile: Fixed, slide-in. */}
