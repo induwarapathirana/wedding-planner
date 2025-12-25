@@ -1,20 +1,8 @@
 {
     "crons": [
         {
-            "path": "/api/cron/send-notifications?type=today",
-            "schedule": "30 2 * * *"
-        },
-        {
             "path": "/api/cron/send-notifications?type=tomorrow",
-            "schedule": "30 3 * * *"
-        },
-        {
-            "path": "/api/cron/send-notifications?type=tomorrow",
-            "schedule": "0 14 * * *"
-        },
-        {
-            "path": "/api/cron/send-notifications?type=three_days",
-            "schedule": "30 15 * * *"
+            "schedule": "30 14 * * *"
         }
     ]
 }
