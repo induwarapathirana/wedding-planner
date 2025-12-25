@@ -385,7 +385,10 @@ function NotificationSettings({ weddingId }: { weddingId: string }) {
                 }),
             });
 
-            if (!response.ok) throw new Error("Failed to save subscription to database.");
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: "Unknown server error" }));
+                throw new Error(errorData.details || errorData.error || "Failed to save subscription to database.");
+            }
 
             alert("Notifications enabled successfully! 🎉");
             localStorage.setItem("notification-enabled", "true");
@@ -440,8 +443,8 @@ function NotificationSettings({ weddingId }: { weddingId: string }) {
                         onClick={handleEnable}
                         disabled={loading || !isPWA}
                         className={`px-4 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-50 ${permission === "granted"
-                                ? "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
-                                : "bg-primary text-white hover:bg-primary/90"
+                            ? "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                            : "bg-primary text-white hover:bg-primary/90"
                             }`}
                     >
                         {loading ? "Processing..." : permission === "granted" ? "Refresh Connection" : "Enable Alerts"}

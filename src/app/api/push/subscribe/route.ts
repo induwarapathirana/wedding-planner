@@ -44,7 +44,11 @@ export async function POST(request: NextRequest) {
         if (error) {
             console.error('Error saving push subscription:', error);
             return NextResponse.json(
-                { error: 'Failed to save subscription' },
+                {
+                    error: 'Failed to save subscription',
+                    details: error.message,
+                    code: error.code
+                },
                 { status: 500 }
             );
         }
