@@ -36,22 +36,19 @@ export function NotificationPrompt({ userId, weddingId }: NotificationPromptProp
             // Register service worker
             const registration = await registerServiceWorker();
             if (!registration) {
-                alert("Service worker registration failed");
-                return;
+                throw new Error("Service worker registration failed. Please ensure you are using Safari on iOS and have added the app to your home screen.");
             }
 
             // Request permission
             const permission = await requestNotificationPermission();
             if (permission !== "granted") {
-                alert("Notification permission denied");
-                return;
+                throw new Error("Notification permission was denied. Please enable notifications in your browser/iOS settings.");
             }
 
             // Subscribe to push
             const subscription = await subscribeToPush(registration);
             if (!subscription) {
-                alert("Push subscription failed");
-                return;
+                throw new Error("Push subscription failed. This usually happens if the VAPID public key is missing or invalid in the app settings.");
             }
 
             // Save subscription to database
@@ -66,15 +63,16 @@ export function NotificationPrompt({ userId, weddingId }: NotificationPromptProp
             });
 
             if (!response.ok) {
-                throw new Error("Failed to save subscription");
+                const errorData = await response.json().catch(() => ({ error: "Unknown server error" }));
+                throw new Error(errorData.error || "Failed to save subscription to our database.");
             }
 
             // Success!
             setIsVisible(false);
             localStorage.setItem("notification-enabled", "true");
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error enabling notifications:", error);
-            alert("Failed to enable notifications. Please try again.");
+            alert(error.message || "Failed to enable notifications. Please try again.");
         } finally {
             setIsLoading(false);
         }
