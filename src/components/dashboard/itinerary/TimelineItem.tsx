@@ -31,12 +31,12 @@ export default function TimelineItem({ event, isLast, onEdit, onDelete, isSelect
     const startTime = new Date(event.start_time);
 
     return (
-        <div className="relative pl-8 pb-8 group">
+        <div className="relative pl-6 md:pl-8 pb-8 group">
             {/* Selection Checkbox - positioned left of the line */}
             {onToggleSelect && (
                 <button
                     onClick={() => onToggleSelect(event.id)}
-                    className="absolute -left-10 top-0 p-1 text-muted-foreground hover:text-primary transition-colors"
+                    className="absolute -left-2 md:-left-10 top-0 p-1 text-muted-foreground hover:text-primary transition-colors"
                 >
                     {isSelected ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
                 </button>
@@ -52,11 +52,11 @@ export default function TimelineItem({ event, isLast, onEdit, onDelete, isSelect
 
             {/* Content Card */}
             <div className={cn(
-                "relative flex gap-4 p-4 rounded-xl border bg-white transition-all hover:shadow-md",
+                "relative flex gap-4 p-4 rounded-xl border bg-white transition-all hover:shadow-md ml-6 md:ml-0", // Added ml-6 for mobile spacing
                 isSelected ? "border-primary ring-1 ring-primary bg-primary/5" : "border-gray-100"
             )}>
                 {/* Time Column */}
-                <div className="w-20 pt-1 text-right flex-shrink-0">
+                <div className="w-16 md:w-20 pt-1 text-right flex-shrink-0">
                     <div className="font-bold text-gray-900">{format(startTime, "h:mm a")}</div>
                     {event.end_time && (
                         <div className="text-xs text-gray-500 mt-1">
@@ -75,10 +75,10 @@ export default function TimelineItem({ event, isLast, onEdit, onDelete, isSelect
                                 {event.title}
                             </h3>
                         </div>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                             <button
                                 onClick={() => onEdit(event)}
-                                className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-colors"
+                                className="p-1.5 md:p-1.5 bg-gray-50 md:bg-transparent text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                             >
                                 <Edit2 className="w-3.5 h-3.5" />
                             </button>
@@ -86,7 +86,7 @@ export default function TimelineItem({ event, isLast, onEdit, onDelete, isSelect
                                 onClick={() => {
                                     if (confirm("Delete this event?")) onDelete(event.id);
                                 }}
-                                className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded-lg transition-colors"
+                                className="p-1.5 md:p-1.5 bg-gray-50 md:bg-transparent text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             >
                                 <Trash2 className="w-3.5 h-3.5" />
                             </button>

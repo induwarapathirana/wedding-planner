@@ -88,10 +88,11 @@ export default function VendorCard({ vendor, onEdit, onDelete, isSelected, onTog
             </div>
 
             {/* Actions */}
-            <div className="absolute top-4 right-14 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+            <div className="absolute top-4 right-4 md:right-14 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex gap-2">
                 <button
                     onClick={() => onEdit(vendor)}
-                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="p-2 md:p-1.5 bg-gray-50 md:bg-transparent text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors shadow-sm md:shadow-none"
+                    aria-label="Edit vendor"
                 >
                     <Pencil className="w-4 h-4" />
                 </button>
@@ -101,7 +102,8 @@ export default function VendorCard({ vendor, onEdit, onDelete, isSelected, onTog
                             onDelete(vendor.id);
                         }
                     }}
-                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    className="p-2 md:p-1.5 bg-gray-50 md:bg-transparent text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shadow-sm md:shadow-none"
+                    aria-label="Delete vendor"
                 >
                     <Trash2 className="w-4 h-4" />
                 </button>

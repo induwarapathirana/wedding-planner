@@ -70,10 +70,13 @@ async function removeInvalidSubscription(endpoint: string) {
 /**
  * Send notifications for upcoming due dates
  */
-export async function sendDueDateNotifications() {
+/**
+ * Send notifications for upcoming due dates
+ */
+export async function sendDueDateNotifications(scheduleType?: 'today' | 'tomorrow' | 'three_days') {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get today and dates for notification triggers
+    // Get dates
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -84,33 +87,75 @@ export async function sendDueDateNotifications() {
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
     const threeDaysStr = threeDaysOut.toISOString().split('T')[0];
 
-    // Query budget items with upcoming due dates
-    const { data: budgetItems } = await supabase
+    // Determine filter date based on scheduleType
+    let dateFilter = '';
+
+    if (scheduleType === 'today') {
+        dateFilter = `due_date.eq.${todayStr}`;
+    } else if (scheduleType === 'tomorrow') {
+        dateFilter = `due_date.eq.${tomorrowStr}`;
+    } else if (scheduleType === 'three_days') {
+        dateFilter = `due_date.eq.${threeDaysStr}`;
+    } else {
+        // Fallback or "all" check (legacy behavior + today)
+        dateFilter = `due_date.eq.${todayStr},due_date.eq.${tomorrowStr},due_date.eq.${threeDaysStr}`;
+    }
+
+    // Query budget items
+    let budgetQuery = supabase
         .from('budget_items')
         .select('*, weddings!inner(id)')
-        .or(`due_date.eq.${tomorrowStr},due_date.eq.${threeDaysStr}`)
         .is('paid_at', null);
 
-    // Query checklist items with upcoming due dates
-    const { data: checklistItems } = await supabase
+    if (scheduleType) {
+        budgetQuery = budgetQuery.filter('due_date', 'eq', scheduleType === 'today' ? todayStr : (scheduleType === 'tomorrow' ? tomorrowStr : threeDaysStr));
+    } else {
+        budgetQuery = budgetQuery.or(dateFilter);
+    }
+
+    const { data: budgetItems } = await budgetQuery;
+
+    // Query checklist items
+    let checklistQuery = supabase
         .from('checklist_items')
         .select('*, weddings!inner(id)')
-        .or(`due_date.eq.${tomorrowStr},due_date.eq.${threeDaysStr}`)
         .is('is_completed', false);
+
+    if (scheduleType) {
+        checklistQuery = checklistQuery.filter('due_date', 'eq', scheduleType === 'today' ? todayStr : (scheduleType === 'tomorrow' ? tomorrowStr : threeDaysStr));
+    } else {
+        checklistQuery = checklistQuery.or(dateFilter);
+    }
+
+    const { data: checklistItems } = await checklistQuery;
 
     const notifications: Array<{
         weddingId: string;
         payload: NotificationPayload;
     }> = [];
 
+    // Helper to format body based on due date
+    const getTimingText = (dueDate: string) => {
+        if (dueDate === todayStr) return 'due today';
+        if (dueDate === tomorrowStr) return 'due tomorrow';
+        if (dueDate === threeDaysStr) return 'due in 3 days';
+        return 'due soon';
+    };
+
+    const getTitleText = (dueDate: string) => {
+        if (dueDate === todayStr) return 'Due Today! 🚨';
+        if (dueDate === tomorrowStr) return 'Due Tomorrow ⏰';
+        if (dueDate === threeDaysStr) return 'Head\'s Up (3 Days) 📅';
+        return 'Upcoming Deadline';
+    };
+
     // Create notifications for budget items
     budgetItems?.forEach((item) => {
-        const daysUntil = item.due_date === tomorrowStr ? 1 : 3;
         notifications.push({
             weddingId: item.wedding_id,
             payload: {
-                title: `💰 Payment Due ${daysUntil === 1 ? 'Tomorrow' : 'in 3 Days'}`,
-                body: `${item.name} - ${item.estimated_cost} ${daysUntil === 1 ? 'due tomorrow' : 'due in 3 days'}`,
+                title: `💰 Payment ${getTitleText(item.due_date)}`,
+                body: `${item.name} ($${item.estimated_cost}) is ${getTimingText(item.due_date)}.`,
                 icon: '/icons/icon-192x192.png',
                 badge: '/icons/icon-192x192.png',
                 tag: `budget-${item.id}`,
@@ -121,12 +166,11 @@ export async function sendDueDateNotifications() {
 
     // Create notifications for checklist items
     checklistItems?.forEach((item) => {
-        const daysUntil = item.due_date === tomorrowStr ? 1 : 3;
         notifications.push({
             weddingId: item.wedding_id,
             payload: {
-                title: `✅ Task Due ${daysUntil === 1 ? 'Tomorrow' : 'in 3 Days'}`,
-                body: `${item.title} ${daysUntil === 1 ? 'due tomorrow' : 'due in 3 days'}`,
+                title: `✅ Task ${getTitleText(item.due_date)}`,
+                body: `${item.title} is ${getTimingText(item.due_date)}.`,
                 icon: '/icons/icon-192x192.png',
                 badge: '/icons/icon-192x192.png',
                 tag: `checklist-${item.id}`,
@@ -161,6 +205,7 @@ export async function sendDueDateNotifications() {
     }
 
     return {
+        scheduleType: scheduleType || 'all',
         queriedDates: { today: todayStr, tomorrow: tomorrowStr, threeDaysOut: threeDaysStr },
         foundItems: (budgetItems?.length || 0) + (checklistItems?.length || 0),
         budgetItemsCount: budgetItems?.length || 0,

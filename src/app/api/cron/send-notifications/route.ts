@@ -14,8 +14,11 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        console.log('[Cron] Running daily notification check...');
-        const results = await sendDueDateNotifications();
+        const { searchParams } = new URL(request.url);
+        const type = searchParams.get('type') as 'today' | 'tomorrow' | 'three_days' | null;
+
+        console.log(`[Cron] Running notification check for type: ${type || 'all'}...`);
+        const results = await sendDueDateNotifications(type || undefined);
 
         console.log('[Cron] Notification results:', results);
 
