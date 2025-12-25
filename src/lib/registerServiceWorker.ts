@@ -59,32 +59,35 @@ export async function subscribeToPush(registration: ServiceWorkerRegistration) {
         const permission = await requestNotificationPermission();
 
         if (permission !== 'granted') {
-            console.log('Notification permission not granted');
-            return null;
+            throw new Error('Notification permission not granted');
         }
 
         // Get VAPID public key from environment
         const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 
         if (!vapidPublicKey) {
-            console.error('VAPID public key not configured');
-            return null;
+            throw new Error('VAPID public key is missing in environment variables');
         }
 
-        // Convert VAPID key from base64 to Uint8Array
-        const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
+        try {
+            // Convert VAPID key from base64 to Uint8Array
+            const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
 
-        // Subscribe to push notifications
-        const subscription = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: convertedVapidKey,
-        });
+            // Subscribe to push notifications
+            const subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: convertedVapidKey,
+            });
 
-        console.log('Push subscription created:', subscription);
-        return subscription;
+            console.log('Push subscription created:', subscription);
+            return subscription;
+        } catch (err: any) {
+            console.error('Subscription error:', err);
+            throw new Error(`Subscription failed: ${err.message}`);
+        }
     } catch (error) {
         console.error('Failed to subscribe to push notifications:', error);
-        return null;
+        throw error;
     }
 }
 

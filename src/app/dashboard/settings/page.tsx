@@ -343,7 +343,14 @@ function NotificationSettings({ weddingId }: { weddingId: string }) {
 
     useEffect(() => {
         if (typeof window !== "undefined") {
-            setPermission(Notification.permission);
+            try {
+                if ('Notification' in window) {
+                    setPermission(Notification.permission);
+                }
+            } catch (e) {
+                console.error("Notification API access failed", e);
+            }
+
             setIsPWA(
                 window.matchMedia('(display-mode: standalone)').matches ||
                 (window.navigator as any).standalone === true
@@ -372,14 +379,14 @@ function NotificationSettings({ weddingId }: { weddingId: string }) {
 
             // Subscribe to push
             const subscription = await subscribeToPush(registration);
-            if (!subscription) throw new Error("Push subscription failed. Check VAPID keys.");
+            // Error is now thrown by subscribeToPush directly
 
             // Save to DB
             const response = await fetch("/api/push/subscribe", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    subscription: subscription.toJSON(),
+                    subscription: subscription!.toJSON(),
                     userId,
                     weddingId,
                 }),
