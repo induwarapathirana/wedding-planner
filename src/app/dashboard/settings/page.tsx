@@ -135,103 +135,107 @@ export default function SettingsPage() {
                 {/* Main Settings Column */}
                 <div className="lg:col-span-2 space-y-8">
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+
                         <h1 className="text-2xl font-bold text-gray-900 mb-2">Wedding Details</h1>
-                        <p className="text-gray-500 mb-8">Update your wedding information.</p>
+                        <p className="text-gray-500 mb-6 md:mb-8 text-sm md:text-base">Update your wedding information.</p>
 
                         <form onSubmit={handleSave} className="space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                                         Partner 1 Name
                                     </label>
                                     <input
                                         type="text"
                                         value={wedding?.couple_name_1 || ''}
                                         onChange={(e) => setWedding(prev => prev ? { ...prev, couple_name_1: e.target.value } : null)}
-                                        className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                        className="w-full px-4 h-11 md:h-12 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-base"
                                         required
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                                         Partner 2 Name
                                     </label>
                                     <input
                                         type="text"
                                         value={wedding?.couple_name_2 || ''}
                                         onChange={(e) => setWedding(prev => prev ? { ...prev, couple_name_2: e.target.value } : null)}
-                                        className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                        className="w-full px-4 h-11 md:h-12 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-base"
                                         required
                                     />
                                 </div>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                                     Wedding Date
                                 </label>
-                                <input
-                                    type="date"
-                                    value={wedding?.wedding_date || ''}
-                                    onChange={(e) => setWedding(prev => prev ? { ...prev, wedding_date: e.target.value } : null)}
-                                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                                    required
-                                />
+                                <div className="relative">
+                                    <input
+                                        type="date"
+                                        value={wedding?.wedding_date || ''}
+                                        onChange={(e) => setWedding(prev => prev ? { ...prev, wedding_date: e.target.value } : null)}
+                                        className="w-full px-4 h-11 md:h-12 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-base appearance-none min-w-0"
+                                        required
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-400 mt-1.5 ml-1">The big day! Used for your countdown.</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                                        Target Guest Count
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={wedding?.target_guest_count || ''}
+                                        onChange={(e) => setWedding(prev => prev ? { ...prev, target_guest_count: parseInt(e.target.value) || 0 } : null)}
+                                        className="w-full px-4 h-11 md:h-12 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-base"
+                                        placeholder="e.g. 150"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                                        Total Budget
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={wedding?.estimated_budget || ''}
+                                        onChange={(e) => setWedding(prev => prev ? { ...prev, estimated_budget: parseFloat(e.target.value) || 0 } : null)}
+                                        className="w-full px-4 h-11 md:h-12 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-base"
+                                        placeholder="e.g. 20000"
+                                    />
+                                </div>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Target Guest Count (Expected)
-                                </label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={wedding?.target_guest_count || ''}
-                                    onChange={(e) => setWedding(prev => prev ? { ...prev, target_guest_count: parseInt(e.target.value) || 0 } : null)}
-                                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                                    placeholder="e.g. 150"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">This allows you to track your actual headcount vs your goal.</p>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Estimated Total Budget
-                                </label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={wedding?.estimated_budget || ''}
-                                    onChange={(e) => setWedding(prev => prev ? { ...prev, estimated_budget: parseFloat(e.target.value) || 0 } : null)}
-                                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                                    placeholder="e.g. 20000"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">Your total spending goal for the wedding.</p>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Location (Optional)
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                                    Location
                                 </label>
                                 <input
                                     type="text"
                                     value={wedding?.location || ''}
                                     onChange={(e) => setWedding(prev => prev ? { ...prev, location: e.target.value } : null)}
-                                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                    className="w-full px-4 h-11 md:h-12 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-base"
                                     placeholder="e.g., Colombo, Sri Lanka"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                                     Currency
                                 </label>
                                 <select
                                     value={wedding?.currency || 'USD'}
                                     onChange={(e) => setWedding(prev => prev ? { ...prev, currency: e.target.value } : null)}
-                                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                    className="w-full px-4 h-11 md:h-12 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-base appearance-none"
                                 >
                                     <option value="USD">USD ($)</option>
                                     <option value="EUR">EUR (€)</option>
@@ -241,13 +245,13 @@ export default function SettingsPage() {
                                 </select>
                             </div>
 
-                            <div className="flex gap-4 pt-4 border-t border-gray-100">
+                            <div className="flex gap-4 pt-6 border-t border-gray-100">
                                 <button
                                     type="submit"
                                     disabled={saving}
-                                    className="flex items-center gap-2 px-6 py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 font-medium shadow-sm"
+                                    className="w-full md:w-auto flex justify-center items-center gap-2 px-8 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50 font-medium shadow-sm shadow-primary/20 active:scale-95"
                                 >
-                                    <Save className="w-4 h-4" />
+                                    <Save className="w-5 h-5" />
                                     {saving ? 'Saving...' : 'Save Changes'}
                                 </button>
                             </div>
@@ -258,22 +262,22 @@ export default function SettingsPage() {
                     <NotificationSettings weddingId={wedding?.id || ''} />
 
                     {/* Subscription Section */}
-                    <div className="bg-white rounded-2xl border border-border overflow-hidden">
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Subscription Plan</h2>
-                            <div className="flex items-center justify-between p-4 bg-purple-50 rounded-xl border border-purple-100">
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="font-medium text-purple-900">Current Plan: {wedding?.tier === 'premium' ? 'Premium' : 'Free'}</h3>
-                                        {wedding?.tier === 'premium' && <span className="bg-purple-200 text-purple-700 px-2 py-0.5 rounded-full text-xs font-medium">Active</span>}
-                                    </div>
-                                    <p className="text-sm text-purple-700 mt-1">
-                                        {wedding?.tier === 'premium'
-                                            ? "You have access to all premium features."
-                                            : "Upgrade to unlock unlimited guests, budget items, and more."}
-                                    </p>
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-6 md:p-8">
+                        <h2 className="text-lg font-bold text-gray-900 mb-4">Subscription Plan</h2>
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 bg-purple-50 rounded-xl border border-purple-100">
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="font-semibold text-purple-900">Current Plan: {wedding?.tier === 'premium' ? 'Premium' : 'Free'}</h3>
+                                    {wedding?.tier === 'premium' && <span className="bg-purple-200 text-purple-700 px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide">Active</span>}
                                 </div>
-                                {wedding?.tier !== 'premium' && (
+                                <p className="text-sm text-purple-700/80 leading-relaxed">
+                                    {wedding?.tier === 'premium'
+                                        ? "You have access to all premium features."
+                                        : "Upgrade to unlock unlimited guests, budget items, and more."}
+                                </p>
+                            </div>
+                            {wedding?.tier !== 'premium' && (
+                                <div className="shrink-0 w-full md:w-auto">
                                     <PayHereButton
                                         orderId={`ORDER_${wedding?.id}_${Date.now()}`}
                                         items="Wedding Planner Premium"
@@ -281,37 +285,37 @@ export default function SettingsPage() {
                                         currency="LKR"
                                         first_name={wedding?.couple_name_1.split(' ')[0] || 'User'}
                                         last_name={wedding?.couple_name_1.split(' ')[1] || 'Name'}
-                                        email="user@example.com" // Todo: Get real email
+                                        email="user@example.com"
                                         phone="0771234567"
                                         address="123, Main Street"
                                         city="Colombo"
                                         country="Sri Lanka"
-                                        className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors"
+                                        className="w-full md:w-auto px-6 py-3 bg-purple-600 text-white text-sm font-semibold rounded-xl hover:bg-purple-700 transition-colors shadow-sm shadow-purple-200"
                                     >
                                         Upgrade for 990 LKR
                                     </PayHereButton>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Danger Zone */}
-                        <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-6">
-                            <h2 className="text-lg font-semibold text-red-900 mb-4">Danger Zone</h2>
-                            <div className="p-4 bg-red-50 rounded-xl border border-red-100 flex items-center justify-between">
-                                <div>
-                                    <h3 className="font-medium text-red-900">Delete Wedding</h3>
-                                    <p className="text-sm text-red-700 mt-1">
-                                        Permanently delete this wedding and all associated data. This action cannot be undone.
-                                    </p>
                                 </div>
-                                <button
-                                    onClick={confirmDeleteWedding}
-                                    disabled={isDeleting}
-                                    className="px-4 py-2 bg-white border border-red-200 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors"
-                                >
-                                    {isDeleting ? "Deleting..." : "Delete Wedding"}
-                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Danger Zone */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-6 md:p-8">
+                        <h2 className="text-lg font-bold text-red-900 mb-4">Danger Zone</h2>
+                        <div className="p-5 bg-red-50 rounded-xl border border-red-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <h3 className="font-semibold text-red-900">Delete Wedding</h3>
+                                <p className="text-sm text-red-700/80 mt-1 leading-relaxed">
+                                    Permanently delete this wedding and all associated data. This action cannot be undone.
+                                </p>
                             </div>
+                            <button
+                                onClick={confirmDeleteWedding}
+                                disabled={isDeleting}
+                                className="shrink-0 w-full md:w-auto px-6 py-3 bg-white border border-red-200 text-red-600 text-sm font-medium rounded-xl hover:bg-red-50 hover:border-red-300 transition-colors"
+                            >
+                                {isDeleting ? "Deleting..." : "Delete Wedding"}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -330,7 +334,7 @@ export default function SettingsPage() {
                 description="Are you sure you want to delete this wedding? This action is irreversible and will delete all guests, budget items, and data."
                 variant="danger"
             />
-        </div>
+        </div >
     );
 }
 
@@ -414,13 +418,13 @@ function NotificationSettings({ weddingId }: { weddingId: string }) {
     };
 
     return (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
             <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-blue-50 rounded-lg">
+                <div className="p-2.5 bg-blue-50 rounded-xl">
                     <Bell className="w-5 h-5 text-blue-600" />
                 </div>
                 <div>
-                    <h2 className="text-lg font-semibold text-gray-900">Push Notifications</h2>
+                    <h2 className="text-lg font-bold text-gray-900">Push Notifications</h2>
                     <p className="text-sm text-gray-500">Manage your alerts for due dates and tasks.</p>
                 </div>
             </div>
@@ -431,8 +435,8 @@ function NotificationSettings({ weddingId }: { weddingId: string }) {
                         <Settings className="w-4 h-4" />
                     </div>
                     <div>
-                        <p className="text-sm font-medium text-amber-900">Add to Home Screen Required</p>
-                        <p className="text-xs text-amber-700 mt-1">
+                        <p className="text-sm font-semibold text-amber-900">Add to Home Screen Required</p>
+                        <p className="text-xs text-amber-700/90 leading-relaxed mt-1">
                             Push notifications on iOS require the app to be added to your home screen first.
                             Tap the share icon and select "Add to Home Screen".
                         </p>
@@ -441,16 +445,16 @@ function NotificationSettings({ weddingId }: { weddingId: string }) {
             )}
 
             <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="flex flex-col md:flex-row md:items-center justify-between p-5 bg-gray-50 rounded-xl border border-gray-100 gap-4">
                     <div>
                         <p className="text-sm font-medium text-gray-900">Status</p>
-                        <p className="text-xs text-gray-500 capitalize">{permission === 'default' ? 'Not configured' : permission}</p>
+                        <p className="text-xs text-gray-500 capitalize mt-0.5">{permission === 'default' ? 'Not configured' : permission}</p>
                     </div>
                     <button
                         onClick={handleEnable}
                         disabled={loading || !isPWA}
-                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-50 ${permission === "granted"
-                            ? "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                        className={`w-full md:w-auto px-6 py-2.5 text-sm font-medium rounded-xl transition-all disabled:opacity-50 shadow-sm ${permission === "granted"
+                            ? "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"
                             : "bg-primary text-white hover:bg-primary/90"
                             }`}
                     >
@@ -461,7 +465,7 @@ function NotificationSettings({ weddingId }: { weddingId: string }) {
                 <div className="flex justify-start">
                     <button
                         onClick={resetPrompt}
-                        className="text-xs text-gray-500 hover:text-primary transition-colors underline underline-offset-4"
+                        className="text-xs text-gray-400 hover:text-primary transition-colors hover:underline underline-offset-4"
                     >
                         Reset notification preferences
                     </button>
@@ -607,7 +611,7 @@ function TeamMembers({ weddingId, tier }: { weddingId: string, tier: string }) {
                         <p className="text-xs text-muted-foreground">Upgrade your plan to invite your partner or team.</p>
                     </div>
                 ) : (
-                    <form onSubmit={handleInvite} className="space-y-3">
+                    <form onSubmit={handleInvite} className="space-y-4">
                         <div>
                             <input
                                 type="email"
@@ -615,13 +619,13 @@ function TeamMembers({ weddingId, tier }: { weddingId: string, tier: string }) {
                                 placeholder="Email address"
                                 value={inviteEmail}
                                 onChange={(e) => setInviteEmail(e.target.value)}
-                                className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
+                                className="w-full px-4 h-11 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                             />
                         </div>
                         <button
                             type="submit"
                             disabled={sending}
-                            className="w-full py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+                            className="w-full h-11 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 shadow-sm"
                         >
                             {sending ? "Generating Code..." : "Generate Invitation Code"}
                         </button>
