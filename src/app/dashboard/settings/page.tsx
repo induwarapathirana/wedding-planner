@@ -436,20 +436,16 @@ function NotificationSettings({ weddingId }: { weddingId: string }) {
                         <p className="text-sm font-medium text-gray-900">Status</p>
                         <p className="text-xs text-gray-500 capitalize">{permission === 'default' ? 'Not configured' : permission}</p>
                     </div>
-                    {permission !== "granted" ? (
-                        <button
-                            onClick={handleEnable}
-                            disabled={loading || !isPWA}
-                            className="px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary/90 transition-all disabled:opacity-50"
-                        >
-                            {loading ? "Enabling..." : "Enable Alerts"}
-                        </button>
-                    ) : (
-                        <div className="flex items-center gap-2 text-green-600">
-                            <Bell className="w-4 h-4" />
-                            <span className="text-sm font-medium">Notifications Active</span>
-                        </div>
-                    )}
+                    <button
+                        onClick={handleEnable}
+                        disabled={loading || !isPWA}
+                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-50 ${permission === "granted"
+                                ? "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                                : "bg-primary text-white hover:bg-primary/90"
+                            }`}
+                    >
+                        {loading ? "Processing..." : permission === "granted" ? "Refresh Connection" : "Enable Alerts"}
+                    </button>
                 </div>
 
                 <div className="flex justify-start">
