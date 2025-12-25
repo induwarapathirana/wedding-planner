@@ -17,6 +17,7 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://weddingplanner.islanders.lk'),
   title: "Vow & Venue | Premium Wedding Planner",
   description: "Advanced wedding planning made simple.",
   manifest: "/manifest.json",
