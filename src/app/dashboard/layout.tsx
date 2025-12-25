@@ -1,11 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { BottomNav } from "@/components/dashboard/bottom-nav";
+import { InstallPrompt } from "@/components/dashboard/install-prompt";
+import { NotificationPrompt } from "@/components/dashboard/notification-prompt";
 import { ModeProvider } from "@/context/mode-context";
 import { Menu, X } from "lucide-react";
+import { registerServiceWorker } from "@/lib/registerServiceWorker";
+import { supabase } from "@/lib/supabase";
 
 export default function DashboardLayout({
     children,
@@ -13,8 +17,32 @@ export default function DashboardLayout({
     children: React.ReactNode;
 }) {
     const [isMobileOpen, setIsMobileOpen] = useState(false);
+    const [userId, setUserId] = useState<string | null>(null);
+    const [weddingId, setWeddingId] = useState<string | null>(null);
     const pathname = usePathname();
     const isOverviewPage = pathname === '/dashboard';
+
+    // Register service worker on mount
+    useEffect(() => {
+        registerServiceWorker();
+    }, []);
+
+    // Get user and wedding IDs for notifications
+    useEffect(() => {
+        async function fetchUserData() {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                setUserId(user.id);
+
+                // Get current wedding ID from storage
+                const storedWeddingId = localStorage.getItem('current_wedding_id');
+                if (storedWeddingId) {
+                    setWeddingId(storedWeddingId);
+                }
+            }
+        }
+        fetchUserData();
+    }, []);
 
     return (
         <ModeProvider>
@@ -79,6 +107,14 @@ export default function DashboardLayout({
 
                 {/* Bottom Navigation - Mobile Only */}
                 <BottomNav onMoreClick={() => setIsMobileOpen(true)} />
+
+                {/* PWA Install Prompt */}
+                <InstallPrompt />
+
+                {/* Notification Permission Prompt */}
+                {userId && weddingId && (
+                    <NotificationPrompt userId={userId} weddingId={weddingId} />
+                )}
             </div>
         </ModeProvider>
     );
