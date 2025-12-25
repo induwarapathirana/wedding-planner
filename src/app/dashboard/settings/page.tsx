@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import { Save, ArrowLeft, Trash2, UserPlus, X } from "lucide-react";
+import { Save, ArrowLeft, Trash2, UserPlus, X, Bell, BellOff, Settings } from "lucide-react";
 import Link from "next/link";
 import { PayHereButton } from "@/components/payhere-button";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
@@ -254,6 +254,9 @@ export default function SettingsPage() {
                         </form>
                     </div>
 
+                    {/* Notification Settings Section */}
+                    <NotificationSettings weddingId={wedding?.id || ''} />
+
                     {/* Subscription Section */}
                     <div className="bg-white rounded-2xl border border-border overflow-hidden">
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -327,6 +330,137 @@ export default function SettingsPage() {
                 description="Are you sure you want to delete this wedding? This action is irreversible and will delete all guests, budget items, and data."
                 variant="danger"
             />
+        </div>
+    );
+}
+
+// Sub-component for Notification Management
+function NotificationSettings({ weddingId }: { weddingId: string }) {
+    const [permission, setPermission] = useState<string>("default");
+    const [isPWA, setIsPWA] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [userId, setUserId] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            setPermission(Notification.permission);
+            setIsPWA(
+                window.matchMedia('(display-mode: standalone)').matches ||
+                (window.navigator as any).standalone === true
+            );
+
+            // Get user ID
+            supabase.auth.getUser().then(({ data: { user } }) => {
+                if (user) setUserId(user.id);
+            });
+        }
+    }, []);
+
+    const handleEnable = async () => {
+        setLoading(true);
+        try {
+            const { registerServiceWorker, requestNotificationPermission, subscribeToPush } = await import('@/lib/registerServiceWorker');
+
+            // Register service worker
+            const registration = await registerServiceWorker();
+            if (!registration) throw new Error("Service worker registration failed. Please ensure you are using Safari on iOS and have added the app to your home screen.");
+
+            // Request permission
+            const status = await requestNotificationPermission();
+            setPermission(status);
+            if (status !== "granted") throw new Error("Notification permission denied.");
+
+            // Subscribe to push
+            const subscription = await subscribeToPush(registration);
+            if (!subscription) throw new Error("Push subscription failed. Check VAPID keys.");
+
+            // Save to DB
+            const response = await fetch("/api/push/subscribe", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    subscription: subscription.toJSON(),
+                    userId,
+                    weddingId,
+                }),
+            });
+
+            if (!response.ok) throw new Error("Failed to save subscription to database.");
+
+            alert("Notifications enabled successfully! 🎉");
+            localStorage.setItem("notification-enabled", "true");
+        } catch (error: any) {
+            console.error(error);
+            alert(error.message || "Failed to enable notifications.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const resetPrompt = () => {
+        localStorage.removeItem("notification-prompt-dismissed");
+        localStorage.removeItem("notification-enabled");
+        alert("Notification preferences reset. The prompt will reappear on your next visit to the dashboard.");
+    };
+
+    return (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-blue-50 rounded-lg">
+                    <Bell className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Push Notifications</h2>
+                    <p className="text-sm text-gray-500">Manage your alerts for due dates and tasks.</p>
+                </div>
+            </div>
+
+            {!isPWA && (
+                <div className="mb-6 p-4 bg-amber-50 rounded-xl border border-amber-100 flex items-start gap-3">
+                    <div className="p-1.5 bg-amber-100 rounded-lg text-amber-600 mt-0.5">
+                        <Settings className="w-4 h-4" />
+                    </div>
+                    <div>
+                        <p className="text-sm font-medium text-amber-900">Add to Home Screen Required</p>
+                        <p className="text-xs text-amber-700 mt-1">
+                            Push notifications on iOS require the app to be added to your home screen first.
+                            Tap the share icon and select "Add to Home Screen".
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <div>
+                        <p className="text-sm font-medium text-gray-900">Status</p>
+                        <p className="text-xs text-gray-500 capitalize">{permission === 'default' ? 'Not configured' : permission}</p>
+                    </div>
+                    {permission !== "granted" ? (
+                        <button
+                            onClick={handleEnable}
+                            disabled={loading || !isPWA}
+                            className="px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary/90 transition-all disabled:opacity-50"
+                        >
+                            {loading ? "Enabling..." : "Enable Alerts"}
+                        </button>
+                    ) : (
+                        <div className="flex items-center gap-2 text-green-600">
+                            <Bell className="w-4 h-4" />
+                            <span className="text-sm font-medium">Notifications Active</span>
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex justify-start">
+                    <button
+                        onClick={resetPrompt}
+                        className="text-xs text-gray-500 hover:text-primary transition-colors underline underline-offset-4"
+                    >
+                        Reset notification preferences
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }
