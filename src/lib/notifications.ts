@@ -161,6 +161,10 @@ export async function sendDueDateNotifications() {
     }
 
     return {
+        foundItems: (budgetItems?.length || 0) + (checklistItems?.length || 0),
+        budgetItemsCount: budgetItems?.length || 0,
+        checklistItemsCount: checklistItems?.length || 0,
+        subscriptionsCount: subscriptions?.length || 0,
         sent: results.filter((r) => r.success).length,
         failed: results.filter((r) => !r.success).length,
         total: results.length,
