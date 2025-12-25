@@ -194,20 +194,7 @@ export default function InventoryPage() {
                                         <div className="font-bold text-gray-900">{item.name}</div>
                                         <div className="text-xs text-gray-500 mt-0.5">{item.category}</div>
                                     </div>
-                                    <InventoryItemRow
-                                        item={item} // Reuse logic if possible, or build inline
-                                        // Wait, row component renders a TR, we can't reuse it here easily without refactoring.
-                                        // Let's build inline for now or create a new component.
-                                        // Inline is safer for this change.
-                                        onEdit={() => { }}
-                                        onDelete={() => { }}
-                                        onToggleStatus={() => { }}
-                                        isMobileWrapper={true} // Hack to suppress errors if we were reusing, but we won't.
-                                    />
-                                    {/* 
-                                        Correction: InventoryItemRow renders a <tr>. We cannot use it inside a div.
-                                        I will implement the mobile card UI directly here.
-                                     */}
+
                                     <button
                                         onClick={() => handleToggleStatus(item)}
                                         className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide border ${item.status === 'packed'
