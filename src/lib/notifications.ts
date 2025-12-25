@@ -161,6 +161,7 @@ export async function sendDueDateNotifications() {
     }
 
     return {
+        queriedDates: { today: todayStr, tomorrow: tomorrowStr, threeDaysOut: threeDaysStr },
         foundItems: (budgetItems?.length || 0) + (checklistItems?.length || 0),
         budgetItemsCount: budgetItems?.length || 0,
         checklistItemsCount: checklistItems?.length || 0,
