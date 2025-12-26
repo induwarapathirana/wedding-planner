@@ -19,12 +19,12 @@ export default function VendorsPage() {
     const [activeTab, setActiveTab] = useState<'wedding' | 'directory'>('wedding');
     const [loading, setLoading] = useState(true);
     const [weddingId, setWeddingId] = useState<string | null>(null);
-    
+
     // Wedding Vendors State
     const [vendors, setVendors] = useState<Vendor[]>([]);
     const [showForm, setShowForm] = useState(false);
     const [editingVendor, setEditingVendor] = useState<Vendor | undefined>(undefined);
-    
+
     // Directory Vendors State
     const [directoryVendors, setDirectoryVendors] = useState<DirectoryVendor[]>([]);
     const [editingDirectoryVendor, setEditingDirectoryVendor] = useState<DirectoryVendor | undefined>(undefined);
@@ -36,23 +36,23 @@ export default function VendorsPage() {
     // Shared State
     const [filterCategory, setFilterCategory] = useState<string>("All");
     const [tier, setTier] = useState<PlanTier>('free');
-    const [currency, setCurrency] = useState("USD"); 
+    const [currency, setCurrency] = useState("USD");
     const [showLimitModal, setShowLimitModal] = useState(false);
-    
+
     // Import Modal State
     const [showImportModal, setShowImportModal] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     // Confirm Modal State
-    const [confirmState, setConfirmState] = useState<{ 
-        isOpen: boolean; 
-        type: 'single' | 'bulk' | 'directory_single'; 
-        id?: string 
+    const [confirmState, setConfirmState] = useState<{
+        isOpen: boolean;
+        type: 'single' | 'bulk' | 'directory_single';
+        id?: string
     }>({ isOpen: false, type: 'single' });
 
     const CATEGORIES = [
-        "Venue", "Catering", "Photography", "Videography", "Music/DJ", 
-        "Florist", "Decor", "Attire", "Makeup/Hair", "Transport", 
+        "Venue", "Catering", "Photography", "Videography", "Music/DJ",
+        "Florist", "Decor", "Attire", "Makeup/Hair", "Transport",
         "Cake", "Officiant", "Planner", "Stationery", "Other"
     ];
 
@@ -61,9 +61,9 @@ export default function VendorsPage() {
         if (storedWeddingId) {
             setWeddingId(storedWeddingId);
             fetchVendors(storedWeddingId);
+            fetchWeddingTier(storedWeddingId);
         }
         fetchDirectory();
-        fetchUserTier();
         fetchWeddingDetails(storedWeddingId);
     }, []);
 
@@ -73,11 +73,17 @@ export default function VendorsPage() {
         if (data) setCurrency(data.currency);
     };
 
-    const fetchUserTier = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            const { data } = await supabase.from('users').select('plan_tier').eq('id', user.id).single();
-            if (data) setTier(data.plan_tier as PlanTier);
+    const fetchWeddingTier = async (id: string) => {
+        const { data } = await supabase.from('weddings').select('tier, premium_trial_ends_at').eq('id', id).single();
+        if (data) {
+            // Check if trial is active
+            const now = new Date();
+            const trialEnd = data.premium_trial_ends_at ? new Date(data.premium_trial_ends_at) : null;
+            const isTrialActive = trialEnd && trialEnd > now;
+
+            // Use premium if either tier is premium OR trial is active
+            const effectiveTier = (data.tier === 'premium' || isTrialActive) ? 'premium' : 'free';
+            setTier(effectiveTier as PlanTier);
         }
     };
 
@@ -194,7 +200,7 @@ export default function VendorsPage() {
         } else if (confirmState.type === 'directory_single' && confirmState.id) {
             const { error } = await supabase.from('vendor_directory').delete().eq('id', confirmState.id);
             if (!error) {
-                 setDirectoryVendors(prev => prev.filter(v => v.id !== confirmState.id));
+                setDirectoryVendors(prev => prev.filter(v => v.id !== confirmState.id));
             } else {
                 alert("Failed to delete from directory");
             }
@@ -224,7 +230,7 @@ export default function VendorsPage() {
         return CURRENCIES.find(c => c.code === code)?.symbol || '$';
     };
 
-    const filteredVendors = activeTab === 'wedding' 
+    const filteredVendors = activeTab === 'wedding'
         ? vendors.filter(v => filterCategory === "All" || v.category === filterCategory)
         : directoryVendors.filter(v => filterCategory === "All" || v.category === filterCategory);
 
@@ -235,7 +241,7 @@ export default function VendorsPage() {
                     <h2 className="font-serif text-3xl font-bold text-foreground">Vendors</h2>
                     <p className="mt-1 text-muted-foreground">Manage your wedding team.</p>
                 </div>
-                
+
                 {/* Actions */}
                 <div className="flex items-center gap-3">
                     {activeTab === 'wedding' ? (
@@ -290,8 +296,8 @@ export default function VendorsPage() {
                         onClick={() => setActiveTab('wedding')}
                         className={`
                             py-4 px-1 border-b-2 font-medium text-sm transition-colors
-                            ${activeTab === 'wedding' 
-                                ? 'border-primary text-primary' 
+                            ${activeTab === 'wedding'
+                                ? 'border-primary text-primary'
                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
                         `}
                     >
@@ -301,8 +307,8 @@ export default function VendorsPage() {
                         onClick={() => setActiveTab('directory')}
                         className={`
                             py-4 px-1 border-b-2 font-medium text-sm transition-colors
-                            ${activeTab === 'directory' 
-                                ? 'border-primary text-primary' 
+                            ${activeTab === 'directory'
+                                ? 'border-primary text-primary'
                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
                         `}
                     >
@@ -343,9 +349,9 @@ export default function VendorsPage() {
                             <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                                 <Search className="w-8 h-8 text-gray-400" />
                             </div>
-                             <h3 className="text-lg font-medium text-gray-900 mb-1">No vendors yet</h3>
-                             <p className="text-gray-500 mb-6">Start building your dream team by adding vendors.</p>
-                             <button
+                            <h3 className="text-lg font-medium text-gray-900 mb-1">No vendors yet</h3>
+                            <p className="text-gray-500 mb-6">Start building your dream team by adding vendors.</p>
+                            <button
                                 onClick={() => setShowForm(true)}
                                 className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 font-medium"
                             >
@@ -447,70 +453,70 @@ export default function VendorsPage() {
                         <form onSubmit={handleDirectorySubmit} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium mb-1">Company Name</label>
-                                <input 
+                                <input
                                     required
                                     className="w-full p-2 border rounded-lg"
                                     value={dirFormData.company_name}
-                                    onChange={e => setDirFormData({...dirFormData, company_name: e.target.value})}
+                                    onChange={e => setDirFormData({ ...dirFormData, company_name: e.target.value })}
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium mb-1">Category</label>
-                                    <select 
+                                    <select
                                         className="w-full p-2 border rounded-lg"
                                         value={dirFormData.category}
-                                        onChange={e => setDirFormData({...dirFormData, category: e.target.value})}
+                                        onChange={e => setDirFormData({ ...dirFormData, category: e.target.value })}
                                     >
                                         {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium mb-1">Contact Name</label>
-                                    <input 
+                                    <input
                                         className="w-full p-2 border rounded-lg"
                                         value={dirFormData.contact_name || ''}
-                                        onChange={e => setDirFormData({...dirFormData, contact_name: e.target.value})}
+                                        onChange={e => setDirFormData({ ...dirFormData, contact_name: e.target.value })}
                                     />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium mb-1">Email</label>
-                                    <input 
+                                    <input
                                         type="email"
                                         className="w-full p-2 border rounded-lg"
                                         value={dirFormData.email || ''}
-                                        onChange={e => setDirFormData({...dirFormData, email: e.target.value})}
+                                        onChange={e => setDirFormData({ ...dirFormData, email: e.target.value })}
                                     />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium mb-1">Phone</label>
-                                    <input 
+                                    <input
                                         className="w-full p-2 border rounded-lg"
                                         value={dirFormData.phone || ''}
-                                        onChange={e => setDirFormData({...dirFormData, phone: e.target.value})}
+                                        onChange={e => setDirFormData({ ...dirFormData, phone: e.target.value })}
                                     />
                                 </div>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium mb-1">Website</label>
-                                <input 
+                                <input
                                     className="w-full p-2 border rounded-lg"
                                     value={dirFormData.website || ''}
-                                    onChange={e => setDirFormData({...dirFormData, website: e.target.value})}
+                                    onChange={e => setDirFormData({ ...dirFormData, website: e.target.value })}
                                 />
                             </div>
-                            
+
                             <div className="flex justify-end gap-3 mt-6">
-                                <button 
+                                <button
                                     type="button"
                                     onClick={() => setShowDirectoryForm(false)}
                                     className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
                                 >
                                     Cancel
                                 </button>
-                                <button 
+                                <button
                                     type="submit"
                                     className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
                                 >
@@ -521,7 +527,7 @@ export default function VendorsPage() {
                     </div>
                 </div>
             )}
-            
+
             {showImportModal && weddingId && (
                 <DirectoryImportModal
                     isOpen={showImportModal}
@@ -531,19 +537,19 @@ export default function VendorsPage() {
                 />
             )}
 
-            <ConfirmDialog 
+            <ConfirmDialog
                 isOpen={confirmState.isOpen}
                 onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
                 onConfirm={executeDelete}
                 title={confirmState.type === 'directory_single' ? "Remove from Directory?" : "Delete Vendor?"}
-                description={confirmState.type === 'directory_single' 
+                description={confirmState.type === 'directory_single'
                     ? "This will remove the vendor from your master list. It will NOT remove them from existing weddings."
                     : confirmState.type === 'bulk'
                         ? `Are you sure you want to delete ${selectedIds.size} vendors? This action cannot be undone.`
                         : "Are you sure you want to delete this vendor? This action cannot be undone."}
                 variant="danger"
             />
-            
+
             <LimitModal
                 isOpen={showLimitModal}
                 onClose={() => setShowLimitModal(false)}
