@@ -702,12 +702,62 @@ export default function GuestPage() {
                                                     <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Priority</p>
                                                     <span className="text-xs font-medium">{guest.priority || 'B'}</span>
                                                 </div>
-                                                <div className="bg-muted px-2 py-1.5 rounded-lg">
-                                                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Party Size</p>
-                                                    <span className="text-xs font-medium flex items-center gap-1">
-                                                        <Users className="w-3 h-3" />
-                                                        {1 + (guest.companion_guest_count || 0)}
-                                                    </span>
+                                                <div className="bg-muted px-2 py-1.5 rounded-lg col-span-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Party Size</p>
+                                                            <span className="text-xs font-medium flex items-center gap-1">
+                                                                <Users className="w-3 h-3" />
+                                                                {1 + (guest.companion_guest_count || 0)}
+                                                            </span>
+                                                        </div>
+                                                        {(guest.companion_names && guest.companion_names.length > 0) && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setExpandedGuestIds(prev => {
+                                                                        const newSet = new Set(prev);
+                                                                        if (newSet.has(guest.id)) newSet.delete(guest.id);
+                                                                        else newSet.add(guest.id);
+                                                                        return newSet;
+                                                                    });
+                                                                }}
+                                                                className="text-[10px] font-medium text-primary bg-primary/10 px-2 py-1 rounded-full hover:bg-primary/20 transition-colors"
+                                                            >
+                                                                {expandedGuestIds.has(guest.id) ? "Hide Guests" : "View Guests"}
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Expanded Companion List for Advanced Mode */}
+                                                    {expandedGuestIds.has(guest.id) && guest.companion_names && guest.companion_names.length > 0 && (
+                                                        <div className="mt-3 space-y-2 pt-2 border-t border-gray-200">
+                                                            {/* Main Guest */}
+                                                            <div className="flex items-center gap-2 py-1">
+                                                                <CheckSquare className="w-3.5 h-3.5 text-green-600" />
+                                                                <span className="text-xs text-gray-700 font-medium">{guest.name} (Main)</span>
+                                                            </div>
+                                                            {/* Companions */}
+                                                            {guest.companion_names.map((companionName, idx) => {
+                                                                const isSelected = (guest.selected_companions || guest.companion_names || []).includes(companionName);
+                                                                return (
+                                                                    <button
+                                                                        key={idx}
+                                                                        onClick={() => toggleCompanionSelection(guest.id, companionName)}
+                                                                        className="flex items-center gap-2 w-full text-left py-1 hover:bg-white/50 rounded transition-colors"
+                                                                    >
+                                                                        {isSelected ? (
+                                                                            <CheckSquare className="w-3.5 h-3.5 text-primary" />
+                                                                        ) : (
+                                                                            <Square className="w-3.5 h-3.5 text-gray-400" />
+                                                                        )}
+                                                                        <span className={cn("text-xs", isSelected ? "text-gray-900" : "text-gray-500")}>
+                                                                            {companionName}
+                                                                        </span>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div className="bg-muted px-2 py-1.5 rounded-lg">
                                                     <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Seating</p>
