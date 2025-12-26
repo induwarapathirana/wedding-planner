@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Plus, Search, Filter, Trash2, CheckSquare, Square, BookUser, Globe, Phone, Mail, Edit2 } from "lucide-react";
+import { Plus, Search, Filter, Trash2, CheckSquare, Square, BookUser, Globe, Phone, Mail, Edit2, LayoutGrid, List } from "lucide-react";
 import { Vendor } from "@/types/vendors";
 import { DirectoryVendor, NewDirectoryVendor } from "@/types/directory";
 import VendorCard from "@/components/dashboard/vendors/VendorCard";
+import VendorTable from "@/components/dashboard/vendors/VendorTable";
 import VendorForm from "@/components/dashboard/vendors/VendorForm";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 import { CURRENCIES } from "@/lib/constants";
@@ -24,6 +25,7 @@ export default function VendorsPage() {
     const [vendors, setVendors] = useState<Vendor[]>([]);
     const [showForm, setShowForm] = useState(false);
     const [editingVendor, setEditingVendor] = useState<Vendor | undefined>(undefined);
+    const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
 
     // Directory Vendors State
     const [directoryVendors, setDirectoryVendors] = useState<DirectoryVendor[]>([]);
@@ -113,6 +115,17 @@ export default function VendorsPage() {
 
         if (!error && data) {
             setDirectoryVendors(data as DirectoryVendor[]);
+        }
+    };
+
+    const handleStatusUpdate = async (vendorId: string, newStatus: 'researching' | 'contacted' | 'hired' | 'declined') => {
+        const { error } = await supabase
+            .from('vendors')
+            .update({ status: newStatus })
+            .eq('id', vendorId);
+
+        if (!error && weddingId) {
+            fetchVendors(weddingId);
         }
     };
 
@@ -289,6 +302,32 @@ export default function VendorsPage() {
                         </button>
                     )}
                 </div>
+
+                {/* View Toggle - Only show on wedding tab and desktop */}
+                {activeTab === 'wedding' && (
+                    <div className="hidden md:flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+                        <button
+                            onClick={() => setViewMode('card')}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${viewMode === 'card'
+                                ? 'bg-white text-primary shadow-sm'
+                                : 'text-gray-600 hover:text-gray-900'
+                                }`}
+                        >
+                            <LayoutGrid className="w-4 h-4" />
+                            Cards
+                        </button>
+                        <button
+                            onClick={() => setViewMode('table')}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${viewMode === 'table'
+                                ? 'bg-white text-primary shadow-sm'
+                                : 'text-gray-600 hover:text-gray-900'
+                                }`}
+                        >
+                            <List className="w-4 h-4" />
+                            Table
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Tabs */}
@@ -361,22 +400,37 @@ export default function VendorsPage() {
                             </button>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {(filteredVendors as Vendor[]).map((vendor) => (
-                                <VendorCard
-                                    key={vendor.id}
-                                    vendor={vendor}
-                                    currencySymbol={getCurrencySymbol(currency)}
-                                    isSelected={selectedIds.has(vendor.id)}
-                                    onToggleSelect={toggleSelect}
+                        viewMode === 'card' ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {(filteredVendors as Vendor[]).map((vendor) => (
+                                    <VendorCard
+                                        key={vendor.id}
+                                        vendor={vendor}
+                                        onEdit={(v) => {
+                                            setEditingVendor(v);
+                                            setShowForm(true);
+                                        }}
+                                        onDelete={handleDeleteVendor}
+                                        isSelected={selectedIds.has(vendor.id)}
+                                        onToggleSelect={() => toggleSelection(vendor.id)}
+                                        currencySymbol={symbol}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="hidden md:block">
+                                <VendorTable
+                                    vendors={filteredVendors as Vendor[]}
                                     onEdit={(v) => {
                                         setEditingVendor(v);
                                         setShowForm(true);
                                     }}
-                                    onDelete={confirmDelete}
+                                    onDelete={handleDeleteVendor}
+                                    onStatusUpdate={handleStatusUpdate}
+                                    currencySymbol={symbol}
                                 />
-                            ))}
-                        </div>
+                            </div>
+                        )
                     )}
                 </>
             ) : (
