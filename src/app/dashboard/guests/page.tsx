@@ -49,6 +49,9 @@ export default function GuestPage() {
     // Confirm Modal State
     const [confirmState, setConfirmState] = useState<{ isOpen: boolean; type: 'single' | 'bulk'; id?: string }>({ isOpen: false, type: 'single' });
 
+    // Companion Expansion State
+    const [expandedGuestIds, setExpandedGuestIds] = useState<Set<string>>(new Set());
+
     // ... (fetch logic remains same)
     // Initial Data Load
     useEffect(() => {
@@ -132,13 +135,54 @@ export default function GuestPage() {
     };
 
     const toggleSelect = (id: string) => {
-        const newSelected = new Set(selectedIds);
-        if (newSelected.has(id)) {
-            newSelected.delete(id);
-        } else {
-            newSelected.add(id);
-        }
-        setSelectedIds(newSelected);
+        setSelectedIds((prev) => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) {
+                newSet.delete(id);
+            } else {
+                newSet.add(id);
+            }
+            return newSet;
+        });
+    };
+
+    const toggleCompanionSelection = async (guestId: string, companionName: string) => {
+        const guest = guests.find(g => g.id === guestId);
+        if (!guest) return;
+
+        const currentSelected = guest.selected_companions || guest.companion_names || [];
+        const newSelected = currentSelected.includes(companionName)
+            ? currentSelected.filter(name => name !== companionName)
+            : [...currentSelected, companionName];
+
+        // Update local state
+        setGuests(guests.map(g =>
+            g.id === guestId ? { ...g, selected_companions: newSelected } : g
+        ));
+
+        // Update database
+        await supabase
+            .from('guests')
+            .update({ selected_companions: newSelected })
+            .eq('id', guestId);
+    };
+
+    const toggleAllCompanions = async (guestId: string, selectAll: boolean) => {
+        const guest = guests.find(g => g.id === guestId);
+        if (!guest || !guest.companion_names) return;
+
+        const newSelected = selectAll ? [...guest.companion_names] : [];
+
+        // Update local state
+        setGuests(guests.map(g =>
+            g.id === guestId ? { ...g, selected_companions: newSelected } : g
+        ));
+
+        // Update database
+        await supabase
+            .from('guests')
+            .update({ selected_companions: newSelected })
+            .eq('id', guestId);
     };
 
     // Delete Logic
@@ -257,8 +301,17 @@ export default function GuestPage() {
     const isOverLimit = targetCount > 0 && stats.total > targetCount;
 
     // Selected Headcount Calculation
-    const selectedGuests = Array.from(selectedIds).map(id => guests.find(g => g.id === id)).filter(Boolean) as Guest[];
-    const selectedHeadcount = selectedGuests.reduce((sum, guest) => sum + 1 + (guest.companion_guest_count || 0), 0);
+    const selectedGuests = sortedGuests.filter((g) => selectedIds.has(g.id));
+
+    // Helper function to get companion count (selected or all)
+    const getCompanionCount = (guest: Guest) => {
+        if (guest.selected_companions) {
+            return guest.selected_companions.length;
+        }
+        return guest.companion_guest_count || 0;
+    };
+
+    const selectedHeadcount = selectedGuests.reduce((sum, guest) => sum + 1 + getCompanionCount(guest), 0);
     const allSelectedAreAccepted = selectedGuests.every(g => g.rsvp_status === 'accepted');
 
     // Dynamic Group Categories for Filtering
@@ -454,49 +507,113 @@ export default function GuestPage() {
                     {mode === "simple" ? (
                         /* SIMPLE MODE: Clean List */
                         <div className="divide-y divide-border">
-                            {sortedGuests.map((guest) => (
-                                <div key={guest.id} className={cn("flex items-center justify-between p-4 md:p-6 hover:bg-muted/30 transition-colors", selectedIds.has(guest.id) && "bg-muted/50")}>
-                                    <div className="flex items-center gap-3 md:gap-4">
-                                        <button onClick={() => toggleSelect(guest.id)} className="text-muted-foreground hover:text-primary">
-                                            {selectedIds.has(guest.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
-                                        </button>
+                            {sortedGuests.map((guest) => {
+                                const hasCompanions = guest.companion_names && guest.companion_names.length > 0;
+                                const isExpanded = expandedGuestIds.has(guest.id);
+                                const selectedCompanions = guest.selected_companions || guest.companion_names || [];
+                                const allCompanionsSelected = hasCompanions && selectedCompanions.length === guest.companion_names!.length;
+                                const someCompanionsSelected = hasCompanions && selectedCompanions.length > 0 && selectedCompanions.length < guest.companion_names!.length;
 
-                                        <div className={cn(
-                                            "h-8 w-8 md:h-10 md:w-10 rounded-full flex items-center justify-center font-bold text-[10px] md:text-xs ring-2 ring-white shadow-sm flex-shrink-0",
-                                            guest.priority === 'A' ? "bg-red-100 text-red-700" :
-                                                guest.priority === 'C' ? "bg-gray-100 text-gray-600" : "bg-blue-50 text-blue-600"
-                                        )}>
-                                            {guest.priority || 'B'}
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <p className="font-medium text-sm md:text-base text-foreground leading-none">{guest.name}</p>
-                                                {(guest.companion_guest_count || 0) > 0 && (
-                                                    <span className="inline-flex items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
-                                                        +{guest.companion_guest_count}
-                                                    </span>
-                                                )}
+                                return (
+                                    <div key={guest.id} className={cn("hover:bg-muted/30 transition-colors", selectedIds.has(guest.id) && "bg-muted/50")}>
+                                        <div className="flex items-center justify-between p-4 md:p-6">
+                                            <div className="flex items-center gap-3 md:gap-4">
+                                                <button onClick={() => toggleSelect(guest.id)} className="text-muted-foreground hover:text-primary">
+                                                    {selectedIds.has(guest.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
+                                                </button>
+
+                                                <div className={cn(
+                                                    "h-8 w-8 md:h-10 md:w-10 rounded-full flex items-center justify-center font-bold text-[10px] md:text-xs ring-2 ring-white shadow-sm flex-shrink-0",
+                                                    guest.priority === 'A' ? "bg-red-100 text-red-700" :
+                                                        guest.priority === 'C' ? "bg-gray-100 text-gray-600" : "bg-blue-50 text-blue-600"
+                                                )}>
+                                                    {guest.priority || 'B'}
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-medium text-sm md:text-base text-foreground leading-none">{guest.name}</p>
+                                                        {hasCompanions && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setExpandedGuestIds(prev => {
+                                                                        const newSet = new Set(prev);
+                                                                        if (newSet.has(guest.id)) {
+                                                                            newSet.delete(guest.id);
+                                                                        } else {
+                                                                            newSet.add(guest.id);
+                                                                        }
+                                                                        return newSet;
+                                                                    });
+                                                                }}
+                                                                className="inline-flex items-center gap-1 rounded-full bg-slate-100 hover:bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600 transition-colors"
+                                                            >
+                                                                <Users className="w-3 h-3" />
+                                                                {selectedCompanions.length} of {guest.companion_names!.length + 1}
+                                                                <span className="text-xs">{isExpanded ? '▲' : '▼'}</span>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[11px] md:text-sm text-muted-foreground mt-1">{guest.group_category || 'Uncategorized'}</p>
+                                                </div>
                                             </div>
-                                            <p className="text-[11px] md:text-sm text-muted-foreground mt-1">{guest.group_category || 'Uncategorized'}</p>
+                                            <div className="flex items-center gap-1 md:gap-3">
+                                                <span className={cn(
+                                                    "hidden xs:inline-flex items-center rounded-full px-2 py-0.5 text-[10px] md:text-xs font-medium mr-1 md:mr-0",
+                                                    guest.rsvp_status === 'accepted' ? "bg-green-100 text-green-700" :
+                                                        guest.rsvp_status === 'declined' ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                                                )}>
+                                                    {guest.rsvp_status.charAt(0).toUpperCase() + guest.rsvp_status.slice(1)}
+                                                </span>
+                                                <button onClick={() => handleOpenEdit(guest)} className="p-2 text-muted-foreground hover:text-primary transition-colors">
+                                                    <Edit2 className="w-4 h-4" />
+                                                </button>
+                                                <button onClick={() => confirmDelete(guest.id)} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </div>
+
+                                        {/* Companion Expansion */}
+                                        {isExpanded && hasCompanions && (
+                                            <div className="pl-14 pr-4 pb-4 space-y-2">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <button
+                                                        onClick={() => toggleAllCompanions(guest.id, !allCompanionsSelected)}
+                                                        className="text-xs text-primary hover:underline font-medium"
+                                                    >
+                                                        {allCompanionsSelected ? 'Deselect All' : 'Select All'}
+                                                    </button>
+                                                </div>
+                                                {/* Main Guest */}
+                                                <div className="flex items-center gap-2 py-1.5 px-3 bg-green-50 rounded-lg">
+                                                    <CheckSquare className="w-4 h-4 text-green-600" />
+                                                    <span className="text-sm text-gray-700">{guest.name} <span className="text-xs text-gray-500">(main guest)</span></span>
+                                                </div>
+                                                {/* Companions */}
+                                                {guest.companion_names!.map((companionName, idx) => {
+                                                    const isSelected = selectedCompanions.includes(companionName);
+                                                    return (
+                                                        <button
+                                                            key={idx}
+                                                            onClick={() => toggleCompanionSelection(guest.id, companionName)}
+                                                            className="flex items-center gap-2 py-1.5 px-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors w-full text-left"
+                                                        >
+                                                            {isSelected ? (
+                                                                <CheckSquare className="w-4 h-4 text-primary" />
+                                                            ) : (
+                                                                <Square className="w-4 h-4 text-gray-400" />
+                                                            )}
+                                                            <span className={cn("text-sm", isSelected ? "text-gray-900 font-medium" : "text-gray-600")}>
+                                                                {companionName}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="flex items-center gap-1 md:gap-3">
-                                        <span className={cn(
-                                            "hidden xs:inline-flex items-center rounded-full px-2 py-0.5 text-[10px] md:text-xs font-medium mr-1 md:mr-0",
-                                            guest.rsvp_status === 'accepted' ? "bg-green-100 text-green-700" :
-                                                guest.rsvp_status === 'declined' ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
-                                        )}>
-                                            {guest.rsvp_status.charAt(0).toUpperCase() + guest.rsvp_status.slice(1)}
-                                        </span>
-                                        <button onClick={() => handleOpenEdit(guest)} className="p-2 text-muted-foreground hover:text-primary transition-colors">
-                                            <Edit2 className="w-4 h-4" />
-                                        </button>
-                                        <button onClick={() => confirmDelete(guest.id)} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                             {sortedGuests.length === 0 && <div className="p-8 text-center text-muted-foreground">No guests found matching this filter.</div>}
                         </div>
                     ) : (
