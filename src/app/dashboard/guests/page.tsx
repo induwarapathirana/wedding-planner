@@ -371,16 +371,16 @@ export default function GuestPage() {
                                     disabled={!allSelectedAreAccepted}
                                     onClick={() => setIsSeatingDialogOpen(true)}
                                     className={cn(
-                                        "flex-1 md:flex-none flex items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 md:py-1.5 text-xs font-semibold transition-all shadow-sm",
+                                        "flex-1 md:flex-none flex items-center justify-center gap-2 rounded-lg border px-3 py-2 md:py-1.5 text-xs font-semibold transition-all shadow-sm",
                                         allSelectedAreAccepted
-                                            ? "bg-white text-foreground hover:bg-gray-50 border-primary/10"
-                                            : "bg-gray-50 text-muted-foreground opacity-50 cursor-not-allowed"
+                                            ? "bg-primary text-white hover:bg-primary/90 border-primary"
+                                            : "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
                                     )}
-                                    title={!allSelectedAreAccepted ? "Only accepted guests can be assigned seating" : ""}
+                                    title={!allSelectedAreAccepted ? "Only accepted guests can be assigned seating" : "Assign selected guests to a table"}
                                 >
-                                    <Armchair className="w-3.5 h-3.5 text-primary" />
-                                    <span className="hidden xs:inline">Assign Table</span>
-                                    <span className="xs:hidden">Assign</span>
+                                    <Armchair className="w-4 h-4" />
+                                    <span className="hidden sm:inline">Assign Table</span>
+                                    <span className="sm:hidden">Assign</span>
                                 </button>
                                 <button
                                     onClick={handleBulkUnassign}
