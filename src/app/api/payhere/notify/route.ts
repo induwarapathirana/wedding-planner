@@ -96,7 +96,10 @@ export async function POST(req: NextRequest) {
 
         // Status code 2 means Success
         if (status_code === '2') {
-            const { error } = await supabase.rpc('upgrade_wedding_tier', { wedding_id: weddingId });
+            const { error } = await supabase.rpc('upgrade_wedding_tier', {
+                wedding_id: weddingId,
+                payment_id: order_id // Store the Order ID as proof of payment
+            });
 
             if (error) {
                 console.error("Failed to upgrade tier:", error);

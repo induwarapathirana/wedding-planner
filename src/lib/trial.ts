@@ -19,7 +19,7 @@ export async function getEffectiveTier(weddingId: string): Promise<TrialInfo> {
     // Fetch wedding data
     const { data: wedding, error } = await supabase
         .from('weddings')
-        .select('tier, premium_trial_ends_at')
+        .select('tier, premium_trial_ends_at, payment_id')
         .eq('id', weddingId)
         .single();
 
@@ -34,7 +34,12 @@ export async function getEffectiveTier(weddingId: string): Promise<TrialInfo> {
         };
     }
 
-    const isPaidPremium = wedding.tier === 'premium';
+    // STRICT CHECK:
+    // A user is 'premium' ONLY if:
+    // 1. They have a verified payment_id
+    // 2. OR their trial is still active
+    // We IGNORE the 'tier' column unless payment_id is present.
+    const isPaidPremium = !!wedding.payment_id;
     const trialEndsAt = wedding.premium_trial_ends_at;
 
     // Check if trial is active
