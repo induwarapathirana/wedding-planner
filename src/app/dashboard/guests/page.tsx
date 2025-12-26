@@ -22,6 +22,7 @@ type Guest = {
     plus_one: boolean;
     companion_guest_count?: number; // Added for companion count
     companion_names?: string[]; // Added: Optional names for companions
+    selected_companions?: string[]; // Added: Track which companions are selected
 };
 
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
