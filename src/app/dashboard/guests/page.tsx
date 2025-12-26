@@ -10,6 +10,7 @@ import { GroupSummaryModal } from "@/components/dashboard/group-summary-modal";
 import { BulkSeatingDialog } from "@/components/dashboard/bulk-seating-dialog"; // New Import
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 import { LimitModal } from "@/components/dashboard/limit-modal";
+import { getEffectiveTier } from "@/lib/trial";
 
 type Guest = {
     id: string; // Changed to string for UUID
@@ -53,6 +54,9 @@ export default function GuestPage() {
     const [expandedGuestIds, setExpandedGuestIds] = useState<Set<string>>(new Set());
 
     // ... (fetch logic remains same)
+    // Check if over limit based on CURRENT tier
+    const isOverLimit = guests.length > PLAN_LIMITS[tier].guests;
+
     // Initial Data Load
     useEffect(() => {
         async function loadData() {
@@ -64,18 +68,27 @@ export default function GuestPage() {
                 return;
             }
 
-            // Fetch wedding target and tier
-            const { data: weddingData } = await supabase.from('weddings').select('target_guest_count, tier').eq('id', weddingId).single();
-
+            // Fetch wedding target
+            const { data: weddingData } = await supabase.from('weddings').select('target_guest_count').eq('id', weddingId).single();
             if (weddingData) {
                 setTargetCount(weddingData.target_guest_count || 0);
-                setTier((weddingData.tier as PlanTier) || 'free');
             }
+
+            // Fetch Effective Tier (checking trial status)
+            const trialInfo = await getEffectiveTier(weddingId);
+            setTier(trialInfo.effectiveTier);
 
             fetchGuests(weddingId);
         }
         loadData();
     }, []);
+
+    // Effect to check limit on load
+    useEffect(() => {
+        if (!loading && isOverLimit) {
+            setShowLimitModal(true);
+        }
+    }, [loading, isOverLimit]);
 
     async function fetchGuests(weddingId: string) {
         const { data } = await supabase.from('guests').select('*').eq('wedding_id', weddingId);
@@ -793,6 +806,7 @@ export default function GuestPage() {
                     onSubmit={handleSaveGuest}
                     initialData={editingGuest}
                     customGroups={Array.from(new Set(guests.map(g => g.group_category).filter(g => g && !DEFAULT_GROUPS.includes(g))))}
+                    readOnly={editingGuest ? isOverLimit : false}
                 />
 
                 <GroupSummaryModal
