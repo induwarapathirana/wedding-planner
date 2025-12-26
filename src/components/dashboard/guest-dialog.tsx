@@ -45,7 +45,20 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData, customGrou
         // ... (rest of effect)
     }, [initialData, isOpen]);
 
-    // ... (handlers)
+    // Helper to update specific companion name
+    const handleCompanionNameChange = (index: number, value: string) => {
+        const currentNames = [...(formData.companion_names || [])];
+        // Ensure array is large enough
+        while (currentNames.length <= index) currentNames.push("");
+        currentNames[index] = value;
+        setFormData({ ...formData, companion_names: currentNames });
+    };
+
+    // Helper to change count and resize name array safely
+    const handleCountChange = (newCount: number) => {
+        const count = Math.max(0, Math.min(50, newCount));
+        setFormData({ ...formData, companion_guest_count: count });
+    };
 
     if (!isOpen) return null;
 
