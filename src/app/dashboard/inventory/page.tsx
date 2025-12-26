@@ -188,7 +188,14 @@ export default function InventoryPage() {
                     {/* Mobile Card View */}
                     <div className="md:hidden divide-y divide-gray-100">
                         {filteredItems.map(item => (
-                            <div key={item.id} className="p-4 space-y-3">
+                            <div
+                                key={item.id}
+                                onClick={() => {
+                                    setEditingItem(item);
+                                    setShowForm(true);
+                                }}
+                                className="p-4 space-y-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                            >
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <div className="font-bold text-gray-900">{item.name}</div>
@@ -196,7 +203,7 @@ export default function InventoryPage() {
                                     </div>
 
                                     <button
-                                        onClick={() => handleToggleStatus(item)}
+                                        onClick={(e) => { e.stopPropagation(); handleToggleStatus(item); }}
                                         className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide border ${item.status === 'packed'
                                             ? 'bg-green-50 text-green-700 border-green-200'
                                             : 'bg-white text-gray-500 border-gray-200'
@@ -219,7 +226,8 @@ export default function InventoryPage() {
                                     </div>
                                     <div className="flex gap-1">
                                         <button
-                                            onClick={() => {
+                                            onClick={(e) => {
+                                                e.stopPropagation();
                                                 setEditingItem(item);
                                                 setShowForm(true);
                                             }}
@@ -228,7 +236,8 @@ export default function InventoryPage() {
                                             <Pencil className="w-4 h-4" />
                                         </button>
                                         <button
-                                            onClick={() => {
+                                            onClick={(e) => {
+                                                e.stopPropagation();
                                                 if (confirm("Delete this item?")) handleDelete(item.id);
                                             }}
                                             className="p-2 text-gray-400 hover:text-red-600 bg-gray-50 rounded-lg"

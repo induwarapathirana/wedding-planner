@@ -24,11 +24,14 @@ export default function InventoryItemRow({ item, onEdit, onDelete, onToggleStatu
     const badge = statusBadges[item.status];
 
     return (
-        <tr className="hover:bg-gray-50/80 transition-colors group">
+        <tr
+            onClick={() => onEdit(item)}
+            className="hover:bg-gray-50/80 transition-colors group cursor-pointer"
+        >
             <td className="px-6 py-4">
                 <div className="flex items-center gap-3">
                     <button
-                        onClick={() => onToggleStatus(item)}
+                        onClick={(e) => { e.stopPropagation(); onToggleStatus(item); }}
                         className={`p-1 rounded-full transition-colors ${item.status === 'packed'
                             ? 'text-green-600 bg-green-50'
                             : 'text-gray-300 hover:text-gray-400'
@@ -38,7 +41,7 @@ export default function InventoryItemRow({ item, onEdit, onDelete, onToggleStatu
                         <CheckCircle2 className={`w-5 h-5 ${item.status === 'packed' ? 'fill-current' : ''}`} />
                     </button>
                     <div>
-                        <div className="font-medium text-gray-900">{item.name}</div>
+                        <div className="font-medium text-gray-900 group-hover:text-primary transition-colors">{item.name}</div>
                         <div className="text-xs text-gray-500 md:hidden">{item.category}</div>
                     </div>
                 </div>
@@ -66,6 +69,7 @@ export default function InventoryItemRow({ item, onEdit, onDelete, onToggleStatu
                 <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     {item.link && (
                         <a
+                            onClick={(e) => e.stopPropagation()}
                             href={item.link}
                             target="_blank"
                             rel="noopener noreferrer"
@@ -76,14 +80,15 @@ export default function InventoryItemRow({ item, onEdit, onDelete, onToggleStatu
                         </a>
                     )}
                     <button
-                        onClick={() => onEdit(item)}
+                        onClick={(e) => { e.stopPropagation(); onEdit(item); }}
                         className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
                         title="Edit"
                     >
                         <Pencil className="w-4 h-4" />
                     </button>
                     <button
-                        onClick={() => {
+                        onClick={(e) => {
+                            e.stopPropagation();
                             if (confirm("Delete this item?")) onDelete(item.id);
                         }}
                         className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"

@@ -35,14 +35,17 @@ export default function VendorCard({ vendor, onEdit, onDelete, isSelected, onTog
     const [showActions, setShowActions] = useState(false);
 
     return (
-        <div className={cn(
-            "bg-white rounded-xl border shadow-sm p-5 hover:shadow-md transition-all relative group",
-            isSelected ? "border-primary ring-1 ring-primary bg-primary/5" : "border-gray-100"
-        )}>
+        <div
+            onClick={() => onEdit(vendor)}
+            className={cn(
+                "bg-white rounded-xl border shadow-sm p-5 hover:shadow-md transition-all relative group cursor-pointer",
+                isSelected ? "border-primary ring-1 ring-primary bg-primary/5" : "border-gray-100"
+            )}
+        >
             {/* Selection Checkbox */}
             {onToggleSelect && (
                 <button
-                    onClick={() => onToggleSelect(vendor.id)}
+                    onClick={(e) => { e.stopPropagation(); onToggleSelect(vendor.id); }}
                     className="absolute top-4 left-4 z-10 text-muted-foreground hover:text-primary transition-colors"
                 >
                     {isSelected ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
@@ -54,7 +57,7 @@ export default function VendorCard({ vendor, onEdit, onDelete, isSelected, onTog
                     <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                         {vendor.category}
                     </span>
-                    <h3 className="font-serif text-lg font-bold text-gray-900 mt-1">
+                    <h3 className="font-serif text-lg font-bold text-gray-900 mt-1 group-hover:text-primary transition-colors">
                         {vendor.company_name}
                     </h3>
                 </div>
@@ -71,7 +74,7 @@ export default function VendorCard({ vendor, onEdit, onDelete, isSelected, onTog
                 {vendor.phone && (
                     <div className="flex items-center gap-2">
                         <Phone className="w-4 h-4" />
-                        <a href={`tel:${vendor.phone}`} className="hover:text-primary transition-colors">
+                        <a href={`tel:${vendor.phone}`} onClick={(e) => e.stopPropagation()} className="hover:text-primary transition-colors">
                             {vendor.phone}
                         </a>
                     </div>
@@ -79,7 +82,7 @@ export default function VendorCard({ vendor, onEdit, onDelete, isSelected, onTog
                 {vendor.email && (
                     <div className="flex items-center gap-2">
                         <Mail className="w-4 h-4" />
-                        <a href={`mailto:${vendor.email}`} className="hover:text-primary transition-colors truncate max-w-[200px]">
+                        <a href={`mailto:${vendor.email}`} onClick={(e) => e.stopPropagation()} className="hover:text-primary transition-colors truncate max-w-[200px]">
                             {vendor.email}
                         </a>
                     </div>
@@ -87,7 +90,7 @@ export default function VendorCard({ vendor, onEdit, onDelete, isSelected, onTog
                 {vendor.website && (
                     <div className="flex items-center gap-2">
                         <Globe className="w-4 h-4" />
-                        <a href={vendor.website} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors flex items-center gap-1 group/link">
+                        <a href={vendor.website} onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors flex items-center gap-1 group/link">
                             Website <ExternalLink className="w-3 h-3 opacity-0 group-hover/link:opacity-100 transition-opacity" />
                         </a>
                     </div>
@@ -110,14 +113,15 @@ export default function VendorCard({ vendor, onEdit, onDelete, isSelected, onTog
             {/* Actions */}
             <div className="absolute top-4 right-4 md:right-14 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex gap-2">
                 <button
-                    onClick={() => onEdit(vendor)}
+                    onClick={(e) => { e.stopPropagation(); onEdit(vendor); }}
                     className="p-2 md:p-1.5 bg-gray-50 md:bg-transparent text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors shadow-sm md:shadow-none"
                     aria-label="Edit vendor"
                 >
                     <Pencil className="w-4 h-4" />
                 </button>
                 <button
-                    onClick={() => {
+                    onClick={(e) => {
+                        e.stopPropagation();
                         if (confirm("Are you sure you want to delete this vendor?")) {
                             onDelete(vendor.id);
                         }

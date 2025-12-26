@@ -314,28 +314,38 @@ function ChecklistContent() {
                             </h3>
                             <div className="space-y-3">
                                 {pendingItems.map(item => (
-                                    <div key={item.id} className={cn("group flex items-start gap-4 p-4 rounded-2xl hover:bg-muted/50 transition-all border border-transparent hover:border-border/50", selectedIds.has(item.id) ? "bg-primary/5 border-primary/20 shadow-sm" : "bg-white md:bg-transparent shadow-sm md:shadow-none border-border/50 md:border-transparent")}>
+                                    <div
+                                        key={item.id}
+                                        onClick={() => handleOpenEdit(item)}
+                                        className={cn("group flex items-start gap-4 p-4 rounded-2xl hover:bg-muted/50 transition-all border border-transparent hover:border-border/50 cursor-pointer", selectedIds.has(item.id) ? "bg-primary/5 border-primary/20 shadow-sm" : "bg-white md:bg-transparent shadow-sm md:shadow-none border-border/50 md:border-transparent")}
+                                    >
                                         <div className="flex items-center h-6">
-                                            <button onClick={() => toggleSelect(item.id)} className="text-muted-foreground hover:text-primary transition-colors">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }}
+                                                className="text-muted-foreground hover:text-primary transition-colors"
+                                            >
                                                 {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
                                             </button>
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <button onClick={() => toggleComplete(item)} className="group/btn flex items-start gap-3 w-full text-left">
-                                                <div className="mt-0.5 rounded-full border-2 border-muted-foreground/30 group-hover/btn:border-primary/50 transition-colors p-0.5">
+                                            <div className="flex items-start gap-3 w-full text-left">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); toggleComplete(item); }}
+                                                    className="mt-0.5 rounded-full border-2 border-muted-foreground/30 hover:border-primary/50 transition-colors p-0.5"
+                                                >
                                                     <Circle className="w-4 h-4 text-transparent" />
-                                                </div>
+                                                </button>
                                                 <div>
-                                                    <p className="font-semibold text-foreground text-sm md:text-base mb-1 leading-snug">{item.title}</p>
+                                                    <p className="font-semibold text-foreground text-sm md:text-base mb-1 leading-snug group-hover:text-primary transition-colors">{item.title}</p>
                                                     <p className="text-[11px] md:text-xs text-muted-foreground font-medium">{item.category} • {item.due_date ? new Date(item.due_date).toLocaleDateString() : 'No Date'}</p>
                                                 </div>
-                                            </button>
+                                            </div>
                                         </div>
                                         <div className="flex items-start gap-1">
-                                            <button onClick={() => handleOpenEdit(item)} className="p-2 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-white md:hover:bg-muted">
+                                            <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-white md:hover:bg-muted">
                                                 <Edit2 className="w-4 h-4" />
                                             </button>
-                                            <button onClick={() => confirmDelete(item.id)} className="p-2 text-muted-foreground hover:text-red-600 transition-all rounded-lg hover:bg-white md:hover:bg-muted">
+                                            <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-all rounded-lg hover:bg-white md:hover:bg-muted">
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
@@ -352,26 +362,32 @@ function ChecklistContent() {
                             </h3>
                             <div className="space-y-3">
                                 {completedItems.map(item => (
-                                    <div key={item.id} className={cn("group flex items-start gap-4 p-4 rounded-2xl opacity-80 hover:opacity-100 transition-all border border-transparent hover:border-border/50", selectedIds.has(item.id) ? "bg-primary/5 border-primary/20" : "bg-white/50 md:bg-transparent border-border/30 md:border-transparent shadow-sm md:shadow-none")}>
+                                    <div
+                                        key={item.id}
+                                        onClick={() => handleOpenEdit(item)}
+                                        className={cn("group flex items-start gap-4 p-4 rounded-2xl opacity-80 hover:opacity-100 transition-all border border-transparent hover:border-border/50 cursor-pointer", selectedIds.has(item.id) ? "bg-primary/5 border-primary/20" : "bg-white/50 md:bg-transparent border-border/30 md:border-transparent shadow-sm md:shadow-none")}
+                                    >
                                         <div className="flex items-center h-6">
-                                            <button onClick={() => toggleSelect(item.id)} className="text-muted-foreground hover:text-primary transition-colors">
+                                            <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground hover:text-primary transition-colors">
                                                 {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
                                             </button>
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <button onClick={() => toggleComplete(item)} className="flex items-start gap-3 w-full text-left">
-                                                <CheckCircle2 className="mt-0.5 w-5 h-5 text-green-600" />
+                                            <div className="flex items-start gap-3 w-full text-left">
+                                                <button onClick={(e) => { e.stopPropagation(); toggleComplete(item); }}>
+                                                    <CheckCircle2 className="mt-0.5 w-5 h-5 text-green-600 hover:text-green-700 transition-colors" />
+                                                </button>
                                                 <div>
-                                                    <p className="font-medium text-foreground text-sm line-through decoration-muted-foreground/50 leading-snug">{item.title}</p>
+                                                    <p className="font-medium text-foreground text-sm line-through decoration-muted-foreground/50 leading-snug group-hover:text-primary transition-colors">{item.title}</p>
                                                     <p className="text-[11px] text-muted-foreground font-medium">{item.category}</p>
                                                 </div>
-                                            </button>
+                                            </div>
                                         </div>
                                         <div className="flex items-start gap-1">
-                                            <button onClick={() => handleOpenEdit(item)} className="p-2 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-white md:hover:bg-muted">
+                                            <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-white md:hover:bg-muted">
                                                 <Edit2 className="w-4 h-4" />
                                             </button>
-                                            <button onClick={() => confirmDelete(item.id)} className="p-2 text-muted-foreground hover:text-red-600 transition-all rounded-lg hover:bg-white md:hover:bg-muted">
+                                            <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-all rounded-lg hover:bg-white md:hover:bg-muted">
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
@@ -393,13 +409,17 @@ function ChecklistContent() {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                                         {groupedItems[category].map(item => (
-                                            <div key={item.id} className={cn(
-                                                "relative flex flex-col justify-between rounded-3xl border-2 p-5 md:p-6 transition-all hover:shadow-xl hover:-translate-y-1",
-                                                item.is_completed ? "bg-muted/10 border-border/50 opacity-80" : "bg-white border-border/40 shadow-sm",
-                                                selectedIds.has(item.id) && "ring-2 ring-primary border-primary bg-primary/5"
-                                            )}>
+                                            <div
+                                                key={item.id}
+                                                onClick={() => handleOpenEdit(item)}
+                                                className={cn(
+                                                    "relative flex flex-col justify-between rounded-3xl border-2 p-5 md:p-6 transition-all hover:shadow-xl hover:-translate-y-1 cursor-pointer group",
+                                                    item.is_completed ? "bg-muted/10 border-border/50 opacity-80" : "bg-white border-border/40 shadow-sm",
+                                                    selectedIds.has(item.id) && "ring-2 ring-primary border-primary bg-primary/5"
+                                                )}
+                                            >
                                                 <button
-                                                    onClick={() => toggleSelect(item.id)}
+                                                    onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }}
                                                     className="absolute top-5 right-5 z-10 text-muted-foreground hover:text-primary transition-colors"
                                                 >
                                                     {selectedIds.has(item.id) ? <CheckSquare className="w-6 h-6 text-primary" /> : <Square className="w-6 h-6 opacity-40 hover:opacity-100" />}
@@ -414,7 +434,7 @@ function ChecklistContent() {
                                                     </span>
                                                 </div>
 
-                                                <h4 className={cn("text-base md:text-lg font-bold text-foreground mb-2 leading-tight pr-8", item.is_completed && "line-through opacity-70")}>
+                                                <h4 className={cn("text-base md:text-lg font-bold text-foreground mb-2 leading-tight pr-8 group-hover:text-primary transition-colors", item.is_completed && "line-through opacity-70")}>
                                                     {item.title}
                                                 </h4>
 
@@ -434,7 +454,7 @@ function ChecklistContent() {
 
                                                 <div className="flex items-center gap-2 pt-2 border-t border-border/50">
                                                     <button
-                                                        onClick={() => toggleComplete(item)}
+                                                        onClick={(e) => { e.stopPropagation(); toggleComplete(item); }}
                                                         className={cn(
                                                             "flex-1 rounded-xl py-2.5 text-xs font-bold transition-all shadow-sm",
                                                             item.is_completed
@@ -445,10 +465,10 @@ function ChecklistContent() {
                                                         {item.is_completed ? "Mark Undone" : "Mark Complete"}
                                                     </button>
                                                     <div className="flex gap-1">
-                                                        <button onClick={() => handleOpenEdit(item)} className="p-2.5 text-muted-foreground hover:text-primary hover:bg-muted rounded-xl transition-all">
+                                                        <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2.5 text-muted-foreground hover:text-primary hover:bg-muted rounded-xl transition-all">
                                                             <Edit2 className="w-4 h-4" />
                                                         </button>
-                                                        <button onClick={() => confirmDelete(item.id)} className="p-2.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
+                                                        <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
                                                             <Trash2 className="w-4 h-4" />
                                                         </button>
                                                     </div>

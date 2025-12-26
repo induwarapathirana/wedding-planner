@@ -444,20 +444,24 @@ export default function VendorsPage() {
                         </div>
                     ) : (
                         (filteredVendors as DirectoryVendor[]).map((vendor) => (
-                            <div key={vendor.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow group relative">
+                            <div
+                                key={vendor.id}
+                                onClick={() => openDirectoryEdit(vendor)}
+                                className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow group relative cursor-pointer"
+                            >
                                 <div className="flex justify-between items-start mb-3">
                                     <div>
                                         <span className="inline-block px-2 py-1 bg-gray-100 text-gray-600 text-xs font-semibold rounded-md mb-2">
                                             {vendor.category}
                                         </span>
-                                        <h3 className="font-bold text-gray-900 text-lg">{vendor.company_name}</h3>
+                                        <h3 className="font-bold text-gray-900 text-lg group-hover:text-primary transition-colors">{vendor.company_name}</h3>
                                         {vendor.contact_name && <p className="text-sm text-gray-500">{vendor.contact_name}</p>}
                                     </div>
                                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => openDirectoryEdit(vendor)} className="p-1 text-gray-400 hover:text-primary">
+                                        <button onClick={(e) => { e.stopPropagation(); openDirectoryEdit(vendor); }} className="p-1 text-gray-400 hover:text-primary">
                                             <Edit2 className="w-4 h-4" />
                                         </button>
-                                        <button onClick={() => confirmDirectoryDelete(vendor.id)} className="p-1 text-gray-400 hover:text-red-500">
+                                        <button onClick={(e) => { e.stopPropagation(); confirmDirectoryDelete(vendor.id); }} className="p-1 text-gray-400 hover:text-red-500">
                                             <Trash2 className="w-4 h-4" />
                                         </button>
                                     </div>
@@ -479,7 +483,13 @@ export default function VendorsPage() {
                                     {vendor.website && (
                                         <div className="flex items-center gap-2">
                                             <Globe className="w-3.5 h-3.5 text-gray-400" />
-                                            <a href={vendor.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate max-w-[200px]">
+                                            <a
+                                                href={vendor.website}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-primary hover:underline truncate max-w-[200px]"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
                                                 {vendor.website.replace(/^https?:\/\//, '')}
                                             </a>
                                         </div>

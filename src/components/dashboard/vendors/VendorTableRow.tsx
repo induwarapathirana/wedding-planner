@@ -39,9 +39,12 @@ const getPricingDisplay = (vendor: Vendor, currencySymbol: string) => {
 
 export default function VendorTableRow({ vendor, onEdit, onDelete, onStatusUpdate, currencySymbol = '$' }: VendorTableRowProps) {
     return (
-        <tr className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors group">
+        <tr
+            onClick={() => onEdit(vendor)}
+            className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors group cursor-pointer"
+        >
             <td className="px-4 py-3">
-                <div className="font-medium text-gray-900">{vendor.company_name}</div>
+                <div className="font-medium text-gray-900 group-hover:text-primary transition-colors">{vendor.company_name}</div>
                 {vendor.contact_name && (
                     <div className="text-xs text-gray-500 mt-0.5">{vendor.contact_name}</div>
                 )}
@@ -59,6 +62,7 @@ export default function VendorTableRow({ vendor, onEdit, onDelete, onStatusUpdat
             <td className="px-4 py-3">
                 <select
                     value={vendor.status}
+                    onClick={(e) => e.stopPropagation()}
                     onChange={(e) => onStatusUpdate(vendor.id, e.target.value as VendorStatus)}
                     className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide cursor-pointer border-0 focus:ring-2 focus:ring-primary/20 transition-all ${statusColors[vendor.status]}`}
                 >
@@ -74,14 +78,15 @@ export default function VendorTableRow({ vendor, onEdit, onDelete, onStatusUpdat
             <td className="px-4 py-3">
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
-                        onClick={() => onEdit(vendor)}
+                        onClick={(e) => { e.stopPropagation(); onEdit(vendor); }}
                         className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         aria-label="Edit vendor"
                     >
                         <Pencil className="w-4 h-4" />
                     </button>
                     <button
-                        onClick={() => {
+                        onClick={(e) => {
+                            e.stopPropagation();
                             if (confirm("Are you sure you want to delete this vendor?")) {
                                 onDelete(vendor.id);
                             }
