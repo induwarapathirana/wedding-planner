@@ -311,7 +311,7 @@ export default function GuestPage() {
 
     // Progress Bar Calcs
     const progressPercent = targetCount > 0 ? Math.min((stats.total / targetCount) * 100, 100) : 0;
-    const isOverLimit = targetCount > 0 && stats.total > targetCount;
+    const isOverTarget = targetCount > 0 && stats.total > targetCount;
 
     // Selected Headcount Calculation
     const selectedGuests = sortedGuests.filter((g) => selectedIds.has(g.id));
@@ -472,15 +472,15 @@ export default function GuestPage() {
                     <div className="bg-white p-4 rounded-xl border border-border shadow-sm flex flex-col gap-2">
                         <div className="flex justify-between text-sm font-medium">
                             <span>Total Guests: {stats.total}</span>
-                            <span className={isOverLimit ? "text-amber-600" : "text-muted-foreground"}>Target: {targetCount}</span>
+                            <span className={isOverTarget ? "text-amber-600" : "text-muted-foreground"}>Target: {targetCount}</span>
                         </div>
                         <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
                             <div
-                                className={cn("h-full transition-all duration-500 rounded-full", isOverLimit ? "bg-amber-500" : "bg-primary")}
+                                className={cn("h-full transition-all duration-500 rounded-full", isOverTarget ? "bg-amber-500" : "bg-primary")}
                                 style={{ width: `${progressPercent}% ` }}
                             />
                         </div>
-                        {isOverLimit && <p className="text-xs text-amber-600 font-medium">You have exceeded your target headcount.</p>}
+                        {isOverTarget && <p className="text-xs text-amber-600 font-medium">You have exceeded your target headcount.</p>}
                     </div>
                 )}
 
@@ -516,288 +516,315 @@ export default function GuestPage() {
                 </div>
 
                 {/* Main Content */}
-                <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
-                    {mode === "simple" ? (
-                        /* SIMPLE MODE: Clean List */
-                        <div className="divide-y divide-border">
-                            {sortedGuests.map((guest) => {
-                                const hasCompanions = guest.companion_names && guest.companion_names.length > 0;
-                                const isExpanded = expandedGuestIds.has(guest.id);
-                                const selectedCompanions = guest.selected_companions || guest.companion_names || [];
-                                const allCompanionsSelected = hasCompanions && selectedCompanions.length === guest.companion_names!.length;
-                                const someCompanionsSelected = hasCompanions && selectedCompanions.length > 0 && selectedCompanions.length < guest.companion_names!.length;
-
-                                return (
-                                    <div key={guest.id} className={cn("hover:bg-muted/30 transition-colors", selectedIds.has(guest.id) && "bg-muted/50")}>
-                                        <div className="flex items-center justify-between p-4 md:p-6">
-                                            <div className="flex items-center gap-3 md:gap-4">
-                                                <button onClick={() => toggleSelect(guest.id)} className="text-muted-foreground hover:text-primary">
-                                                    {selectedIds.has(guest.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
-                                                </button>
-
-                                                <div className={cn(
-                                                    "h-8 w-8 md:h-10 md:w-10 rounded-full flex items-center justify-center font-bold text-[10px] md:text-xs ring-2 ring-white shadow-sm flex-shrink-0",
-                                                    guest.priority === 'A' ? "bg-red-100 text-red-700" :
-                                                        guest.priority === 'C' ? "bg-gray-100 text-gray-600" : "bg-blue-50 text-blue-600"
-                                                )}>
-                                                    {guest.priority || 'B'}
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <p className="font-medium text-sm md:text-base text-foreground leading-none">{guest.name}</p>
-                                                        {hasCompanions && (
-                                                            <button
-                                                                onClick={() => {
-                                                                    setExpandedGuestIds(prev => {
-                                                                        const newSet = new Set(prev);
-                                                                        if (newSet.has(guest.id)) {
-                                                                            newSet.delete(guest.id);
-                                                                        } else {
-                                                                            newSet.add(guest.id);
-                                                                        }
-                                                                        return newSet;
-                                                                    });
-                                                                }}
-                                                                className="inline-flex items-center gap-1 rounded-full bg-slate-100 hover:bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600 transition-colors"
-                                                            >
-                                                                <Users className="w-3 h-3" />
-                                                                {selectedCompanions.length} of {guest.companion_names!.length + 1}
-                                                                <span className="text-xs">{isExpanded ? '▲' : '▼'}</span>
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-[11px] md:text-sm text-muted-foreground mt-1">{guest.group_category || 'Uncategorized'}</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-1 md:gap-3">
-                                                <span className={cn(
-                                                    "hidden xs:inline-flex items-center rounded-full px-2 py-0.5 text-[10px] md:text-xs font-medium mr-1 md:mr-0",
-                                                    guest.rsvp_status === 'accepted' ? "bg-green-100 text-green-700" :
-                                                        guest.rsvp_status === 'declined' ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
-                                                )}>
-                                                    {guest.rsvp_status.charAt(0).toUpperCase() + guest.rsvp_status.slice(1)}
-                                                </span>
-                                                <button onClick={() => handleOpenEdit(guest)} className="p-2 text-muted-foreground hover:text-primary transition-colors">
-                                                    <Edit2 className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={() => confirmDelete(guest.id)} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* Companion Expansion */}
-                                        {isExpanded && hasCompanions && (
-                                            <div className="pl-14 pr-4 pb-4 space-y-2">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <button
-                                                        onClick={() => toggleAllCompanions(guest.id, !allCompanionsSelected)}
-                                                        className="text-xs text-primary hover:underline font-medium"
-                                                    >
-                                                        {allCompanionsSelected ? 'Deselect All' : 'Select All'}
-                                                    </button>
-                                                </div>
-                                                {/* Main Guest */}
-                                                <div className="flex items-center gap-2 py-1.5 px-3 bg-green-50 rounded-lg">
-                                                    <CheckSquare className="w-4 h-4 text-green-600" />
-                                                    <span className="text-sm text-gray-700">{guest.name} <span className="text-xs text-gray-500">(main guest)</span></span>
-                                                </div>
-                                                {/* Companions */}
-                                                {guest.companion_names!.map((companionName, idx) => {
-                                                    const isSelected = selectedCompanions.includes(companionName);
-                                                    return (
-                                                        <button
-                                                            key={idx}
-                                                            onClick={() => toggleCompanionSelection(guest.id, companionName)}
-                                                            className="flex items-center gap-2 py-1.5 px-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors w-full text-left"
-                                                        >
-                                                            {isSelected ? (
-                                                                <CheckSquare className="w-4 h-4 text-primary" />
-                                                            ) : (
-                                                                <Square className="w-4 h-4 text-gray-400" />
-                                                            )}
-                                                            <span className={cn("text-sm", isSelected ? "text-gray-900 font-medium" : "text-gray-600")}>
-                                                                {companionName}
-                                                            </span>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                            {sortedGuests.length === 0 && <div className="p-8 text-center text-muted-foreground">No guests found matching this filter.</div>}
-                        </div>
-                    ) : (
-                        /* ADVANCED MODE: Responsive Layout */
-                        <>
-                            {/* Mobile Card View */}
-                            <div className="md:hidden divide-y divide-border">
-                                {sortedGuests.map((guest) => (
-                                    <div key={guest.id} className={cn("p-4 hover:bg-muted/30 transition-colors", selectedIds.has(guest.id) && "bg-muted/50")}>
-                                        <div className="flex items-start justify-between mb-3">
-                                            <div className="flex items-center gap-3">
-                                                <button onClick={() => toggleSelect(guest.id)} className="text-muted-foreground pt-0.5">
-                                                    {selectedIds.has(guest.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
-                                                </button>
-                                                <div className="flex items-center gap-3">
-                                                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary uppercase">
-                                                        {guest.name.charAt(0)}
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-semibold text-foreground text-sm">{guest.name}</p>
-                                                        <p className="text-[11px] text-muted-foreground">{guest.group_category || 'Uncategorized'}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-1">
-                                                <button onClick={() => handleOpenEdit(guest)} className="p-2 text-muted-foreground">
-                                                    <Edit2 className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={() => confirmDelete(guest.id)} className="p-2 text-muted-foreground">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-2 pl-8">
-                                            <div className="bg-muted px-2 py-1.5 rounded-lg">
-                                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Status</p>
-                                                <span className={cn(
-                                                    "text-xs font-medium",
-                                                    guest.rsvp_status === 'accepted' ? "text-green-600" :
-                                                        guest.rsvp_status === 'declined' ? "text-red-600" : "text-amber-600"
-                                                )}>
-                                                    {guest.rsvp_status.charAt(0).toUpperCase() + guest.rsvp_status.slice(1)}
-                                                </span>
-                                            </div>
-                                            <div className="bg-muted px-2 py-1.5 rounded-lg">
-                                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Priority</p>
-                                                <span className="text-xs font-medium">{guest.priority || 'B'}</span>
-                                            </div>
-                                            <div className="bg-muted px-2 py-1.5 rounded-lg">
-                                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Party Size</p>
-                                                <span className="text-xs font-medium flex items-center gap-1">
-                                                    <Users className="w-3 h-3" />
-                                                    {1 + (guest.companion_guest_count || 0)}
-                                                </span>
-                                            </div>
-                                            <div className="bg-muted px-2 py-1.5 rounded-lg">
-                                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Seating</p>
-                                                <span className="text-xs font-medium flex items-center gap-1 truncate">
-                                                    <Armchair className="w-3 h-3" />
-                                                    {guest.table_assignment || 'Unassigned'}
-                                                </span>
-                                            </div>
-                                            {guest.rsvp_status === 'accepted' && guest.meal_preference && (
-                                                <div className="bg-muted px-2 py-1.5 rounded-lg col-span-2 flex items-center gap-2">
-                                                    <Utensils className="w-3 h-3 text-muted-foreground" />
-                                                    <span className="text-xs font-medium">{guest.meal_preference}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
+                <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden relative">
+                    {/* Locked View Overlay - Strict Locking */}
+                    {isOverLimit && (
+                        <div className="absolute inset-0 z-50 bg-white/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center">
+                            <div className="bg-white p-8 rounded-2xl shadow-xl border border-purple-100 max-w-md w-full animate-in zoom-in-95 duration-300">
+                                <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                                    <div className="text-3xl">🔒</div>
+                                </div>
+                                <h3 className="text-2xl font-bold text-gray-900 mb-2">Content Locked</h3>
+                                <p className="text-gray-600 mb-6">
+                                    You have {guests.length} guests, which exceeds the Free plan limit of {PLAN_LIMITS.free.guests}.
+                                    Please upgrade to Premium to access your complete guest list.
+                                </p>
+                                <a
+                                    href="/dashboard/settings"
+                                    className="block w-full py-3 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                                >
+                                    Upgrade to Unlock
+                                </a>
+                                <p className="text-xs text-gray-400 mt-4">
+                                    Your data is safe, just hidden until you upgrade.
+                                </p>
                             </div>
+                        </div>
+                    )}
 
-                            {/* Desktop Table View */}
-                            <div className="hidden md:block overflow-x-auto">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-muted text-muted-foreground font-medium uppercase text-xs">
-                                        <tr>
-                                            <th className="px-6 py-4 w-12">
-                                                <button onClick={toggleSelectAll} className="flex items-center">
-                                                    {selectedIds.size > 0 && selectedIds.size === guests.length ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
-                                                </button>
-                                            </th>
-                                            <th className="px-6 py-4 w-1/4">Guest Name</th>
-                                            <th className="px-6 py-4">Group</th>
-                                            <th className="px-6 py-4">Priority</th>
-                                            <th className="px-6 py-4">Status</th>
-                                            <th className="px-6 py-4">Meal Choice</th>
-                                            <th className="px-6 py-4">Seating</th>
-                                            <th className="px-6 py-4">Total Party</th>
-                                            <th className="px-6 py-4">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-border">
-                                        {sortedGuests.map((guest) => (
-                                            <tr key={guest.id} className={cn("hover:bg-muted/30 transition-colors", selectedIds.has(guest.id) && "bg-muted/50")}>
-                                                <td className="px-6 py-4">
+                    <div className={cn(isOverLimit && "opacity-10 blur-sm pointer-events-none select-none")}>
+                        {mode === "simple" ? (
+                            /* SIMPLE MODE: Clean List */
+                            <div className="divide-y divide-border">
+                                {sortedGuests.map((guest) => {
+                                    const hasCompanions = guest.companion_names && guest.companion_names.length > 0;
+                                    const isExpanded = expandedGuestIds.has(guest.id);
+                                    const selectedCompanions = guest.selected_companions || guest.companion_names || [];
+                                    const allCompanionsSelected = hasCompanions && selectedCompanions.length === guest.companion_names!.length;
+                                    const someCompanionsSelected = hasCompanions && selectedCompanions.length > 0 && selectedCompanions.length < guest.companion_names!.length;
+
+                                    return (
+                                        <div key={guest.id} className={cn("hover:bg-muted/30 transition-colors", selectedIds.has(guest.id) && "bg-muted/50")}>
+                                            <div className="flex items-center justify-between p-4 md:p-6">
+                                                <div className="flex items-center gap-3 md:gap-4">
                                                     <button onClick={() => toggleSelect(guest.id)} className="text-muted-foreground hover:text-primary">
-                                                        {selectedIds.has(guest.id) ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
+                                                        {selectedIds.has(guest.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
                                                     </button>
-                                                </td>
-                                                <td className="px-6 py-4 font-medium text-foreground">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary uppercase">
-                                                            {guest.name.charAt(0)}
-                                                        </div>
-                                                        {guest.name}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-muted-foreground">{guest.group_category || '-'}</td>
-                                                <td className="px-6 py-4">
-                                                    <span className={cn(
-                                                        "inline-flex items-center rounded px-2 py-0.5 text-xs font-bold",
+
+                                                    <div className={cn(
+                                                        "h-8 w-8 md:h-10 md:w-10 rounded-full flex items-center justify-center font-bold text-[10px] md:text-xs ring-2 ring-white shadow-sm flex-shrink-0",
                                                         guest.priority === 'A' ? "bg-red-100 text-red-700" :
                                                             guest.priority === 'C' ? "bg-gray-100 text-gray-600" : "bg-blue-50 text-blue-600"
                                                     )}>
                                                         {guest.priority || 'B'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4">
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="font-medium text-sm md:text-base text-foreground leading-none">{guest.name}</p>
+                                                            {hasCompanions && (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setExpandedGuestIds(prev => {
+                                                                            const newSet = new Set(prev);
+                                                                            if (newSet.has(guest.id)) {
+                                                                                newSet.delete(guest.id);
+                                                                            } else {
+                                                                                newSet.add(guest.id);
+                                                                            }
+                                                                            return newSet;
+                                                                        });
+                                                                    }}
+                                                                    className="inline-flex items-center gap-1 rounded-full bg-slate-100 hover:bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600 transition-colors"
+                                                                >
+                                                                    <Users className="w-3 h-3" />
+                                                                    {selectedCompanions.length} of {guest.companion_names!.length + 1}
+                                                                    <span className="text-xs">{isExpanded ? '▲' : '▼'}</span>
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-[11px] md:text-sm text-muted-foreground mt-1">{guest.group_category || 'Uncategorized'}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-1 md:gap-3">
                                                     <span className={cn(
-                                                        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                                                        guest.rsvp_status === 'accepted' ? "bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20" :
-                                                            guest.rsvp_status === 'declined' ? "bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20" : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20"
+                                                        "hidden xs:inline-flex items-center rounded-full px-2 py-0.5 text-[10px] md:text-xs font-medium mr-1 md:mr-0",
+                                                        guest.rsvp_status === 'accepted' ? "bg-green-100 text-green-700" :
+                                                            guest.rsvp_status === 'declined' ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
                                                     )}>
                                                         {guest.rsvp_status.charAt(0).toUpperCase() + guest.rsvp_status.slice(1)}
                                                     </span>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    {guest.rsvp_status === 'accepted' && guest.meal_preference ? (
-                                                        <div className="flex items-center gap-1.5 text-foreground">
-                                                            <Utensils className="w-3.5 h-3.5 text-muted-foreground" />
-                                                            {guest.meal_preference}
-                                                        </div>
-                                                    ) : <span className="text-muted-foreground">-</span>}
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    {guest.rsvp_status === 'accepted' && guest.table_assignment ? (
-                                                        <div className="flex items-center gap-1.5 text-foreground">
-                                                            <Armchair className="w-3.5 h-3.5 text-muted-foreground" />
-                                                            {guest.table_assignment}
-                                                        </div>
-                                                    ) : <span className="text-muted-foreground text-xs italic">Unassigned</span>}
-                                                </td>
-                                                <td className="px-6 py-4 text-muted-foreground">
-                                                    <div className="flex items-center gap-2">
-                                                        <Users className="w-3.5 h-3.5 text-muted-foreground/70" />
-                                                        <span>{1 + (guest.companion_guest_count || 0)}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 flex items-center gap-2">
-                                                    <button onClick={() => handleOpenEdit(guest)} className="text-muted-foreground hover:text-primary transition-colors">
+                                                    <button onClick={() => handleOpenEdit(guest)} className="p-2 text-muted-foreground hover:text-primary transition-colors">
                                                         <Edit2 className="w-4 h-4" />
                                                     </button>
-                                                    <button onClick={() => confirmDelete(guest.id)} className="text-muted-foreground hover:text-red-600 transition-colors">
+                                                    <button onClick={() => confirmDelete(guest.id)} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
                                                         <Trash2 className="w-4 h-4" />
                                                     </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                        {sortedGuests.length === 0 && (
-                                            <tr>
-                                                <td colSpan={9} className="p-8 text-center text-muted-foreground">No guests found matching this filter.</td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
+                                                </div>
+                                            </div>
+
+                                            {/* Companion Expansion */}
+                                            {isExpanded && hasCompanions && (
+                                                <div className="pl-14 pr-4 pb-4 space-y-2">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <button
+                                                            onClick={() => toggleAllCompanions(guest.id, !allCompanionsSelected)}
+                                                            className="text-xs text-primary hover:underline font-medium"
+                                                        >
+                                                            {allCompanionsSelected ? 'Deselect All' : 'Select All'}
+                                                        </button>
+                                                    </div>
+                                                    {/* Main Guest */}
+                                                    <div className="flex items-center gap-2 py-1.5 px-3 bg-green-50 rounded-lg">
+                                                        <CheckSquare className="w-4 h-4 text-green-600" />
+                                                        <span className="text-sm text-gray-700">{guest.name} <span className="text-xs text-gray-500">(main guest)</span></span>
+                                                    </div>
+                                                    {/* Companions */}
+                                                    {guest.companion_names!.map((companionName, idx) => {
+                                                        const isSelected = selectedCompanions.includes(companionName);
+                                                        return (
+                                                            <button
+                                                                key={idx}
+                                                                onClick={() => toggleCompanionSelection(guest.id, companionName)}
+                                                                className="flex items-center gap-2 py-1.5 px-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors w-full text-left"
+                                                            >
+                                                                {isSelected ? (
+                                                                    <CheckSquare className="w-4 h-4 text-primary" />
+                                                                ) : (
+                                                                    <Square className="w-4 h-4 text-gray-400" />
+                                                                )}
+                                                                <span className={cn("text-sm", isSelected ? "text-gray-900 font-medium" : "text-gray-600")}>
+                                                                    {companionName}
+                                                                </span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                                {sortedGuests.length === 0 && <div className="p-8 text-center text-muted-foreground">No guests found matching this filter.</div>}
                             </div>
-                        </>
-                    )}
+                        ) : (
+                            /* ADVANCED MODE: Responsive Layout */
+                            <>
+                                {/* Mobile Card View */}
+                                <div className="md:hidden divide-y divide-border">
+                                    {sortedGuests.map((guest) => (
+                                        <div key={guest.id} className={cn("p-4 hover:bg-muted/30 transition-colors", selectedIds.has(guest.id) && "bg-muted/50")}>
+                                            <div className="flex items-start justify-between mb-3">
+                                                <div className="flex items-center gap-3">
+                                                    <button onClick={() => toggleSelect(guest.id)} className="text-muted-foreground pt-0.5">
+                                                        {selectedIds.has(guest.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
+                                                    </button>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary uppercase">
+                                                            {guest.name.charAt(0)}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-semibold text-foreground text-sm">{guest.name}</p>
+                                                            <p className="text-[11px] text-muted-foreground">{guest.group_category || 'Uncategorized'}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <button onClick={() => handleOpenEdit(guest)} className="p-2 text-muted-foreground">
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </button>
+                                                    <button onClick={() => confirmDelete(guest.id)} className="p-2 text-muted-foreground">
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-2 pl-8">
+                                                <div className="bg-muted px-2 py-1.5 rounded-lg">
+                                                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Status</p>
+                                                    <span className={cn(
+                                                        "text-xs font-medium",
+                                                        guest.rsvp_status === 'accepted' ? "text-green-600" :
+                                                            guest.rsvp_status === 'declined' ? "text-red-600" : "text-amber-600"
+                                                    )}>
+                                                        {guest.rsvp_status.charAt(0).toUpperCase() + guest.rsvp_status.slice(1)}
+                                                    </span>
+                                                </div>
+                                                <div className="bg-muted px-2 py-1.5 rounded-lg">
+                                                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Priority</p>
+                                                    <span className="text-xs font-medium">{guest.priority || 'B'}</span>
+                                                </div>
+                                                <div className="bg-muted px-2 py-1.5 rounded-lg">
+                                                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Party Size</p>
+                                                    <span className="text-xs font-medium flex items-center gap-1">
+                                                        <Users className="w-3 h-3" />
+                                                        {1 + (guest.companion_guest_count || 0)}
+                                                    </span>
+                                                </div>
+                                                <div className="bg-muted px-2 py-1.5 rounded-lg">
+                                                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Seating</p>
+                                                    <span className="text-xs font-medium flex items-center gap-1 truncate">
+                                                        <Armchair className="w-3 h-3" />
+                                                        {guest.table_assignment || 'Unassigned'}
+                                                    </span>
+                                                </div>
+                                                {guest.rsvp_status === 'accepted' && guest.meal_preference && (
+                                                    <div className="bg-muted px-2 py-1.5 rounded-lg col-span-2 flex items-center gap-2">
+                                                        <Utensils className="w-3 h-3 text-muted-foreground" />
+                                                        <span className="text-xs font-medium">{guest.meal_preference}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Desktop Table View */}
+                                <div className="hidden md:block overflow-x-auto">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-muted text-muted-foreground font-medium uppercase text-xs">
+                                            <tr>
+                                                <th className="px-6 py-4 w-12">
+                                                    <button onClick={toggleSelectAll} className="flex items-center">
+                                                        {selectedIds.size > 0 && selectedIds.size === guests.length ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
+                                                    </button>
+                                                </th>
+                                                <th className="px-6 py-4 w-1/4">Guest Name</th>
+                                                <th className="px-6 py-4">Group</th>
+                                                <th className="px-6 py-4">Priority</th>
+                                                <th className="px-6 py-4">Status</th>
+                                                <th className="px-6 py-4">Meal Choice</th>
+                                                <th className="px-6 py-4">Seating</th>
+                                                <th className="px-6 py-4">Total Party</th>
+                                                <th className="px-6 py-4">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-border">
+                                            {sortedGuests.map((guest) => (
+                                                <tr key={guest.id} className={cn("hover:bg-muted/30 transition-colors", selectedIds.has(guest.id) && "bg-muted/50")}>
+                                                    <td className="px-6 py-4">
+                                                        <button onClick={() => toggleSelect(guest.id)} className="text-muted-foreground hover:text-primary">
+                                                            {selectedIds.has(guest.id) ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
+                                                        </button>
+                                                    </td>
+                                                    <td className="px-6 py-4 font-medium text-foreground">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary uppercase">
+                                                                {guest.name.charAt(0)}
+                                                            </div>
+                                                            {guest.name}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-muted-foreground">{guest.group_category || '-'}</td>
+                                                    <td className="px-6 py-4">
+                                                        <span className={cn(
+                                                            "inline-flex items-center rounded px-2 py-0.5 text-xs font-bold",
+                                                            guest.priority === 'A' ? "bg-red-100 text-red-700" :
+                                                                guest.priority === 'C' ? "bg-gray-100 text-gray-600" : "bg-blue-50 text-blue-600"
+                                                        )}>
+                                                            {guest.priority || 'B'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <span className={cn(
+                                                            "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                                                            guest.rsvp_status === 'accepted' ? "bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20" :
+                                                                guest.rsvp_status === 'declined' ? "bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20" : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20"
+                                                        )}>
+                                                            {guest.rsvp_status.charAt(0).toUpperCase() + guest.rsvp_status.slice(1)}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        {guest.rsvp_status === 'accepted' && guest.meal_preference ? (
+                                                            <div className="flex items-center gap-1.5 text-foreground">
+                                                                <Utensils className="w-3.5 h-3.5 text-muted-foreground" />
+                                                                {guest.meal_preference}
+                                                            </div>
+                                                        ) : <span className="text-muted-foreground">-</span>}
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        {guest.rsvp_status === 'accepted' && guest.table_assignment ? (
+                                                            <div className="flex items-center gap-1.5 text-foreground">
+                                                                <Armchair className="w-3.5 h-3.5 text-muted-foreground" />
+                                                                {guest.table_assignment}
+                                                            </div>
+                                                        ) : <span className="text-muted-foreground text-xs italic">Unassigned</span>}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-muted-foreground">
+                                                        <div className="flex items-center gap-2">
+                                                            <Users className="w-3.5 h-3.5 text-muted-foreground/70" />
+                                                            <span>{1 + (guest.companion_guest_count || 0)}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 flex items-center gap-2">
+                                                        <button onClick={() => handleOpenEdit(guest)} className="text-muted-foreground hover:text-primary transition-colors">
+                                                            <Edit2 className="w-4 h-4" />
+                                                        </button>
+                                                        <button onClick={() => confirmDelete(guest.id)} className="text-muted-foreground hover:text-red-600 transition-colors">
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {sortedGuests.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={9} className="p-8 text-center text-muted-foreground">No guests found matching this filter.</td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </>
+                        )}
+                    </div>
                 </div>
 
                 <GuestDialog
