@@ -352,7 +352,7 @@ export default function GuestPage() {
 
                 {/* Selection Bar - Sticky at bottom for mobile, floated on desktop */}
                 {selectedIds.size > 0 && (
-                    <div className="fixed bottom-4 left-4 right-4 md:relative md:bottom-auto md:left-auto md:right-auto z-40">
+                    <div className="fixed bottom-20 left-4 right-4 md:relative md:bottom-auto md:left-auto md:right-auto z-40">
                         <div className="bg-white/95 backdrop-blur-sm md:bg-muted/50 rounded-2xl md:rounded-xl p-2 border border-primary/20 md:border-border shadow-xl md:shadow-none flex flex-col md:flex-row md:items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
                             <div className="flex items-center justify-between px-2 md:px-3">
                                 <span className="text-xs font-bold text-primary md:text-muted-foreground uppercase tracking-tight">
