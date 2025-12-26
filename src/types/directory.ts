@@ -8,6 +8,8 @@ export interface DirectoryVendor {
     phone?: string;
     website?: string;
     price_estimate?: number;
+    pricing_type?: 'flat_rate' | 'per_person' | 'hourly' | 'per_item' | 'package' | 'tbd' | null;
+    pricing_unit?: string;
     notes?: string;
     created_at: string;
 }

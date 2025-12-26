@@ -19,6 +19,18 @@ const statusColors: Record<VendorStatus, string> = {
     declined: "bg-gray-100 text-gray-700",
 };
 
+const getPricingTypeLabel = (type: string): string => {
+    const labels: Record<string, string> = {
+        'flat_rate': ' (Flat Rate)',
+        'per_person': '/person',
+        'hourly': '/hour',
+        'per_item': '/item',
+        'package': ' (Package)',
+        'tbd': ' (TBD)'
+    };
+    return labels[type] || '';
+};
+
 export default function VendorCard({ vendor, onEdit, onDelete, isSelected, onToggleSelect, currencySymbol = '$' }: VendorCardProps) {
     const [showActions, setShowActions] = useState(false);
 
@@ -83,6 +95,14 @@ export default function VendorCard({ vendor, onEdit, onDelete, isSelected, onTog
                 {vendor.price_estimate && (
                     <div className="pt-2 mt-2 border-t border-gray-50 text-gray-900 font-medium">
                         Est: {currencySymbol}{vendor.price_estimate.toLocaleString()}
+                        {vendor.pricing_type && vendor.pricing_type !== 'tbd' && (
+                            <span className="text-sm text-gray-500 font-normal">
+                                {vendor.pricing_unit ? ` ${vendor.pricing_unit}` : getPricingTypeLabel(vendor.pricing_type)}
+                            </span>
+                        )}
+                        {vendor.pricing_type === 'tbd' && (
+                            <span className="text-sm text-gray-500 font-normal"> (TBD)</span>
+                        )}
                     </div>
                 )}
             </div>

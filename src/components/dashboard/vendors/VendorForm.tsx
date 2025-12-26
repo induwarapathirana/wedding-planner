@@ -37,9 +37,11 @@ export default function VendorForm({ weddingId, onClose, onSuccess, initialData 
         website: initialData?.website || "",
         status: initialData?.status || "researching",
         price_estimate: initialData?.price_estimate || undefined,
+        pricing_type: initialData?.pricing_type || null,
+        pricing_unit: initialData?.pricing_unit || "",
         notes: initialData?.notes || "",
     });
-    
+
     // New state for directory checkbox
     const [addToDirectory, setAddToDirectory] = useState(false);
 
@@ -60,13 +62,13 @@ export default function VendorForm({ weddingId, onClose, onSuccess, initialData 
                     .insert([{ ...formData, wedding_id: weddingId }])
                     .select()
                     .single();
-                
+
                 if (error) throw error;
 
                 // If checkbox is checked, add to Directory
                 if (addToDirectory) {
-                     const { data: { user } } = await supabase.auth.getUser();
-                     if (user) {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
                         await supabase.from('vendor_directory').insert([{
                             user_id: user.id,
                             category: formData.category,
@@ -78,7 +80,7 @@ export default function VendorForm({ weddingId, onClose, onSuccess, initialData 
                             price_estimate: formData.price_estimate,
                             notes: formData.notes
                         }]);
-                     }
+                    }
                 }
             }
             onSuccess();
@@ -181,6 +183,23 @@ export default function VendorForm({ weddingId, onClose, onSuccess, initialData 
                         </div>
 
                         <div>
+                            <label className="block text-sm font-medium mb-1">Pricing Type</label>
+                            <select
+                                value={formData.pricing_type || ""}
+                                onChange={e => setFormData({ ...formData, pricing_type: e.target.value as any })}
+                                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
+                            >
+                                <option value="">Not specified</option>
+                                <option value="flat_rate">Flat Rate</option>
+                                <option value="per_person">Per Person</option>
+                                <option value="hourly">Hourly</option>
+                                <option value="per_item">Per Item</option>
+                                <option value="package">Package Deal</option>
+                                <option value="tbd">To Be Determined</option>
+                            </select>
+                        </div>
+
+                        <div>
                             <label className="block text-sm font-medium mb-1">Price Estimate</label>
                             <input
                                 type="number"
@@ -191,6 +210,19 @@ export default function VendorForm({ weddingId, onClose, onSuccess, initialData 
                             />
                         </div>
 
+                        {formData.pricing_type && formData.pricing_type !== 'tbd' && (
+                            <div className="col-span-2">
+                                <label className="block text-sm font-medium mb-1">Custom Unit (Optional)</label>
+                                <input
+                                    value={formData.pricing_unit || ""}
+                                    onChange={e => setFormData({ ...formData, pricing_unit: e.target.value })}
+                                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
+                                    placeholder="e.g., per guest, per hour, per arrangement"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Leave blank to use the default pricing type label</p>
+                            </div>
+                        )}
+
                         <div className="col-span-2">
                             <label className="block text-sm font-medium mb-1">Notes</label>
                             <textarea
@@ -200,21 +232,21 @@ export default function VendorForm({ weddingId, onClose, onSuccess, initialData 
                                 placeholder="Add specific package details or questions..."
                             />
                         </div>
-                        </div>
+                    </div>
 
 
                     {!initialData && (
                         <div className="flex items-center gap-2 pt-2">
-                             <input 
+                            <input
                                 type="checkbox"
                                 id="addToDirectory"
                                 checked={addToDirectory}
                                 onChange={(e) => setAddToDirectory(e.target.checked)}
                                 className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
-                             />
-                             <label htmlFor="addToDirectory" className="text-sm text-gray-700 cursor-pointer select-none">
+                            />
+                            <label htmlFor="addToDirectory" className="text-sm text-gray-700 cursor-pointer select-none">
                                 Also save to my <strong>Vendor Directory</strong> for future weddings
-                             </label>
+                            </label>
                         </div>
                     )}
 

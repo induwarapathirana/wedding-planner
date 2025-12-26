@@ -30,7 +30,7 @@ export default function VendorsPage() {
     const [editingDirectoryVendor, setEditingDirectoryVendor] = useState<DirectoryVendor | undefined>(undefined);
     const [showDirectoryForm, setShowDirectoryForm] = useState(false);
     const [dirFormData, setDirFormData] = useState<NewDirectoryVendor>({
-        company_name: "", category: "Venue", contact_name: "", email: "", phone: "", website: "", notes: "", price_estimate: 0
+        company_name: "", category: "Venue", contact_name: "", email: "", phone: "", website: "", notes: "", price_estimate: 0, pricing_type: null, pricing_unit: ""
     });
 
     // Shared State
@@ -141,7 +141,7 @@ export default function VendorsPage() {
     const openDirectoryCreate = () => {
         setEditingDirectoryVendor(undefined);
         setDirFormData({
-            company_name: "", category: "Venue", contact_name: "", email: "", phone: "", website: "", notes: "", price_estimate: 0
+            company_name: "", category: "Venue", contact_name: "", email: "", phone: "", website: "", notes: "", price_estimate: 0, pricing_type: null, pricing_unit: ""
         });
         setShowDirectoryForm(true);
     };
@@ -156,7 +156,9 @@ export default function VendorsPage() {
             phone: vendor.phone,
             website: vendor.website,
             notes: vendor.notes,
-            price_estimate: vendor.price_estimate
+            price_estimate: vendor.price_estimate,
+            pricing_type: vendor.pricing_type || null,
+            pricing_unit: vendor.pricing_unit || ""
         });
         setShowDirectoryForm(true);
     };
@@ -507,6 +509,48 @@ export default function VendorsPage() {
                                     onChange={e => setDirFormData({ ...dirFormData, website: e.target.value })}
                                 />
                             </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Pricing Type</label>
+                                    <select
+                                        className="w-full p-2 border rounded-lg"
+                                        value={dirFormData.pricing_type || ''}
+                                        onChange={e => setDirFormData({ ...dirFormData, pricing_type: e.target.value as any })}
+                                    >
+                                        <option value="">Not specified</option>
+                                        <option value="flat_rate">Flat Rate</option>
+                                        <option value="per_person">Per Person</option>
+                                        <option value="hourly">Hourly</option>
+                                        <option value="per_item">Per Item</option>
+                                        <option value="package">Package Deal</option>
+                                        <option value="tbd">To Be Determined</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Price Estimate</label>
+                                    <input
+                                        type="number"
+                                        className="w-full p-2 border rounded-lg"
+                                        value={dirFormData.price_estimate || ''}
+                                        onChange={e => setDirFormData({ ...dirFormData, price_estimate: parseFloat(e.target.value) })}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                            </div>
+
+                            {dirFormData.pricing_type && dirFormData.pricing_type !== 'tbd' && (
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Custom Unit (Optional)</label>
+                                    <input
+                                        className="w-full p-2 border rounded-lg"
+                                        value={dirFormData.pricing_unit || ''}
+                                        onChange={e => setDirFormData({ ...dirFormData, pricing_unit: e.target.value })}
+                                        placeholder="e.g., per guest, per hour, per arrangement"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Leave blank to use the default pricing type label</p>
+                                </div>
+                            )}
 
                             <div className="flex justify-end gap-3 mt-6">
                                 <button
