@@ -410,7 +410,7 @@ export default function VendorsPage() {
                                             setEditingVendor(v);
                                             setShowForm(true);
                                         }}
-                                        onDelete={handleDeleteVendor}
+                                        onDelete={confirmDelete}
                                         isSelected={selectedIds.has(vendor.id)}
                                         onToggleSelect={() => toggleSelection(vendor.id)}
                                         currencySymbol={symbol}
