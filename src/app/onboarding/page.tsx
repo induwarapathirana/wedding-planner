@@ -56,7 +56,7 @@ export default function OnboardingPage() {
             couple_name_2: partnerTwo,
             wedding_date: date,
             style_theme: 'Elegant', // default
-            tier: 'premium', // Start with premium tier during trial
+            tier: 'free', // Start with free tier, effective tier will be premium during trial
             premium_trial_ends_at: trialEndsAt.toISOString()
         }).select().single();
 
