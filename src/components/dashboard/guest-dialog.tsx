@@ -42,7 +42,36 @@ export function GuestDialog({ isOpen, onClose, onSubmit, initialData, customGrou
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        // ... (rest of effect)
+        if (isOpen) {
+            if (initialData) {
+                setFormData({
+                    ...initialData,
+                    companion_guest_count: initialData.companion_guest_count || 0,
+                    companion_names: initialData.companion_names || []
+                });
+
+                const isCustomGroup = initialData.group_category && !DEFAULT_GROUPS.includes(initialData.group_category);
+                setIsCustom(!!isCustomGroup);
+                if (isCustomGroup) {
+                    setCustomValue(initialData.group_category);
+                } else {
+                    setCustomValue("");
+                }
+            } else {
+                setFormData({
+                    name: "",
+                    group_category: "Bride Family",
+                    priority: "B",
+                    rsvp_status: "pending",
+                    meal_preference: "",
+                    table_assignment: "",
+                    companion_guest_count: 0,
+                    companion_names: [],
+                });
+                setIsCustom(false);
+                setCustomValue("");
+            }
+        }
     }, [initialData, isOpen]);
 
     // Helper to update specific companion name
