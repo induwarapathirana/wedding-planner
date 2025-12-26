@@ -334,18 +334,25 @@ export default function BudgetPage() {
                     /* SIMPLE MODE: Clean List */
                     <div className="divide-y divide-border">
                         {filteredItems.map((item) => (
-                            <div key={item.id} className={cn("flex flex-col md:flex-row md:items-center justify-between p-4 md:p-6 hover:bg-muted/30 transition-colors", selectedIds.has(item.id) && "bg-muted/50")}>
+                            <div
+                                key={item.id}
+                                onClick={() => handleOpenEdit(item)}
+                                className={cn(
+                                    "flex flex-col md:flex-row md:items-center justify-between p-4 md:p-6 hover:bg-muted/30 transition-colors cursor-pointer group",
+                                    selectedIds.has(item.id) && "bg-muted/50"
+                                )}
+                            >
                                 <div className="flex items-start md:items-center gap-3 md:gap-4 mb-3 md:mb-0">
-                                    <button onClick={() => toggleSelect(item.id)} className="text-muted-foreground hover:text-primary mt-0.5 md:mt-0">
+                                    <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground hover:text-primary mt-0.5 md:mt-0">
                                         {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
                                     </button>
 
-                                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0 group-hover:bg-primary/20 transition-colors">
                                         <Wallet className="w-5 h-5" />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
-                                            <p className="font-semibold text-foreground truncate">{item.item_name}</p>
+                                            <p className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">{item.item_name}</p>
                                             <span className="inline-flex items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 uppercase tracking-tight">
                                                 {item.category}
                                             </span>
@@ -374,10 +381,10 @@ export default function BudgetPage() {
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-1 md:gap-2">
-                                        <button onClick={() => handleOpenEdit(item)} className="p-2 text-muted-foreground hover:text-primary transition-colors">
+                                        <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
                                             <Edit2 className="w-4 h-4" />
                                         </button>
-                                        <button onClick={() => confirmDelete(item.id)} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
+                                        <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
                                             <Trash2 className="w-4 h-4" />
                                         </button>
                                     </div>
@@ -392,24 +399,31 @@ export default function BudgetPage() {
                         {/* Mobile Card View */}
                         <div className="md:hidden divide-y divide-border">
                             {filteredItems.map((item) => (
-                                <div key={item.id} className={cn("p-4 hover:bg-muted/30 transition-colors", selectedIds.has(item.id) && "bg-muted/50")}>
+                                <div
+                                    key={item.id}
+                                    onClick={() => handleOpenEdit(item)}
+                                    className={cn(
+                                        "p-4 hover:bg-muted/30 transition-colors cursor-pointer group",
+                                        selectedIds.has(item.id) && "bg-muted/50"
+                                    )}
+                                >
                                     <div className="flex items-start justify-between mb-4">
                                         <div className="flex items-center gap-3">
-                                            <button onClick={() => toggleSelect(item.id)} className="text-muted-foreground pt-0.5">
+                                            <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground pt-0.5 hover:text-primary">
                                                 {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
                                             </button>
                                             <div>
-                                                <p className="font-bold text-foreground">{item.item_name}</p>
+                                                <p className="font-bold text-foreground group-hover:text-primary transition-colors">{item.item_name}</p>
                                                 <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-1">
                                                     {item.category}
                                                 </span>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-1">
-                                            <button onClick={() => handleOpenEdit(item)} className="p-2 text-muted-foreground">
+                                            <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
                                                 <Edit2 className="w-4 h-4" />
                                             </button>
-                                            <button onClick={() => confirmDelete(item.id)} className="p-2 text-muted-foreground">
+                                            <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
@@ -473,14 +487,21 @@ export default function BudgetPage() {
                                 </thead>
                                 <tbody className="divide-y divide-border">
                                     {filteredItems.map((item) => (
-                                        <tr key={item.id} className={cn("hover:bg-muted/30 transition-colors", selectedIds.has(item.id) && "bg-muted/50")}>
+                                        <tr
+                                            key={item.id}
+                                            onClick={() => handleOpenEdit(item)}
+                                            className={cn(
+                                                "hover:bg-muted/30 transition-colors cursor-pointer group",
+                                                selectedIds.has(item.id) && "bg-muted/50"
+                                            )}
+                                        >
                                             <td className="px-6 py-4">
-                                                <button onClick={() => toggleSelect(item.id)} className="text-muted-foreground hover:text-primary">
+                                                <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground hover:text-primary">
                                                     {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-4 h-4" />}
                                                 </button>
                                             </td>
                                             <td className="px-6 py-4 font-medium text-foreground">
-                                                <div>{item.item_name}</div>
+                                                <div className="group-hover:text-primary transition-colors">{item.item_name}</div>
                                                 {item.unit_price && item.unit_price > 0 && (
                                                     <div className="text-[10px] text-muted-foreground font-normal">
                                                         {formatMoney(item.unit_price)} × {item.units || 1}
@@ -501,10 +522,10 @@ export default function BudgetPage() {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 flex items-center gap-2">
-                                                <button onClick={() => handleOpenEdit(item)} className="text-muted-foreground hover:text-primary transition-colors">
+                                                <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="text-muted-foreground hover:text-primary transition-colors">
                                                     <Edit2 className="w-4 h-4" />
                                                 </button>
-                                                <button onClick={() => confirmDelete(item.id)} className="text-muted-foreground hover:text-red-600 transition-colors">
+                                                <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="text-muted-foreground hover:text-red-600 transition-colors">
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </td>
