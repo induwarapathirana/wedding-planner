@@ -11,6 +11,8 @@ import { CURRENCIES } from "@/lib/constants";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+import { TourGuide } from "@/components/dashboard/TourGuide";
+import { BUDGET_STEPS } from "@/lib/tours";
 
 type BudgetItem = {
     id: string;

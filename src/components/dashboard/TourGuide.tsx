@@ -10,7 +10,7 @@ interface TourGuideProps {
     pageKey: string;
 }
 
-export default function TourGuide({ steps, pageKey }: TourGuideProps) {
+export function TourGuide({ steps, pageKey }: TourGuideProps) {
     const tourRef = useRef<ReturnType<typeof driver> | null>(null);
 
     useEffect(() => {
