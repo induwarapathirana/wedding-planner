@@ -56,7 +56,7 @@ export default function ItineraryPage() {
 
     const fetchEvents = async (wId: string) => {
         const { data, error } = await supabase
-            .from('itinerary')
+            .from('events')
             .select('*')
             .eq('wedding_id', wId)
             .order('start_time', { ascending: true });
@@ -77,13 +77,13 @@ export default function ItineraryPage() {
     const executeDelete = async () => {
         if (confirmState.type === 'bulk') {
             const idsToDelete = Array.from(selectedIds);
-            const { error } = await supabase.from('itinerary').delete().in('id', idsToDelete);
+            const { error } = await supabase.from('events').delete().in('id', idsToDelete);
             if (!error && weddingId) {
                 setSelectedIds(new Set());
                 fetchEvents(weddingId);
             }
         } else if (confirmState.id) {
-            const { error } = await supabase.from('itinerary').delete().eq('id', confirmState.id);
+            const { error } = await supabase.from('events').delete().eq('id', confirmState.id);
             if (!error && weddingId) {
                 fetchEvents(weddingId);
             }

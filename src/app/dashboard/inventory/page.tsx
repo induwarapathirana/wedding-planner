@@ -56,7 +56,7 @@ export default function InventoryPage() {
 
     const fetchItems = async (wId: string) => {
         const { data, error } = await supabase
-            .from('inventory')
+            .from('inventory_items')
             .select('*')
             .eq('wedding_id', wId)
             .order('created_at', { ascending: false });
@@ -72,7 +72,7 @@ export default function InventoryPage() {
 
     const executeDelete = async () => {
         if (!confirmState.id) return;
-        const { error } = await supabase.from('inventory').delete().eq('id', confirmState.id);
+        const { error } = await supabase.from('inventory_items').delete().eq('id', confirmState.id);
         if (!error && weddingId) {
             fetchItems(weddingId);
         }
@@ -90,7 +90,7 @@ export default function InventoryPage() {
         const nextStatus = statuses[(currentIndex + 1) % statuses.length];
 
         const { error } = await supabase
-            .from('inventory')
+            .from('inventory_items')
             .update({ status: nextStatus })
             .eq('id', item.id);
 
