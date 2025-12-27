@@ -5,11 +5,83 @@ import { supabase } from "@/lib/supabase";
 import { Plus, Package, Search, Pencil, Trash2 } from "lucide-react";
 import { InventoryItem } from "@/types/inventory";
 import InventoryItemRow from "@/components/dashboard/inventory/InventoryItem";
+import InventoryForm from "@/components/dashboard/inventory/InventoryForm";
+import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+import { CURRENCIES } from "@/lib/constants";
 import { TourGuide } from "@/components/dashboard/TourGuide";
 import { INVENTORY_STEPS } from "@/lib/tours";
 
 export default function InventoryPage() {
-    // ... (existing code) ...
+    const [items, setItems] = useState<InventoryItem[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [showForm, setShowForm] = useState(false);
+    const [editingItem, setEditingItem] = useState<InventoryItem | undefined>(undefined);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [confirmState, setConfirmState] = useState<{ isOpen: boolean; id?: string }>({ isOpen: false });
+    const [weddingId, setWeddingId] = useState<string | null>(null);
+    const [currency, setCurrency] = useState('USD');
+
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    const loadData = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: wedding } = await supabase
+            .from('weddings')
+            .select('id, currency')
+            .eq('user_id', user.id)
+            .single();
+
+        if (wedding) {
+            setWeddingId(wedding.id);
+            setCurrency(wedding.currency || 'USD');
+            fetchItems(wedding.id);
+        }
+        setLoading(false);
+    };
+
+    const fetchItems = async (wId: string) => {
+        const { data, error } = await supabase
+            .from('inventory')
+            .select('*')
+            .eq('wedding_id', wId)
+            .order('created_at', { ascending: false });
+
+        if (!error && data) {
+            setItems(data as InventoryItem[]);
+        }
+    };
+
+    const confirmDelete = (id: string) => {
+        setConfirmState({ isOpen: true, id });
+    };
+
+    const executeDelete = async () => {
+        if (!confirmState.id) return;
+        const { error } = await supabase.from('inventory').delete().eq('id', confirmState.id);
+        if (!error && weddingId) {
+            fetchItems(weddingId);
+        }
+        setConfirmState({ isOpen: false });
+    };
+
+    const openEdit = (item: InventoryItem) => {
+        setEditingItem(item);
+        setShowForm(true);
+    };
+
+    const symbol = CURRENCIES.find(c => c.code === currency)?.symbol || '$';
+    const filteredItems = items.filter(item =>
+        item.item_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.category?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const totalItems = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    const totalCost = items.reduce((sum, item) => sum + (item.estimated_cost || 0) * (item.quantity || 1), 0);
+    const packedCount = items.filter(i => i.status === 'packed').length;
 
     return (
         <div className="space-y-6">
@@ -86,7 +158,7 @@ export default function InventoryPage() {
                     </button>
                 </div>
             ) : (
-                <div id="tour-inventory-list" className="bg-white border boundary-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <div id="tour-inventory-list" className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                     {/* Desktop Table View */}
                     <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left">
@@ -101,17 +173,13 @@ export default function InventoryPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {filteredItems.map(item => (
+                                {filteredItems.map((item) => (
                                     <InventoryItemRow
                                         key={item.id}
                                         item={item}
-                                        onEdit={(i) => {
-                                            setEditingItem(i);
-                                            setShowForm(true);
-                                        }}
-                                        onDelete={handleDelete}
-                                        onToggleStatus={handleToggleStatus}
-                                        currencySymbol={symbol} // Passing symbol
+                                        onEdit={openEdit}
+                                        onDelete={confirmDelete}
+                                        currencySymbol={symbol}
                                     />
                                 ))}
                             </tbody>
@@ -120,64 +188,51 @@ export default function InventoryPage() {
 
                     {/* Mobile Card View */}
                     <div className="md:hidden divide-y divide-gray-100">
-                        {filteredItems.map(item => (
+                        {filteredItems.map((item) => (
                             <div
                                 key={item.id}
-                                onClick={() => {
-                                    setEditingItem(item);
-                                    setShowForm(true);
-                                }}
-                                className="p-4 space-y-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                                onClick={() => openEdit(item)}
+                                className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
                             >
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <div className="font-bold text-gray-900">{item.name}</div>
-                                        <div className="text-xs text-gray-500 mt-0.5">{item.category}</div>
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="flex-1">
+                                        <h3 className="font-semibold text-gray-900">{item.item_name}</h3>
+                                        {item.category && (
+                                            <p className="text-xs text-gray-500 mt-0.5">{item.category}</p>
+                                        )}
                                     </div>
-
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); handleToggleStatus(item); }}
-                                        className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide border ${item.status === 'packed'
-                                            ? 'bg-green-50 text-green-700 border-green-200'
-                                            : 'bg-white text-gray-500 border-gray-200'
-                                            }`}
-                                    >
-                                        {item.status}
-                                    </button>
+                                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${item.status === 'packed' ? 'bg-green-100 text-green-700' :
+                                            item.status === 'ordered' ? 'bg-blue-100 text-blue-700' :
+                                                'bg-gray-100 text-gray-600'
+                                        }`}>
+                                        {item.status || 'pending'}
+                                    </span>
                                 </div>
-
-                                <div className="flex justify-between items-center text-sm text-gray-600">
-                                    <div className="flex gap-4">
-                                        <div>
-                                            <span className="text-gray-400 text-xs uppercase mr-1">Qty</span>
-                                            <span className="font-medium">{item.quantity}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-gray-400 text-xs uppercase mr-1">Cost</span>
-                                            <span className="font-medium">{symbol}{(item.quantity * item.unit_cost).toLocaleString()}</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-1">
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setEditingItem(item);
-                                                setShowForm(true);
-                                            }}
-                                            className="p-2 text-gray-400 hover:text-blue-600 bg-gray-50 rounded-lg"
-                                        >
-                                            <Pencil className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (confirm("Delete this item?")) handleDelete(item.id);
-                                            }}
-                                            className="p-2 text-gray-400 hover:text-red-600 bg-gray-50 rounded-lg"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-500">Qty: {item.quantity || 1}</span>
+                                    <span className="font-semibold text-gray-900">
+                                        {symbol}{((item.estimated_cost || 0) * (item.quantity || 1)).toLocaleString()}
+                                    </span>
+                                </div>
+                                <div className="flex gap-2 mt-3">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            openEdit(item);
+                                        }}
+                                        className="p-2 text-gray-400 hover:text-primary bg-gray-50 rounded-lg"
+                                    >
+                                        <Pencil className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            confirmDelete(item.id);
+                                        }}
+                                        className="p-2 text-gray-400 hover:text-red-600 bg-gray-50 rounded-lg"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
                                 </div>
                             </div>
                         ))}
@@ -199,6 +254,15 @@ export default function InventoryPage() {
                     onSuccess={() => fetchItems(weddingId)}
                 />
             )}
+
+            <ConfirmDialog
+                isOpen={confirmState.isOpen}
+                onClose={() => setConfirmState({ isOpen: false })}
+                onConfirm={executeDelete}
+                title="Delete Item?"
+                description="Are you sure you want to delete this item? This action cannot be undone."
+                variant="danger"
+            />
         </div>
     );
 }
