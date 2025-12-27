@@ -17,8 +17,212 @@ import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { TourGuide } from "@/components/dashboard/TourGuide";
 import { VENDOR_STEPS } from "@/lib/tours";
 
+import DirectoryImportModal from "@/components/dashboard/vendors/DirectoryImportModal";
+
+const CATEGORIES = [
+    "Venue", "Catering", "Photography", "Videography",
+    "Florist", "Music/DJ", "Attire", "Hair & Makeup",
+    "Officiant", "Planner", "Stationery", "Transport",
+    "Cake", "Favors", "Other"
+];
+
 export default function VendorsPage() {
-    // ... (existing code) ...
+    const [vendors, setVendors] = useState<Vendor[]>([]);
+    const [directoryVendors, setDirectoryVendors] = useState<DirectoryVendor[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<'wedding' | 'directory'>('wedding');
+    const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
+    const [filterCategory, setFilterCategory] = useState('All');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    // Modals
+    const [showForm, setShowForm] = useState(false);
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [showLimitModal, setShowLimitModal] = useState(false);
+    const [editingVendor, setEditingVendor] = useState<Vendor | undefined>(undefined);
+    const [confirmState, setConfirmState] = useState<{ isOpen: boolean; type: 'single' | 'bulk' | 'directory_single'; id?: string }>({ isOpen: false, type: 'single' });
+
+    // Directory Form
+    const [showDirectoryForm, setShowDirectoryForm] = useState(false);
+    const [editingDirectoryVendor, setEditingDirectoryVendor] = useState<DirectoryVendor | undefined>(undefined);
+    const [dirFormData, setDirFormData] = useState<Partial<NewDirectoryVendor>>({});
+
+    const [weddingId, setWeddingId] = useState<string | null>(null);
+    const [tier, setTier] = useState<PlanTier>('free');
+    const [currency, setCurrency] = useState('USD');
+
+    useEffect(() => {
+        const fetchUser = async () => {
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return; // Handle auth redirect matching your app flow
+
+                // Check collaborator
+                const { data: collab } = await supabase.from('collaborators').select('wedding_id').eq('user_id', user.id).single();
+                if (collab) {
+                    setWeddingId(collab.wedding_id);
+                    // Fetch wedding details (tier/currency) and vendors
+                    await fetchWeddingDetails(collab.wedding_id);
+                    await fetchVendors(collab.wedding_id);
+                } else {
+                    // Try to find wedding if owner (legacy/direct)
+                    const { data: wedding } = await supabase.from('weddings').select('id').eq('owner_id', user.id).single();
+                    if (wedding) {
+                        setWeddingId(wedding.id);
+                        await fetchWeddingDetails(wedding.id);
+                        await fetchVendors(wedding.id);
+                    }
+                }
+            } catch (error) {
+                console.error("Error fetching user:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchUser();
+    }, []);
+
+    const fetchWeddingDetails = async (wId: string) => {
+        const { data } = await supabase.from('weddings').select('tier, currency').eq('id', wId).single();
+        if (data) {
+            setTier((data.tier as PlanTier) || 'free');
+            setCurrency(data.currency || 'USD');
+        }
+    };
+
+    const fetchVendors = async (wId: string) => {
+        setLoading(true);
+        // Fetch Wedding Vendors
+        const { data: vData } = await supabase.from('vendors').select('*').eq('wedding_id', wId).order('created_at', { ascending: false });
+        if (vData) setVendors(vData as Vendor[]);
+
+        // Fetch Directory Vendors
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            const { data: dData } = await supabase.from('directory_vendors').select('*').eq('user_id', user.id).order('company_name', { ascending: true });
+            if (dData) setDirectoryVendors(dData as DirectoryVendor[]);
+        }
+        setLoading(false);
+    };
+
+    const handleStatusUpdate = async (id: string, status: 'researching' | 'contacted' | 'hired' | 'declined') => {
+        const { error } = await supabase.from('vendors').update({ status }).eq('id', id);
+        if (error) {
+            console.error("Error updating status:", error);
+            alert("Failed to update status");
+        } else {
+            setVendors(vendors.map(v => v.id === id ? { ...v, status } : v));
+        }
+    };
+
+    const confirmDelete = (id: string) => {
+        setConfirmState({ isOpen: true, type: 'single', id });
+    };
+
+    const confirmDirectoryDelete = (id: string) => {
+        setConfirmState({ isOpen: true, type: 'directory_single', id });
+    };
+
+    const confirmBulkDelete = () => {
+        setConfirmState({ isOpen: true, type: 'bulk' });
+    };
+
+    const executeDelete = async () => {
+        if (confirmState.type === 'single' && confirmState.id) {
+            const { error } = await supabase.from('vendors').delete().eq('id', confirmState.id);
+            if (!error) {
+                setVendors(vendors.filter(v => v.id !== confirmState.id));
+                setSelectedIds(prev => { const next = new Set(prev); next.delete(confirmState.id!); return next; });
+            }
+        } else if (confirmState.type === 'directory_single' && confirmState.id) {
+            const { error } = await supabase.from('directory_vendors').delete().eq('id', confirmState.id);
+            if (!error) {
+                setDirectoryVendors(directoryVendors.filter(v => v.id !== confirmState.id));
+            }
+        } else if (confirmState.type === 'bulk') {
+            const ids = Array.from(selectedIds);
+            const { error } = await supabase.from('vendors').delete().in('id', ids);
+            if (!error) {
+                setVendors(vendors.filter(v => !selectedIds.has(v.id)));
+                setSelectedIds(new Set());
+            }
+        }
+        setConfirmState({ ...confirmState, isOpen: false });
+    };
+
+    // Directory Form Handlers
+    const openDirectoryCreate = () => {
+        setEditingDirectoryVendor(undefined);
+        setDirFormData({ category: 'Other', pricing_type: 'tbd' });
+        setShowDirectoryForm(true);
+    };
+
+    const openDirectoryEdit = (vendor: DirectoryVendor) => {
+        setEditingDirectoryVendor(vendor);
+        setDirFormData({
+            company_name: vendor.company_name,
+            category: vendor.category,
+            contact_name: vendor.contact_name,
+            email: vendor.email,
+            phone: vendor.phone,
+            website: vendor.website,
+            price_estimate: vendor.price_estimate,
+            pricing_type: vendor.pricing_type,
+            pricing_unit: vendor.pricing_unit,
+            notes: vendor.notes
+        });
+        setShowDirectoryForm(true);
+    };
+
+    const handleDirectorySubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const payload = {
+            ...dirFormData,
+            user_id: user.id
+        } as any; // Casting to avoid strict type checks for missing optional fields if any
+
+        if (editingDirectoryVendor) {
+            const { error } = await supabase.from('directory_vendors').update(payload).eq('id', editingDirectoryVendor.id);
+            if (error) alert(error.message);
+        } else {
+            const { error } = await supabase.from('directory_vendors').insert(payload);
+            if (error) alert(error.message);
+        }
+        setShowDirectoryForm(false);
+        if (weddingId) fetchVendors(weddingId);
+    };
+
+    // Selection
+    const toggleSelectAll = () => {
+        if (selectedIds.size === vendors.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(vendors.map(v => v.id)));
+        }
+    };
+
+    const toggleSelect = (id: string) => {
+        const newSet = new Set(selectedIds);
+        if (newSet.has(id)) newSet.delete(id);
+        else newSet.add(id);
+        setSelectedIds(newSet);
+    };
+
+    const getCurrencySymbol = (code: string) => {
+        return CURRENCIES.find(c => c.code === code)?.symbol || '$';
+    };
+
+    // Filtering
+    const displayedVendors = activeTab === 'wedding' ? vendors : directoryVendors;
+    const filteredVendors = displayedVendors.filter(v => {
+        const matchesCategory = filterCategory === 'All' || v.category === filterCategory;
+        // Search could be implemented here if searchQuery was used, but simpler to skip for now unless UI has search input
+        return matchesCategory;
+    });
 
     return (
         <div className="space-y-6">
@@ -274,171 +478,173 @@ export default function VendorsPage() {
                         )}
                     </div>
                 )}
-
-                {/* Wedding Vendor Form */}
-                {showForm && weddingId && (
-                    <VendorForm
-                        weddingId={weddingId}
-                        initialData={editingVendor}
-                        onClose={() => setShowForm(false)}
-                        onSuccess={() => fetchVendors(weddingId)}
-                    />
-                )}
-
-                {/* Directory Form */}
-                {showDirectoryForm && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-                        <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-xl">
-                            <h3 className="text-xl font-bold mb-4">{editingDirectoryVendor ? 'Edit Directory Contact' : 'Add to Directory'}</h3>
-                            <form onSubmit={handleDirectorySubmit} className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Company Name</label>
-                                    <input
-                                        required
-                                        className="w-full p-2 border rounded-lg"
-                                        value={dirFormData.company_name}
-                                        onChange={e => setDirFormData({ ...dirFormData, company_name: e.target.value })}
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1">Category</label>
-                                        <select
-                                            className="w-full p-2 border rounded-lg"
-                                            value={dirFormData.category}
-                                            onChange={e => setDirFormData({ ...dirFormData, category: e.target.value })}
-                                        >
-                                            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1">Contact Name</label>
-                                        <input
-                                            className="w-full p-2 border rounded-lg"
-                                            value={dirFormData.contact_name || ''}
-                                            onChange={e => setDirFormData({ ...dirFormData, contact_name: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1">Email</label>
-                                        <input
-                                            type="email"
-                                            className="w-full p-2 border rounded-lg"
-                                            value={dirFormData.email || ''}
-                                            onChange={e => setDirFormData({ ...dirFormData, email: e.target.value })}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1">Phone</label>
-                                        <input
-                                            className="w-full p-2 border rounded-lg"
-                                            value={dirFormData.phone || ''}
-                                            onChange={e => setDirFormData({ ...dirFormData, phone: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Website</label>
-                                    <input
-                                        className="w-full p-2 border rounded-lg"
-                                        value={dirFormData.website || ''}
-                                        onChange={e => setDirFormData({ ...dirFormData, website: e.target.value })}
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1">Pricing Type</label>
-                                        <select
-                                            className="w-full p-2 border rounded-lg"
-                                            value={dirFormData.pricing_type || ''}
-                                            onChange={e => setDirFormData({ ...dirFormData, pricing_type: e.target.value as any })}
-                                        >
-                                            <option value="">Not specified</option>
-                                            <option value="flat_rate">Flat Rate</option>
-                                            <option value="per_person">Per Person</option>
-                                            <option value="hourly">Hourly</option>
-                                            <option value="per_item">Per Item</option>
-                                            <option value="package">Package Deal</option>
-                                            <option value="tbd">To Be Determined</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1">Price Estimate</label>
-                                        <input
-                                            type="number"
-                                            className="w-full p-2 border rounded-lg"
-                                            value={dirFormData.price_estimate || ''}
-                                            onChange={e => setDirFormData({ ...dirFormData, price_estimate: parseFloat(e.target.value) })}
-                                            placeholder="0.00"
-                                        />
-                                    </div>
-                                </div>
-
-                                {dirFormData.pricing_type && dirFormData.pricing_type !== 'tbd' && (
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1">Custom Unit (Optional)</label>
-                                        <input
-                                            className="w-full p-2 border rounded-lg"
-                                            value={dirFormData.pricing_unit || ''}
-                                            onChange={e => setDirFormData({ ...dirFormData, pricing_unit: e.target.value })}
-                                            placeholder="e.g., per guest, per hour, per arrangement"
-                                        />
-                                        <p className="text-xs text-gray-500 mt-1">Leave blank to use the default pricing type label</p>
-                                    </div>
-                                )}
-
-                                <div className="flex justify-end gap-3 mt-6">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowDirectoryForm(false)}
-                                        className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
-                                    >
-                                        Save to Directory
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-                {showImportModal && weddingId && (
-                    <DirectoryImportModal
-                        isOpen={showImportModal}
-                        onClose={() => setShowImportModal(false)}
-                        weddingId={weddingId}
-                        onImportSuccess={() => fetchVendors(weddingId)}
-                    />
-                )}
-
-                <ConfirmDialog
-                    isOpen={confirmState.isOpen}
-                    onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
-                    onConfirm={executeDelete}
-                    title={confirmState.type === 'directory_single' ? "Remove from Directory?" : "Delete Vendor?"}
-                    description={confirmState.type === 'directory_single'
-                        ? "This will remove the vendor from your master list. It will NOT remove them from existing weddings."
-                        : confirmState.type === 'bulk'
-                            ? `Are you sure you want to delete ${selectedIds.size} vendors? This action cannot be undone.`
-                            : "Are you sure you want to delete this vendor? This action cannot be undone."}
-                    variant="danger"
-                />
-
-                <LimitModal
-                    isOpen={showLimitModal}
-                    onClose={() => setShowLimitModal(false)}
-                    feature="Vendors"
-                    limit={PLAN_LIMITS.free.vendors}
-                    tier={tier}
-                />
             </div>
-            );
+
+
+            {/* Wedding Vendor Form */}
+            {showForm && weddingId && (
+                <VendorForm
+                    weddingId={weddingId}
+                    initialData={editingVendor}
+                    onClose={() => setShowForm(false)}
+                    onSuccess={() => fetchVendors(weddingId)}
+                />
+            )}
+
+            {/* Directory Form */}
+            {showDirectoryForm && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-xl">
+                        <h3 className="text-xl font-bold mb-4">{editingDirectoryVendor ? 'Edit Directory Contact' : 'Add to Directory'}</h3>
+                        <form onSubmit={handleDirectorySubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Company Name</label>
+                                <input
+                                    required
+                                    className="w-full p-2 border rounded-lg"
+                                    value={dirFormData.company_name}
+                                    onChange={e => setDirFormData({ ...dirFormData, company_name: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Category</label>
+                                    <select
+                                        className="w-full p-2 border rounded-lg"
+                                        value={dirFormData.category}
+                                        onChange={e => setDirFormData({ ...dirFormData, category: e.target.value })}
+                                    >
+                                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Contact Name</label>
+                                    <input
+                                        className="w-full p-2 border rounded-lg"
+                                        value={dirFormData.contact_name || ''}
+                                        onChange={e => setDirFormData({ ...dirFormData, contact_name: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Email</label>
+                                    <input
+                                        type="email"
+                                        className="w-full p-2 border rounded-lg"
+                                        value={dirFormData.email || ''}
+                                        onChange={e => setDirFormData({ ...dirFormData, email: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Phone</label>
+                                    <input
+                                        className="w-full p-2 border rounded-lg"
+                                        value={dirFormData.phone || ''}
+                                        onChange={e => setDirFormData({ ...dirFormData, phone: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Website</label>
+                                <input
+                                    className="w-full p-2 border rounded-lg"
+                                    value={dirFormData.website || ''}
+                                    onChange={e => setDirFormData({ ...dirFormData, website: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Pricing Type</label>
+                                    <select
+                                        className="w-full p-2 border rounded-lg"
+                                        value={dirFormData.pricing_type || ''}
+                                        onChange={e => setDirFormData({ ...dirFormData, pricing_type: e.target.value as any })}
+                                    >
+                                        <option value="">Not specified</option>
+                                        <option value="flat_rate">Flat Rate</option>
+                                        <option value="per_person">Per Person</option>
+                                        <option value="hourly">Hourly</option>
+                                        <option value="per_item">Per Item</option>
+                                        <option value="package">Package Deal</option>
+                                        <option value="tbd">To Be Determined</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Price Estimate</label>
+                                    <input
+                                        type="number"
+                                        className="w-full p-2 border rounded-lg"
+                                        value={dirFormData.price_estimate || ''}
+                                        onChange={e => setDirFormData({ ...dirFormData, price_estimate: parseFloat(e.target.value) })}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                            </div>
+
+                            {dirFormData.pricing_type && dirFormData.pricing_type !== 'tbd' && (
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Custom Unit (Optional)</label>
+                                    <input
+                                        className="w-full p-2 border rounded-lg"
+                                        value={dirFormData.pricing_unit || ''}
+                                        onChange={e => setDirFormData({ ...dirFormData, pricing_unit: e.target.value })}
+                                        placeholder="e.g., per guest, per hour, per arrangement"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Leave blank to use the default pricing type label</p>
+                                </div>
+                            )}
+
+                            <div className="flex justify-end gap-3 mt-6">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDirectoryForm(false)}
+                                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+                                >
+                                    Save to Directory
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {showImportModal && weddingId && (
+                <DirectoryImportModal
+                    isOpen={showImportModal}
+                    onClose={() => setShowImportModal(false)}
+                    weddingId={weddingId}
+                    onImportSuccess={() => fetchVendors(weddingId)}
+                />
+            )}
+
+            <ConfirmDialog
+                isOpen={confirmState.isOpen}
+                onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
+                onConfirm={executeDelete}
+                title={confirmState.type === 'directory_single' ? "Remove from Directory?" : "Delete Vendor?"}
+                description={confirmState.type === 'directory_single'
+                    ? "This will remove the vendor from your master list. It will NOT remove them from existing weddings."
+                    : confirmState.type === 'bulk'
+                        ? `Are you sure you want to delete ${selectedIds.size} vendors? This action cannot be undone.`
+                        : "Are you sure you want to delete this vendor? This action cannot be undone."}
+                variant="danger"
+            />
+
+            <LimitModal
+                isOpen={showLimitModal}
+                onClose={() => setShowLimitModal(false)}
+                feature="Vendors"
+                limit={PLAN_LIMITS.free.vendors}
+                tier={tier}
+            />
+        </div>
+    );
 }
