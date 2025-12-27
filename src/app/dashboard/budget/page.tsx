@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { BudgetDialog } from "@/components/dashboard/budget-dialog";
 import { CURRENCIES } from "@/lib/constants";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
+import { getEffectiveTier } from "@/lib/trial";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { TourGuide } from "@/components/dashboard/TourGuide";
@@ -78,11 +79,13 @@ export default function BudgetPage() {
             if (wId) {
                 setWeddingId(wId);
                 // Fetch Settings (Currency & Tier)
-                const { data: wedding } = await supabase.from('weddings').select('currency, tier').eq('id', wId).single();
+                const { data: wedding } = await supabase.from('weddings').select('currency').eq('id', wId).single();
                 if (wedding) {
                     if (wedding.currency) setCurrency(wedding.currency);
-                    if (wedding.tier) setTier(wedding.tier as PlanTier);
                 }
+                // Use getEffectiveTier for proper trial/payment validation
+                const trialInfo = await getEffectiveTier(wId);
+                setTier(trialInfo.effectiveTier);
                 fetchBudget(wId);
             } else {
                 setLoading(false);

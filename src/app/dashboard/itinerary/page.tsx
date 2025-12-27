@@ -8,6 +8,7 @@ import TimelineItem from "@/components/dashboard/itinerary/TimelineItem";
 import EventForm from "@/components/dashboard/itinerary/EventForm";
 import { format } from "date-fns";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
+import { getEffectiveTier } from "@/lib/trial";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { TourGuide } from "@/components/dashboard/TourGuide";
 import { ITINERARY_STEPS } from "@/lib/tours";
@@ -40,7 +41,9 @@ export default function ItineraryPage() {
         if (wedding) {
             setWeddingId(wedding.id);
             setWeddingDate(wedding.wedding_date);
-            setTier(wedding.tier || 'free');
+            // Use getEffectiveTier for proper trial/payment validation
+            const trialInfo = await getEffectiveTier(wedding.id);
+            setTier(trialInfo.effectiveTier);
             fetchEvents(wedding.id);
         }
         setLoading(false);

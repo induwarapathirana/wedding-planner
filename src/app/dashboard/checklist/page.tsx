@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { ChecklistDialog } from "@/components/dashboard/checklist-dialog";
 import { useSearchParams } from "next/navigation";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
+import { getEffectiveTier } from "@/lib/trial";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
@@ -51,11 +52,9 @@ function ChecklistContent() {
 
             if (wId) {
                 setWeddingId(wId);
-                const { data } = await supabase.from('weddings').select('tier').eq('id', wId).single();
-                if (data) {
-                    currentTier = (data.tier as PlanTier) || 'free';
-                    setTier(currentTier);
-                }
+                // Use getEffectiveTier for proper trial/payment validation
+                const trialInfo = await getEffectiveTier(wId);
+                setTier(trialInfo.effectiveTier);
                 await fetchItems(wId);
             } else {
                 const { data: { user } } = await supabase.auth.getUser();
@@ -64,10 +63,9 @@ function ChecklistContent() {
                     if (collab) {
                         localStorage.setItem("current_wedding_id", collab.wedding_id);
                         setWeddingId(collab.wedding_id);
-
-                        const { data } = await supabase.from('weddings').select('tier').eq('id', collab.wedding_id).single();
-                        if (data) setTier((data.tier as PlanTier) || 'free');
-
+                        // Use getEffectiveTier for proper trial/payment validation
+                        const trialInfo = await getEffectiveTier(collab.wedding_id);
+                        setTier(trialInfo.effectiveTier);
                         await fetchItems(collab.wedding_id);
                     }
                 }

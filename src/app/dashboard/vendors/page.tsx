@@ -9,6 +9,7 @@ import VendorCard from "@/components/dashboard/vendors/VendorCard";
 import VendorTable from "@/components/dashboard/vendors/VendorTable";
 import VendorForm from "@/components/dashboard/vendors/VendorForm";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
+import { getEffectiveTier } from "@/lib/trial";
 import { CURRENCIES } from "@/lib/constants";
 
 import { LimitModal } from "@/components/dashboard/limit-modal";
@@ -84,11 +85,13 @@ export default function VendorsPage() {
     }, []);
 
     const fetchWeddingDetails = async (wId: string) => {
-        const { data } = await supabase.from('weddings').select('tier, currency').eq('id', wId).single();
+        const { data } = await supabase.from('weddings').select('currency').eq('id', wId).single();
         if (data) {
-            setTier((data.tier as PlanTier) || 'free');
             setCurrency(data.currency || 'USD');
         }
+        // Use getEffectiveTier for proper trial/payment validation
+        const trialInfo = await getEffectiveTier(wId);
+        setTier(trialInfo.effectiveTier);
     };
 
     const fetchVendors = async (wId: string) => {
