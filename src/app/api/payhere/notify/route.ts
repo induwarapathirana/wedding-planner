@@ -1,59 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase Admin client to bypass RLS for webhook updates
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-/**
- * Verify PayHere webhook signature
- * Formula: md5(merchant_id + order_id + payhere_amount + payhere_currency + status_code + md5(merchant_secret).toUpperCase()).toUpperCase()
- */
-function verifyPayHereSignature(
-    merchantId: string,
-    orderId: string,
-    amount: string,
-    currency: string,
-    statusCode: string,
-    receivedSignature: string
-): boolean {
-    const merchantSecret = process.env.PAYHERE_SECRET;
-
-    if (!merchantSecret) {
-        console.error("PAYHERE_SECRET not configured - cannot verify signature");
-        return false;
-    }
-
-    // 1. Hash the merchant secret
-    const hashedSecret = crypto
-        .createHash('md5')
-        .update(merchantSecret)
-        .digest('hex')
-        .toUpperCase();
-
-    // 2. Create the verification string
-    const stringToHash = merchantId + orderId + amount + currency + statusCode + hashedSecret;
-
-    // 3. Generate expected signature
-    const expectedSignature = crypto
-        .createHash('md5')
-        .update(stringToHash)
-        .digest('hex')
-        .toUpperCase();
-
-    // 4. Compare signatures (timing-safe comparison)
-    try {
-        return crypto.timingSafeEqual(
-            Buffer.from(expectedSignature),
-            Buffer.from(receivedSignature.toUpperCase())
-        );
-    } catch {
-        return false;
-    }
-}
+import { verifyPayHereSignature } from '@/lib/payhere';
 
 export async function POST(req: NextRequest) {
     try {
@@ -71,6 +18,13 @@ export async function POST(req: NextRequest) {
         console.log(`Order: ${order_id}, Status: ${status_code}`);
         console.log("--------------------------------------------------");
 
+        const merchantSecret = process.env.PAYHERE_SECRET;
+
+        if (!merchantSecret) {
+            console.error("PAYHERE_SECRET not configured");
+            return new NextResponse("Server Config Error", { status: 500 });
+        }
+
         // SECURITY: Verify the signature before processing
         if (!md5sig || !verifyPayHereSignature(
             merchant_id,
@@ -78,7 +32,8 @@ export async function POST(req: NextRequest) {
             payhere_amount,
             payhere_currency,
             status_code,
-            md5sig
+            md5sig,
+            merchantSecret
         )) {
             console.error("⚠️ SECURITY ALERT: Invalid PayHere signature - possible spoofing attempt!");
             return new NextResponse("Invalid signature", { status: 403 });
@@ -96,18 +51,47 @@ export async function POST(req: NextRequest) {
 
         // Status code 2 means Success
         if (status_code === '2') {
-            const { error } = await supabase.rpc('upgrade_wedding_tier', {
-                wedding_id: weddingId,
-                payment_id: order_id // Store the Order ID as proof of payment
+            // Initialize Supabase Admin client
+            // Use SERVICE_ROLE_KEY if available for direct DB update (bypassing RLS)
+            // Fallback to ANON_KEY which relies on RPC permissions
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+            const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+            const supabase = createClient(supabaseUrl, supabaseKey, {
+                auth: {
+                    autoRefreshToken: false,
+                    persistSession: false
+                }
             });
 
-            if (error) {
-                console.error("Failed to upgrade tier:", error);
-                // Note: Direct update will likely fail due to RLS without user context
-                // The RPC function handles this securely now
+            // Try Direct Update first (if Service Key exists)
+            if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+                const { error } = await supabase
+                    .from('weddings')
+                    .update({
+                        payment_id: order_id,
+                        tier: 'premium' // Ensure tier is set to premium
+                    })
+                    .eq('id', weddingId);
+
+                if (error) {
+                    console.error("DB Update Failed:", error);
+                    return new NextResponse("DB Update Failed", { status: 500 });
+                }
             } else {
-                console.log(`Wedding ${weddingId} upgraded to Premium!`);
+                // Fallback to RPC if only Anon Key
+                const { error } = await supabase.rpc('upgrade_wedding_tier', {
+                    wedding_id: weddingId,
+                    payment_id: order_id
+                });
+
+                if (error) {
+                    console.error("RPC Upgrade Failed:", error);
+                    return new NextResponse("RPC Failed", { status: 500 });
+                }
             }
+
+            console.log(`Wedding ${weddingId} upgraded to Premium!`);
         }
 
         return new NextResponse("OK", { status: 200 });
