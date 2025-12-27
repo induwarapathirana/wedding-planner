@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Plus, Package, Search, Pencil, Trash2 } from "lucide-react";
-import { InventoryItem } from "@/types/inventory";
+import { InventoryItem, ItemStatus } from "@/types/inventory";
 import InventoryItemRow from "@/components/dashboard/inventory/InventoryItem";
 import InventoryForm from "@/components/dashboard/inventory/InventoryForm";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
@@ -71,6 +71,21 @@ export default function InventoryPage() {
     const openEdit = (item: InventoryItem) => {
         setEditingItem(item);
         setShowForm(true);
+    };
+
+    const handleToggleStatus = async (item: InventoryItem) => {
+        const statuses: ItemStatus[] = ['needed', 'purchased', 'rented', 'borrowed', 'packed'];
+        const currentIndex = statuses.indexOf(item.status);
+        const nextStatus = statuses[(currentIndex + 1) % statuses.length];
+
+        const { error } = await supabase
+            .from('inventory')
+            .update({ status: nextStatus })
+            .eq('id', item.id);
+
+        if (!error && weddingId) {
+            fetchItems(weddingId);
+        }
     };
 
     const symbol = CURRENCIES.find(c => c.code === currency)?.symbol || '$';
@@ -179,6 +194,7 @@ export default function InventoryPage() {
                                         item={item}
                                         onEdit={openEdit}
                                         onDelete={confirmDelete}
+                                        onToggleStatus={handleToggleStatus}
                                         currencySymbol={symbol}
                                     />
                                 ))}
@@ -202,8 +218,10 @@ export default function InventoryPage() {
                                         )}
                                     </div>
                                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${item.status === 'packed' ? 'bg-green-100 text-green-700' :
-                                        item.status === 'ordered' ? 'bg-blue-100 text-blue-700' :
-                                            'bg-gray-100 text-gray-600'
+                                            item.status === 'purchased' ? 'bg-blue-100 text-blue-700' :
+                                                item.status === 'rented' ? 'bg-orange-100 text-orange-700' :
+                                                    item.status === 'borrowed' ? 'bg-purple-100 text-purple-700' :
+                                                        'bg-gray-100 text-gray-600'
                                         }`}>
                                         {item.status || 'pending'}
                                     </span>
