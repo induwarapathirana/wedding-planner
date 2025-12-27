@@ -75,12 +75,12 @@ export default function InventoryPage() {
 
     const symbol = CURRENCIES.find(c => c.code === currency)?.symbol || '$';
     const filteredItems = items.filter(item =>
-        item.item_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.category?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const totalItems = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
-    const totalCost = items.reduce((sum, item) => sum + (item.estimated_cost || 0) * (item.quantity || 1), 0);
+    const totalCost = items.reduce((sum, item) => sum + (item.unit_cost || 0) * (item.quantity || 1), 0);
     const packedCount = items.filter(i => i.status === 'packed').length;
 
     return (
@@ -196,14 +196,14 @@ export default function InventoryPage() {
                             >
                                 <div className="flex justify-between items-start mb-2">
                                     <div className="flex-1">
-                                        <h3 className="font-semibold text-gray-900">{item.item_name}</h3>
+                                        <h3 className="font-semibold text-gray-900">{item.name}</h3>
                                         {item.category && (
                                             <p className="text-xs text-gray-500 mt-0.5">{item.category}</p>
                                         )}
                                     </div>
                                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${item.status === 'packed' ? 'bg-green-100 text-green-700' :
-                                            item.status === 'ordered' ? 'bg-blue-100 text-blue-700' :
-                                                'bg-gray-100 text-gray-600'
+                                        item.status === 'ordered' ? 'bg-blue-100 text-blue-700' :
+                                            'bg-gray-100 text-gray-600'
                                         }`}>
                                         {item.status || 'pending'}
                                     </span>
@@ -211,7 +211,7 @@ export default function InventoryPage() {
                                 <div className="flex justify-between items-center text-sm">
                                     <span className="text-gray-500">Qty: {item.quantity || 1}</span>
                                     <span className="font-semibold text-gray-900">
-                                        {symbol}{((item.estimated_cost || 0) * (item.quantity || 1)).toLocaleString()}
+                                        {symbol}{((item.unit_cost || 0) * (item.quantity || 1)).toLocaleString()}
                                     </span>
                                 </div>
                                 <div className="flex gap-2 mt-3">
