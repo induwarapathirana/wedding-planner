@@ -13,6 +13,7 @@ import { getEffectiveTier } from "@/lib/trial";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { TourGuide } from "@/components/dashboard/TourGuide";
+import { TierGate } from "@/components/dashboard/TierGate";
 import { BUDGET_STEPS } from "@/lib/tours";
 
 type BudgetItem = {
@@ -216,219 +217,181 @@ export default function BudgetPage() {
     };
 
     return (
-        <div className="space-y-6 md:space-y-8 pb-20 md:pb-0">
-            {/* Header */}
-            <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                    <div className="flex items-center gap-4">
-                        <div>
-                            <h2 className="font-serif text-3xl font-bold text-foreground">Budget Tracker</h2>
-                            <p className="mt-1 text-muted-foreground">Manage your wedding expenses and payments.</p>
-                        </div>
-                        <ModeToggle />
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <TourGuide steps={BUDGET_STEPS} pageKey="budget" />
-                        <button
-                            onClick={() => setIsSearchVisible(!isSearchVisible)}
-                            className="md:hidden flex items-center justify-center h-10 w-10 rounded-xl border border-border bg-white text-gray-500 shadow-sm"
-                        >
-                            <Search className="w-4 h-4" />
-                        </button>
-                        <button
-                            id="tour-add-item"
-                            onClick={handleOpenAdd}
-                            className="flex-1 md:flex-none flex items-center justify-center gap-2 rounded-xl bg-primary px-4 md:px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all">
-                            <Plus className="w-4 h-4" />
-                            Add Item
-                        </button>
-                    </div>
-                </div>
-
-                {/* Search & Filter Bar */}
-                <div
-                    id="tour-status-filter"
-                    className={cn(
-                        "grid grid-cols-1 md:grid-cols-12 gap-3 transition-all duration-300",
-                        isSearchVisible ? "block" : "hidden md:grid"
-                    )}>
-                    <div className="md:col-span-7 relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <input
-                            type="text"
-                            placeholder="Search items..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
-                        />
-                    </div>
-                    <div className="md:col-span-5 flex gap-2">
-                        <div className="relative flex-1">
-                            <LayoutGrid className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                            <select
-                                value={selectedCategory}
-                                onChange={(e) => setSelectedCategory(e.target.value)}
-                                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm appearance-none cursor-pointer"
-                            >
-                                {categories.map(cat => (
-                                    <option key={cat} value={cat}>{cat === "All" ? "All Categories" : cat}</option>
-                                ))}
-                            </select>
-                        </div>
-                        {selectedIds.size > 0 && (
-                            <button
-                                onClick={confirmBulkDelete}
-                                className="flex items-center justify-center p-2.5 rounded-xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 transition-all shadow-sm"
-                                title="Delete Selected"
-                            >
-                                <Trash2 className="w-4 h-4" />
-                                <span className="ml-2 md:hidden">Delete ({selectedIds.size})</span>
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* Summary Cards */}
-            <div id="tour-budget-summary" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-                    <div className="flex items-center gap-4">
-                        <div className="rounded-full bg-blue-100 p-3 text-blue-600">
-                            <PieChart className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-muted-foreground">Total Estimated</p>
-                            <p className="text-2xl font-bold text-foreground">{formatMoney(totalEstimated)}</p>
-                        </div>
-                    </div>
-                </div>
-                <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-                    <div className="flex items-center gap-4">
-                        <div className="rounded-full bg-purple-100 p-3 text-purple-600">
-                            <TrendingUp className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-muted-foreground">Total Actual</p>
-                            <p className="text-2xl font-bold text-foreground">{formatMoney(totalActual)}</p>
-                        </div>
-                    </div>
-                </div>
-                <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-                    <div className="flex items-center gap-4">
-                        <div className="rounded-full bg-green-100 p-3 text-green-600">
-                            <DollarSign className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-muted-foreground">Paid So Far</p>
-                            <p className="text-2xl font-bold text-foreground">{formatMoney(totalPaid)}</p>
-                        </div>
-                    </div>
-                </div>
-                <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-                    <div className="flex items-center gap-4">
-                        <div className="rounded-full bg-amber-100 p-3 text-amber-600">
-                            <Wallet className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-muted-foreground">Remaining Due</p>
-                            <p className="text-2xl font-bold text-foreground">{formatMoney(totalPending)}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Main Content */}
-            <div id="tour-budget-list" className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
-                {mode === "simple" ? (
-                    /* SIMPLE MODE: Clean List */
-                    <div className="divide-y divide-border">
-                        {filteredItems.map((item) => (
-                            <div
-                                key={item.id}
-                                onClick={() => handleOpenEdit(item)}
-                                className={cn(
-                                    "flex flex-col md:flex-row md:items-center justify-between p-4 md:p-6 hover:bg-muted/30 transition-colors cursor-pointer group",
-                                    selectedIds.has(item.id) && "bg-muted/50"
-                                )}
-                            >
-                                <div className="flex items-start md:items-center gap-3 md:gap-4 mb-3 md:mb-0">
-                                    <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground hover:text-primary mt-0.5 md:mt-0">
-                                        {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
-                                    </button>
-
-                                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0 group-hover:bg-primary/20 transition-colors">
-                                        <Wallet className="w-5 h-5" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <p className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">{item.item_name}</p>
-                                            <span className="inline-flex items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 uppercase tracking-tight">
-                                                {item.category}
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-muted-foreground mt-0.5">
-                                            {item.unit_price && item.unit_price > 0 ? (
-                                                <span className="font-medium text-primary/80">
-                                                    {formatMoney(item.unit_price)} × {item.units || 1}
-                                                </span>
-                                            ) : (
-                                                <span>Standard Item</span>
-                                            )}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center justify-between md:justify-end gap-4 pl-10 md:pl-0">
-                                    <div className="text-right">
-                                        <p className={cn("font-bold text-base md:text-sm", item.is_paid ? "text-green-600" : "text-foreground")}>
-                                            {formatMoney(item.estimated_cost)}
-                                        </p>
-                                        <span className={cn(
-                                            "text-[10px] font-bold uppercase tracking-wider",
-                                            item.is_paid ? "text-green-600/70" : "text-amber-600/70"
-                                        )}>
-                                            {item.is_paid ? "Paid" : "Pending"}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-1 md:gap-2">
-                                        <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
-                                            <Edit2 className="w-4 h-4" />
-                                        </button>
-                                        <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </div>
+        <TierGate weddingId={weddingId} featureName="Budget Tracker">
+            <div className="space-y-6 md:space-y-8 pb-20 md:pb-0">
+                {/* Header */}
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                        <div className="flex items-center gap-4">
+                            <div>
+                                <h2 className="font-serif text-3xl font-bold text-foreground">Budget Tracker</h2>
+                                <p className="mt-1 text-muted-foreground">Manage your wedding expenses and payments.</p>
                             </div>
-                        ))}
-                        {filteredItems.length === 0 && <div className="p-8 text-center text-muted-foreground">No budget items found matching your filters.</div>}
+                            <ModeToggle />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <TourGuide steps={BUDGET_STEPS} pageKey="budget" />
+                            <button
+                                onClick={() => setIsSearchVisible(!isSearchVisible)}
+                                className="md:hidden flex items-center justify-center h-10 w-10 rounded-xl border border-border bg-white text-gray-500 shadow-sm"
+                            >
+                                <Search className="w-4 h-4" />
+                            </button>
+                            <button
+                                id="tour-add-item"
+                                onClick={handleOpenAdd}
+                                className="flex-1 md:flex-none flex items-center justify-center gap-2 rounded-xl bg-primary px-4 md:px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all">
+                                <Plus className="w-4 h-4" />
+                                Add Item
+                            </button>
+                        </div>
                     </div>
-                ) : (
-                    /* ADVANCED MODE: Responsive Layout */
-                    <>
-                        {/* Mobile Card View */}
-                        <div className="md:hidden divide-y divide-border">
+
+                    {/* Search & Filter Bar */}
+                    <div
+                        id="tour-status-filter"
+                        className={cn(
+                            "grid grid-cols-1 md:grid-cols-12 gap-3 transition-all duration-300",
+                            isSearchVisible ? "block" : "hidden md:grid"
+                        )}>
+                        <div className="md:col-span-7 relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <input
+                                type="text"
+                                placeholder="Search items..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                            />
+                        </div>
+                        <div className="md:col-span-5 flex gap-2">
+                            <div className="relative flex-1">
+                                <LayoutGrid className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                                <select
+                                    value={selectedCategory}
+                                    onChange={(e) => setSelectedCategory(e.target.value)}
+                                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm appearance-none cursor-pointer"
+                                >
+                                    {categories.map(cat => (
+                                        <option key={cat} value={cat}>{cat === "All" ? "All Categories" : cat}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            {selectedIds.size > 0 && (
+                                <button
+                                    onClick={confirmBulkDelete}
+                                    className="flex items-center justify-center p-2.5 rounded-xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 transition-all shadow-sm"
+                                    title="Delete Selected"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                    <span className="ml-2 md:hidden">Delete ({selectedIds.size})</span>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Summary Cards */}
+                <div id="tour-budget-summary" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+                        <div className="flex items-center gap-4">
+                            <div className="rounded-full bg-blue-100 p-3 text-blue-600">
+                                <PieChart className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-muted-foreground">Total Estimated</p>
+                                <p className="text-2xl font-bold text-foreground">{formatMoney(totalEstimated)}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+                        <div className="flex items-center gap-4">
+                            <div className="rounded-full bg-purple-100 p-3 text-purple-600">
+                                <TrendingUp className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-muted-foreground">Total Actual</p>
+                                <p className="text-2xl font-bold text-foreground">{formatMoney(totalActual)}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+                        <div className="flex items-center gap-4">
+                            <div className="rounded-full bg-green-100 p-3 text-green-600">
+                                <DollarSign className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-muted-foreground">Paid So Far</p>
+                                <p className="text-2xl font-bold text-foreground">{formatMoney(totalPaid)}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+                        <div className="flex items-center gap-4">
+                            <div className="rounded-full bg-amber-100 p-3 text-amber-600">
+                                <Wallet className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-muted-foreground">Remaining Due</p>
+                                <p className="text-2xl font-bold text-foreground">{formatMoney(totalPending)}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Main Content */}
+                <div id="tour-budget-list" className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
+                    {mode === "simple" ? (
+                        /* SIMPLE MODE: Clean List */
+                        <div className="divide-y divide-border">
                             {filteredItems.map((item) => (
                                 <div
                                     key={item.id}
                                     onClick={() => handleOpenEdit(item)}
                                     className={cn(
-                                        "p-4 hover:bg-muted/30 transition-colors cursor-pointer group",
+                                        "flex flex-col md:flex-row md:items-center justify-between p-4 md:p-6 hover:bg-muted/30 transition-colors cursor-pointer group",
                                         selectedIds.has(item.id) && "bg-muted/50"
                                     )}
                                 >
-                                    <div className="flex items-start justify-between mb-4">
-                                        <div className="flex items-center gap-3">
-                                            <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground pt-0.5 hover:text-primary">
-                                                {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
-                                            </button>
-                                            <div>
-                                                <p className="font-bold text-foreground group-hover:text-primary transition-colors">{item.item_name}</p>
-                                                <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-1">
+                                    <div className="flex items-start md:items-center gap-3 md:gap-4 mb-3 md:mb-0">
+                                        <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground hover:text-primary mt-0.5 md:mt-0">
+                                            {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
+                                        </button>
+
+                                        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0 group-hover:bg-primary/20 transition-colors">
+                                            <Wallet className="w-5 h-5" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">{item.item_name}</p>
+                                                <span className="inline-flex items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 uppercase tracking-tight">
                                                     {item.category}
                                                 </span>
                                             </div>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                {item.unit_price && item.unit_price > 0 ? (
+                                                    <span className="font-medium text-primary/80">
+                                                        {formatMoney(item.unit_price)} × {item.units || 1}
+                                                    </span>
+                                                ) : (
+                                                    <span>Standard Item</span>
+                                                )}
+                                            </p>
                                         </div>
-                                        <div className="flex items-center gap-1">
+                                    </div>
+                                    <div className="flex items-center justify-between md:justify-end gap-4 pl-10 md:pl-0">
+                                        <div className="text-right">
+                                            <p className={cn("font-bold text-base md:text-sm", item.is_paid ? "text-green-600" : "text-foreground")}>
+                                                {formatMoney(item.estimated_cost)}
+                                            </p>
+                                            <span className={cn(
+                                                "text-[10px] font-bold uppercase tracking-wider",
+                                                item.is_paid ? "text-green-600/70" : "text-amber-600/70"
+                                            )}>
+                                                {item.is_paid ? "Paid" : "Pending"}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-1 md:gap-2">
                                             <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
                                                 <Edit2 className="w-4 h-4" />
                                             </button>
@@ -437,147 +400,187 @@ export default function BudgetPage() {
                                             </button>
                                         </div>
                                     </div>
-
-                                    <div className="grid grid-cols-3 gap-2 mb-3">
-                                        <div className="bg-muted/30 px-2 py-2 rounded-xl border border-border/50 text-center">
-                                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight mb-1">Est.</p>
-                                            <span className="text-xs font-bold text-foreground">{formatMoney(item.estimated_cost)}</span>
-                                        </div>
-                                        <div className="bg-muted/30 px-2 py-2 rounded-xl border border-border/50 text-center">
-                                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight mb-1">Actual</p>
-                                            <span className="text-xs font-bold text-foreground">{item.actual_cost > 0 ? formatMoney(item.actual_cost) : '-'}</span>
-                                        </div>
-                                        <div className="bg-muted/30 px-2 py-2 rounded-xl border border-border/50 text-center">
-                                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight mb-1">Paid</p>
-                                            <span className="text-xs font-bold text-green-600">{item.paid_amount > 0 ? formatMoney(item.paid_amount) : '-'}</span>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center justify-between mt-2 pl-8">
-                                        <div className="flex items-center gap-4">
-                                            {item.due_date && (
-                                                <div className="flex items-center gap-1.5 text-muted-foreground">
-                                                    <TrendingUp className="w-3 h-3" />
-                                                    <span className="text-[11px] font-medium">{new Date(item.due_date).toLocaleDateString()}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <span className={cn(
-                                            "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider",
-                                            item.is_paid ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700 shadow-sm"
-                                        )}>
-                                            {item.is_paid ? "Paid" : "Pending"}
-                                        </span>
-                                    </div>
                                 </div>
                             ))}
-                            {filteredItems.length === 0 && <div className="p-8 text-center text-muted-foreground">No items found matching your filters.</div>}
+                            {filteredItems.length === 0 && <div className="p-8 text-center text-muted-foreground">No budget items found matching your filters.</div>}
                         </div>
-
-                        {/* Desktop Table View */}
-                        <div className="hidden md:block overflow-x-auto">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-muted text-muted-foreground font-medium uppercase text-xs">
-                                    <tr>
-                                        <th className="px-6 py-4 w-12">
-                                            <button onClick={toggleSelectAll} className="flex items-center">
-                                                {selectedIds.size > 0 && selectedIds.size === budgetItems.length ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
-                                            </button>
-                                        </th>
-                                        <th className="px-6 py-4">Item</th>
-                                        <th className="px-6 py-4">Category</th>
-                                        <th className="px-6 py-4">Est. Cost</th>
-                                        <th className="px-6 py-4">Actual</th>
-                                        <th className="px-6 py-4">Paid</th>
-                                        <th className="px-6 py-4">Due Date</th>
-                                        <th className="px-6 py-4">Status</th>
-                                        <th className="px-6 py-4">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-border">
-                                    {filteredItems.map((item) => (
-                                        <tr
-                                            key={item.id}
-                                            onClick={() => handleOpenEdit(item)}
-                                            className={cn(
-                                                "hover:bg-muted/30 transition-colors cursor-pointer group",
-                                                selectedIds.has(item.id) && "bg-muted/50"
-                                            )}
-                                        >
-                                            <td className="px-6 py-4">
-                                                <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground hover:text-primary">
-                                                    {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-4 h-4" />}
+                    ) : (
+                        /* ADVANCED MODE: Responsive Layout */
+                        <>
+                            {/* Mobile Card View */}
+                            <div className="md:hidden divide-y divide-border">
+                                {filteredItems.map((item) => (
+                                    <div
+                                        key={item.id}
+                                        onClick={() => handleOpenEdit(item)}
+                                        className={cn(
+                                            "p-4 hover:bg-muted/30 transition-colors cursor-pointer group",
+                                            selectedIds.has(item.id) && "bg-muted/50"
+                                        )}
+                                    >
+                                        <div className="flex items-start justify-between mb-4">
+                                            <div className="flex items-center gap-3">
+                                                <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground pt-0.5 hover:text-primary">
+                                                    {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
                                                 </button>
-                                            </td>
-                                            <td className="px-6 py-4 font-medium text-foreground">
-                                                <div className="group-hover:text-primary transition-colors">{item.item_name}</div>
-                                                {item.unit_price && item.unit_price > 0 && (
-                                                    <div className="text-[10px] text-muted-foreground font-normal">
-                                                        {formatMoney(item.unit_price)} × {item.units || 1}
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4 text-muted-foreground uppercase text-[10px] font-bold tracking-tight">{item.category}</td>
-                                            <td className="px-6 py-4 text-foreground font-medium">{formatMoney(item.estimated_cost)}</td>
-                                            <td className="px-6 py-4 text-foreground">{item.actual_cost > 0 ? formatMoney(item.actual_cost) : '-'}</td>
-                                            <td className="px-6 py-4 text-green-600 font-medium">{item.paid_amount > 0 ? formatMoney(item.paid_amount) : '-'}</td>
-                                            <td className="px-6 py-4 text-muted-foreground">{item.due_date ? new Date(item.due_date).toLocaleDateString() : '-'}</td>
-                                            <td className="px-6 py-4">
-                                                <span className={cn(
-                                                    "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                                                    item.is_paid ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
-                                                )}>
-                                                    {item.is_paid ? "Paid" : "Pending"}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 flex items-center gap-2">
-                                                <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="text-muted-foreground hover:text-primary transition-colors">
+                                                <div>
+                                                    <p className="font-bold text-foreground group-hover:text-primary transition-colors">{item.item_name}</p>
+                                                    <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-1">
+                                                        {item.category}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
                                                     <Edit2 className="w-4 h-4" />
                                                 </button>
-                                                <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="text-muted-foreground hover:text-red-600 transition-colors">
+                                                <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {filteredItems.length === 0 && (
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-3 gap-2 mb-3">
+                                            <div className="bg-muted/30 px-2 py-2 rounded-xl border border-border/50 text-center">
+                                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight mb-1">Est.</p>
+                                                <span className="text-xs font-bold text-foreground">{formatMoney(item.estimated_cost)}</span>
+                                            </div>
+                                            <div className="bg-muted/30 px-2 py-2 rounded-xl border border-border/50 text-center">
+                                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight mb-1">Actual</p>
+                                                <span className="text-xs font-bold text-foreground">{item.actual_cost > 0 ? formatMoney(item.actual_cost) : '-'}</span>
+                                            </div>
+                                            <div className="bg-muted/30 px-2 py-2 rounded-xl border border-border/50 text-center">
+                                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight mb-1">Paid</p>
+                                                <span className="text-xs font-bold text-green-600">{item.paid_amount > 0 ? formatMoney(item.paid_amount) : '-'}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between mt-2 pl-8">
+                                            <div className="flex items-center gap-4">
+                                                {item.due_date && (
+                                                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                                                        <TrendingUp className="w-3 h-3" />
+                                                        <span className="text-[11px] font-medium">{new Date(item.due_date).toLocaleDateString()}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <span className={cn(
+                                                "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider",
+                                                item.is_paid ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700 shadow-sm"
+                                            )}>
+                                                {item.is_paid ? "Paid" : "Pending"}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                                {filteredItems.length === 0 && <div className="p-8 text-center text-muted-foreground">No items found matching your filters.</div>}
+                            </div>
+
+                            {/* Desktop Table View */}
+                            <div className="hidden md:block overflow-x-auto">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-muted text-muted-foreground font-medium uppercase text-xs">
                                         <tr>
-                                            <td colSpan={9} className="p-8 text-center text-muted-foreground">No items found matching your filters. Add one to get started!</td>
+                                            <th className="px-6 py-4 w-12">
+                                                <button onClick={toggleSelectAll} className="flex items-center">
+                                                    {selectedIds.size > 0 && selectedIds.size === budgetItems.length ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
+                                                </button>
+                                            </th>
+                                            <th className="px-6 py-4">Item</th>
+                                            <th className="px-6 py-4">Category</th>
+                                            <th className="px-6 py-4">Est. Cost</th>
+                                            <th className="px-6 py-4">Actual</th>
+                                            <th className="px-6 py-4">Paid</th>
+                                            <th className="px-6 py-4">Due Date</th>
+                                            <th className="px-6 py-4">Status</th>
+                                            <th className="px-6 py-4">Actions</th>
                                         </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </>
-                )}
+                                    </thead>
+                                    <tbody className="divide-y divide-border">
+                                        {filteredItems.map((item) => (
+                                            <tr
+                                                key={item.id}
+                                                onClick={() => handleOpenEdit(item)}
+                                                className={cn(
+                                                    "hover:bg-muted/30 transition-colors cursor-pointer group",
+                                                    selectedIds.has(item.id) && "bg-muted/50"
+                                                )}
+                                            >
+                                                <td className="px-6 py-4">
+                                                    <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground hover:text-primary">
+                                                        {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-4 h-4" />}
+                                                    </button>
+                                                </td>
+                                                <td className="px-6 py-4 font-medium text-foreground">
+                                                    <div className="group-hover:text-primary transition-colors">{item.item_name}</div>
+                                                    {item.unit_price && item.unit_price > 0 && (
+                                                        <div className="text-[10px] text-muted-foreground font-normal">
+                                                            {formatMoney(item.unit_price)} × {item.units || 1}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 text-muted-foreground uppercase text-[10px] font-bold tracking-tight">{item.category}</td>
+                                                <td className="px-6 py-4 text-foreground font-medium">{formatMoney(item.estimated_cost)}</td>
+                                                <td className="px-6 py-4 text-foreground">{item.actual_cost > 0 ? formatMoney(item.actual_cost) : '-'}</td>
+                                                <td className="px-6 py-4 text-green-600 font-medium">{item.paid_amount > 0 ? formatMoney(item.paid_amount) : '-'}</td>
+                                                <td className="px-6 py-4 text-muted-foreground">{item.due_date ? new Date(item.due_date).toLocaleDateString() : '-'}</td>
+                                                <td className="px-6 py-4">
+                                                    <span className={cn(
+                                                        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                                                        item.is_paid ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                                                    )}>
+                                                        {item.is_paid ? "Paid" : "Pending"}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 flex items-center gap-2">
+                                                    <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="text-muted-foreground hover:text-primary transition-colors">
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </button>
+                                                    <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="text-muted-foreground hover:text-red-600 transition-colors">
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {filteredItems.length === 0 && (
+                                            <tr>
+                                                <td colSpan={9} className="p-8 text-center text-muted-foreground">No items found matching your filters. Add one to get started!</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                <BudgetDialog
+                    isOpen={isDialogOpen}
+                    onClose={() => setIsDialogOpen(false)}
+                    onSubmit={handleSaveItem}
+                    initialData={editingItem}
+                    currencySymbol={symbol}
+                />
+
+                <ConfirmDialog
+                    isOpen={confirmState.isOpen}
+                    onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
+                    onConfirm={executeDelete}
+                    title={confirmState.type === 'bulk' ? "Delete Budget Items?" : "Delete Budget Item?"}
+                    description={confirmState.type === 'bulk'
+                        ? `Are you sure you want to delete ${selectedIds.size} items? This action cannot be undone.`
+                        : "Are you sure you want to delete this budget item? This action cannot be undone."}
+                    variant="danger"
+                />
+
+                <LimitModal
+                    isOpen={showLimitModal}
+                    onClose={() => setShowLimitModal(false)}
+                    feature="Budget Items"
+                    limit={PLAN_LIMITS.free.budget_items}
+                    tier={tier}
+                />
             </div>
-
-            <BudgetDialog
-                isOpen={isDialogOpen}
-                onClose={() => setIsDialogOpen(false)}
-                onSubmit={handleSaveItem}
-                initialData={editingItem}
-                currencySymbol={symbol}
-            />
-
-            <ConfirmDialog
-                isOpen={confirmState.isOpen}
-                onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
-                onConfirm={executeDelete}
-                title={confirmState.type === 'bulk' ? "Delete Budget Items?" : "Delete Budget Item?"}
-                description={confirmState.type === 'bulk'
-                    ? `Are you sure you want to delete ${selectedIds.size} items? This action cannot be undone.`
-                    : "Are you sure you want to delete this budget item? This action cannot be undone."}
-                variant="danger"
-            />
-
-            <LimitModal
-                isOpen={showLimitModal}
-                onClose={() => setShowLimitModal(false)}
-                feature="Budget Items"
-                limit={PLAN_LIMITS.free.budget_items}
-                tier={tier}
-            />
-        </div>
+        </TierGate>
     );
 }

@@ -12,6 +12,7 @@ export interface TrialInfo {
 
 /**
  * Get the effective tier for a wedding, considering trial status
+ * Also updates the DB tier column if trial has expired (for consistency)
  * @param weddingId - The wedding ID to check
  * @returns TrialInfo with effective tier and trial details
  */
@@ -56,6 +57,15 @@ export async function getEffectiveTier(weddingId: string): Promise<TrialInfo> {
 
     // Determine effective tier
     const effectiveTier: PlanTier = isPaidPremium || isInTrial ? 'premium' : 'free';
+
+    // AUTO-SYNC DB: If trial has expired and user hasn't paid, update tier to 'free' in DB
+    // This keeps the DB tier column in sync for admin visibility
+    if (!isPaidPremium && !isInTrial && wedding.tier === 'premium') {
+        await supabase
+            .from('weddings')
+            .update({ tier: 'free' })
+            .eq('id', weddingId);
+    }
 
     return {
         effectiveTier,

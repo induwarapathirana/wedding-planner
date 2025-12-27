@@ -8,6 +8,7 @@ import Link from "next/link";
 import { PayHereButton } from "@/components/payhere-button";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { LimitModal } from "@/components/dashboard/limit-modal";
+import { getEffectiveTier, PlanTier } from "@/lib/trial";
 
 type WeddingData = {
     id: string;
@@ -27,6 +28,7 @@ export default function SettingsPage() {
     const [saving, setSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [confirmState, setConfirmState] = useState<{ isOpen: boolean; action: 'delete_wedding' | null }>({ isOpen: false, action: null });
+    const [effectiveTier, setEffectiveTier] = useState<PlanTier>('free');
     const router = useRouter();
 
     useEffect(() => {
@@ -84,6 +86,11 @@ export default function SettingsPage() {
         }
 
         setWedding(data as WeddingData); // Cast including tier
+
+        // Get effective tier (validates trial & payment)
+        const trialInfo = await getEffectiveTier(weddingId);
+        setEffectiveTier(trialInfo.effectiveTier);
+
         setLoading(false);
     }
 
@@ -322,7 +329,7 @@ export default function SettingsPage() {
 
                 {/* Team Side Column */}
                 <div className="lg:col-span-1">
-                    <TeamMembers weddingId={wedding?.id || ''} tier={wedding?.tier || 'free'} />
+                    <TeamMembers weddingId={wedding?.id || ''} tier={effectiveTier} />
                 </div>
             </div>
 
