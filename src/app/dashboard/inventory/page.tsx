@@ -8,6 +8,9 @@ import InventoryItemRow from "@/components/dashboard/inventory/InventoryItem";
 import InventoryForm from "@/components/dashboard/inventory/InventoryForm";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { CURRENCIES } from "@/lib/constants";
+import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
+import { getEffectiveTier } from "@/lib/trial";
+import { LimitModal } from "@/components/dashboard/limit-modal";
 import { TourGuide } from "@/components/dashboard/TourGuide";
 import { TierGate } from "@/components/dashboard/TierGate";
 import { INVENTORY_STEPS } from "@/lib/tours";
@@ -21,25 +24,32 @@ export default function InventoryPage() {
     const [confirmState, setConfirmState] = useState<{ isOpen: boolean; id?: string }>({ isOpen: false });
     const [weddingId, setWeddingId] = useState<string | null>(null);
     const [currency, setCurrency] = useState('USD');
+    const [tier, setTier] = useState<PlanTier>('free');
+    const [showLimitModal, setShowLimitModal] = useState(false);
 
     useEffect(() => {
         loadData();
     }, []);
 
     const loadData = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        setLoading(true);
+        const wId = localStorage.getItem("current_wedding_id");
+        if (wId) {
+            setWeddingId(wId);
+            // Fetch currency
+            const { data: wedding } = await supabase
+                .from('weddings')
+                .select('currency')
+                .eq('id', wId)
+                .single();
 
-        const { data: wedding } = await supabase
-            .from('weddings')
-            .select('id, currency')
-            .eq('user_id', user.id)
-            .single();
-
-        if (wedding) {
-            setWeddingId(wedding.id);
-            setCurrency(wedding.currency || 'USD');
-            fetchItems(wedding.id);
+            if (wedding) {
+                setCurrency(wedding.currency || 'USD');
+            }
+            // Get effective tier (validates trial & payment)
+            const trialInfo = await getEffectiveTier(wId);
+            setTier(trialInfo.effectiveTier);
+            fetchItems(wId);
         }
         setLoading(false);
     };
@@ -112,6 +122,10 @@ export default function InventoryPage() {
                         <button
                             id="tour-add-inventory"
                             onClick={() => {
+                                if (!checkLimit(tier, 'inventory_items', items.length)) {
+                                    setShowLimitModal(true);
+                                    return;
+                                }
                                 setEditingItem(undefined);
                                 setShowForm(true);
                             }}
@@ -282,6 +296,14 @@ export default function InventoryPage() {
                     title="Delete Item?"
                     description="Are you sure you want to delete this item? This action cannot be undone."
                     variant="danger"
+                />
+
+                <LimitModal
+                    isOpen={showLimitModal}
+                    onClose={() => setShowLimitModal(false)}
+                    feature="Inventory Items"
+                    limit={PLAN_LIMITS.free.inventory_items}
+                    tier={tier}
                 />
             </div>
         </TierGate>

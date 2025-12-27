@@ -7,6 +7,7 @@ export const PLAN_LIMITS = {
         vendors: 3,
         events: 2, // Itinerary/Timeline
         checklist_items: 3,
+        inventory_items: 5,
         collaborators: 0
     },
     premium: {
@@ -15,6 +16,7 @@ export const PLAN_LIMITS = {
         vendors: Infinity,
         events: Infinity,
         checklist_items: Infinity,
+        inventory_items: Infinity,
         collaborators: Infinity
     }
 } as const;

@@ -9,6 +9,7 @@ import EventForm from "@/components/dashboard/itinerary/EventForm";
 import { format } from "date-fns";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 import { getEffectiveTier } from "@/lib/trial";
+import { LimitModal } from "@/components/dashboard/limit-modal";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { TourGuide } from "@/components/dashboard/TourGuide";
 import { TierGate } from "@/components/dashboard/TierGate";
@@ -24,28 +25,31 @@ export default function ItineraryPage() {
     const [weddingId, setWeddingId] = useState<string | null>(null);
     const [weddingDate, setWeddingDate] = useState<string | null>(null);
     const [tier, setTier] = useState<PlanTier>('free');
+    const [showLimitModal, setShowLimitModal] = useState(false);
 
     useEffect(() => {
         loadData();
     }, []);
 
     const loadData = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        setLoading(true);
+        const wId = localStorage.getItem("current_wedding_id");
+        if (wId) {
+            setWeddingId(wId);
+            // Fetch wedding date
+            const { data: wedding } = await supabase
+                .from('weddings')
+                .select('wedding_date')
+                .eq('id', wId)
+                .single();
 
-        const { data: wedding } = await supabase
-            .from('weddings')
-            .select('id, wedding_date, tier')
-            .eq('user_id', user.id)
-            .single();
-
-        if (wedding) {
-            setWeddingId(wedding.id);
-            setWeddingDate(wedding.wedding_date);
-            // Use getEffectiveTier for proper trial/payment validation
-            const trialInfo = await getEffectiveTier(wedding.id);
+            if (wedding) {
+                setWeddingDate(wedding.wedding_date);
+            }
+            // Get effective tier (validates trial & payment)
+            const trialInfo = await getEffectiveTier(wId);
             setTier(trialInfo.effectiveTier);
-            fetchEvents(wedding.id);
+            fetchEvents(wId);
         }
         setLoading(false);
     };
@@ -131,7 +135,7 @@ export default function ItineraryPage() {
                             id="tour-add-event"
                             onClick={() => {
                                 if (!checkLimit(tier, 'events', events.length)) {
-                                    alert(`You have reached the event limit (${PLAN_LIMITS[tier].events}) for the ${tier} plan.\nPlease upgrade to Premium.`);
+                                    setShowLimitModal(true);
                                     return;
                                 }
                                 setEditingEvent(undefined);
@@ -219,6 +223,14 @@ export default function ItineraryPage() {
                         ? `Are you sure you want to delete ${selectedIds.size} events? This action cannot be undone.`
                         : "Are you sure you want to delete this event? This action cannot be undone."}
                     variant="danger"
+                />
+
+                <LimitModal
+                    isOpen={showLimitModal}
+                    onClose={() => setShowLimitModal(false)}
+                    feature="Timeline Events"
+                    limit={PLAN_LIMITS.free.events}
+                    tier={tier}
                 />
             </div>
         </TierGate>
