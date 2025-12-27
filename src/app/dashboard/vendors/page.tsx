@@ -17,7 +17,7 @@ import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { TourGuide } from "@/components/dashboard/TourGuide";
 import { VENDOR_STEPS } from "@/lib/tours";
 
-import DirectoryImportModal from "@/components/dashboard/vendors/DirectoryImportModal";
+import { DirectoryImportModal } from "@/components/dashboard/vendors/DirectoryImportModal";
 
 const CATEGORIES = [
     "Venue", "Catering", "Photography", "Videography",
