@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import { Save, ArrowLeft, Trash2, UserPlus, X, Bell, BellOff, Settings } from "lucide-react";
+import { Save, ArrowLeft, Trash2, UserPlus, X, Bell, BellOff, Settings, MessageSquare, LifeBuoy } from "lucide-react";
 import Link from "next/link";
 import { PayHereButton } from "@/components/payhere-button";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { LimitModal } from "@/components/dashboard/limit-modal";
+import { FeedbackModal } from "@/components/dashboard/FeedbackModal";
 import { getEffectiveTier, PlanTier } from "@/lib/trial";
 
 type WeddingData = {
@@ -29,6 +30,7 @@ export default function SettingsPage() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [confirmState, setConfirmState] = useState<{ isOpen: boolean; action: 'delete_wedding' | null }>({ isOpen: false, action: null });
     const [effectiveTier, setEffectiveTier] = useState<PlanTier>('free');
+    const [showFeedback, setShowFeedback] = useState(false);
     const router = useRouter();
 
     useEffect(() => {
@@ -306,6 +308,34 @@ export default function SettingsPage() {
                         </div>
                     </div>
 
+                    {/* Support & Feedback Section */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="p-2.5 bg-indigo-50 rounded-xl">
+                                <MessageSquare className="w-5 h-5 text-indigo-600" />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-900">Help & Feedback</h2>
+                                <p className="text-sm text-gray-500">Let us know how we can improve your experience.</p>
+                            </div>
+                        </div>
+
+                        <div className="p-5 bg-gray-50 rounded-xl border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <h3 className="font-semibold text-gray-900">Have a suggestion?</h3>
+                                <p className="text-sm text-gray-600 mt-1 leading-relaxed">
+                                    Found a bug or have a feature request? We'd love to hear from you.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowFeedback(true)}
+                                className="shrink-0 w-full md:w-auto px-6 py-3 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-100 hover:text-gray-900 transition-colors shadow-sm"
+                            >
+                                Give Feedback
+                            </button>
+                        </div>
+                    </div>
+
                     {/* Danger Zone */}
                     <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-6 md:p-8">
                         <h2 className="text-lg font-bold text-red-900 mb-4">Danger Zone</h2>
@@ -340,6 +370,11 @@ export default function SettingsPage() {
                 title="Delete Wedding?"
                 description="Are you sure you want to delete this wedding? This action is irreversible and will delete all guests, budget items, and data."
                 variant="danger"
+            />
+            <FeedbackModal
+                isOpen={showFeedback}
+                onClose={() => setShowFeedback(false)}
+                weddingId={wedding?.id}
             />
         </div >
     );
