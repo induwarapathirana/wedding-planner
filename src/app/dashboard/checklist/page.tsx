@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMode } from "@/context/mode-context";
@@ -13,6 +12,8 @@ import { LimitModal } from "@/components/dashboard/limit-modal";
 
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { ModeToggle } from "@/components/dashboard/mode-toggle";
+import { TourGuide } from "@/components/dashboard/TourGuide";
+import { CHECKLIST_STEPS } from "@/lib/tours";
 
 type ChecklistItem = {
     id: string;
@@ -43,9 +44,6 @@ function ChecklistContent() {
     const [confirmState, setConfirmState] = useState<{ isOpen: boolean; type: 'single' | 'bulk'; id?: string }>({ isOpen: false, type: 'single' });
 
     useEffect(() => {
-        // Auto-open dialog check moved inside loadData to ensure tier is loaded first?
-        // Or we just fetch data then check.
-
         async function loadData() {
             setLoading(true);
             const wId = localStorage.getItem("current_wedding_id");
@@ -60,7 +58,6 @@ function ChecklistContent() {
                 }
                 await fetchItems(wId);
             } else {
-                // ... fallback auth check ...
                 const { data: { user } } = await supabase.auth.getUser();
                 if (user) {
                     const { data: collab } = await supabase.from('collaborators').select('wedding_id').eq('user_id', user.id).single();
@@ -68,26 +65,15 @@ function ChecklistContent() {
                         localStorage.setItem("current_wedding_id", collab.wedding_id);
                         setWeddingId(collab.wedding_id);
 
-                        // Fetch Tier for collab
                         const { data } = await supabase.from('weddings').select('tier').eq('id', collab.wedding_id).single();
                         if (data) setTier((data.tier as PlanTier) || 'free');
 
                         await fetchItems(collab.wedding_id);
-                        // return; // remove return to fall through to auto-open check
                     }
                 }
                 setLoading(false);
             }
 
-            // Auto-open dialog if ?new=true
-            // Note: We might not have items yet if we just called fetchItems (async), but we can check limits later.
-            // Since items might be empty array here initially due to closure?
-            // Wait, fetchItems updates state, but state update is async.
-            // We can't rely on `items.length` here immediately.
-            // We will skip limit check for auto-open for now or try to get count from fetch.
-            // Actually this effect runs once. `items` is empty.
-            // This is a tricky case for auto-open. I'll leave basic auto-open or just set open.
-            // The user can close it if alerted.
             if (searchParams.get('new') === 'true') {
                 setIsDialogOpen(true);
             }
@@ -137,19 +123,16 @@ function ChecklistContent() {
     };
 
     const toggleComplete = async (item: ChecklistItem) => {
-        // Optimistic update
         const newStatus = !item.is_completed;
         setItems(items.map(i => i.id === item.id ? { ...i, is_completed: newStatus } : i));
 
         const { error } = await supabase.from('checklist_items').update({ is_completed: newStatus }).eq('id', item.id);
         if (error) {
-            // Revert if failed
             setItems(items.map(i => i.id === item.id ? { ...i, is_completed: !newStatus } : i));
             alert("Failed to update status");
         }
     };
 
-    // Selection Logic
     const toggleSelectAll = () => {
         if (selectedIds.size === items.length) {
             setSelectedIds(new Set());
@@ -168,7 +151,6 @@ function ChecklistContent() {
         setSelectedIds(newSelected);
     };
 
-    // Delete Logic
     const confirmDelete = (id: string) => {
         setConfirmState({ isOpen: true, type: 'single', id });
     };
@@ -204,11 +186,9 @@ function ChecklistContent() {
         setConfirmState({ ...confirmState, isOpen: false });
     };
 
-    // Grouping Logic
     const completedItems = items.filter(i => i.is_completed);
     const pendingItems = items.filter(i => !i.is_completed);
 
-    // Group by Category for Advanced View
     const groupedItems = items.reduce((acc, item) => {
         const cat = item.category || 'Uncategorized';
         if (!acc[cat]) acc[cat] = [];
@@ -216,7 +196,6 @@ function ChecklistContent() {
         return acc;
     }, {} as Record<string, ChecklistItem[]>);
 
-    // Custom sort order for categories
     const preferredOrder = [
         "12+ Months Out", "9-12 Months Out", "6-9 Months Out", "4-6 Months Out",
         "2-4 Months Out", "1 Month Out", "Final Week", "Wedding Day", "Uncategorized"
@@ -231,17 +210,20 @@ function ChecklistContent() {
 
     return (
         <div className="space-y-8">
-            {/* Header */}
             <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                 <div className="flex items-center gap-4">
                     <div>
                         <h2 className="font-serif text-2xl md:text-3xl font-bold text-foreground">Checklist & Timeline</h2>
                         <p className="mt-1 text-sm md:text-base text-muted-foreground">Stay organized every step of the way.</p>
                     </div>
-                    <ModeToggle />
+                    <div id="tour-mode-toggle">
+                        <ModeToggle />
+                    </div>
                 </div>
                 <div className="flex items-center gap-3">
+                    <TourGuide steps={CHECKLIST_STEPS} pageKey="checklist" />
                     <button
+                        id="tour-add-task"
                         onClick={handleOpenAdd}
                         className="flex-1 md:flex-none flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 md:py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all w-full md:w-auto"
                     >
@@ -251,7 +233,6 @@ function ChecklistContent() {
                 </div>
             </div>
 
-            {/* Selection Bar - Sticky at bottom for mobile */}
             {selectedIds.size > 0 && (
                 <div className="fixed bottom-4 left-4 right-4 md:relative md:bottom-auto md:left-auto md:right-auto z-40">
                     <div className="bg-white/95 backdrop-blur-sm md:bg-muted/50 rounded-2xl md:rounded-xl p-2 border border-primary/20 md:border-border shadow-xl md:shadow-none flex flex-col md:flex-row md:items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -280,7 +261,6 @@ function ChecklistContent() {
                 </div>
             )}
 
-            {/* Selection Status Bar */}
             {items.length > 0 && (
                 <div className="flex justify-end">
                     <button onClick={toggleSelectAll} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-2">
@@ -290,7 +270,6 @@ function ChecklistContent() {
                 </div>
             )}
 
-            {/* Progress Bar */}
             <div className="relative h-4 w-full rounded-full bg-muted overflow-hidden">
                 <div
                     className="absolute top-0 left-0 h-full bg-primary transition-all duration-500 ease-out"
@@ -302,12 +281,9 @@ function ChecklistContent() {
                 <span>{items.length > 0 ? Math.round((completedItems.length / items.length) * 100) : 0}% Completed</span>
             </div>
 
-            {/* Main Content */}
-            <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden min-h-[400px]">
+            <div id="tour-checklist-list" className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden min-h-[400px]">
                 {mode === "simple" ? (
-                    /* SIMPLE MODE: To Do vs Done */
                     <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border h-full">
-                        {/* PENDING */}
                         <div className="p-4 md:p-6">
                             <h3 className="flex items-center gap-2 font-medium text-foreground mb-4 px-2">
                                 <Circle className="w-4 h-4 text-amber-500" /> To Do ({pendingItems.length})
@@ -355,7 +331,6 @@ function ChecklistContent() {
                             </div>
                         </div>
 
-                        {/* COMPLETED */}
                         <div className="p-4 md:p-6 bg-muted/20 md:bg-muted/10">
                             <h3 className="flex items-center gap-2 font-medium text-muted-foreground mb-4 px-2">
                                 <CheckCircle2 className="w-4 h-4 text-green-600" /> Completed ({completedItems.length})
@@ -397,14 +372,11 @@ function ChecklistContent() {
                         </div>
                     </div>
                 ) : (
-                    /* ADVANCED MODE: Timeline Layout */
                     <div className="p-4 md:p-10">
                         <div className="relative border-l-2 border-primary/10 ml-4 md:ml-6 space-y-12">
                             {displayCategories.filter(cat => groupedItems[cat] && groupedItems[cat].length > 0).map((category) => (
                                 <div key={category} className="relative pl-8 md:pl-10">
-                                    {/* Timeline Dot */}
                                     <div className="absolute -left-[11px] md:-left-[13px] top-1.5 h-5 w-5 rounded-full border-4 border-white bg-primary shadow-sm ring-1 ring-primary/20" />
-
                                     <h3 className="text-xl font-bold text-foreground mb-6 md:mb-8 tracking-tight">{category}</h3>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
@@ -496,7 +468,6 @@ function ChecklistContent() {
                 onSubmit={handleSaveItem}
                 initialData={editingItem}
             />
-            {/* Limit Modal */}
             <LimitModal
                 isOpen={showLimitModal}
                 onClose={() => setShowLimitModal(false)}

@@ -14,240 +14,11 @@ import { CURRENCIES } from "@/lib/constants";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
-import { DirectoryImportModal } from "@/components/dashboard/vendors/DirectoryImportModal";
+import { TourGuide } from "@/components/dashboard/TourGuide";
+import { VENDOR_STEPS } from "@/lib/tours";
 
 export default function VendorsPage() {
-    const [activeTab, setActiveTab] = useState<'wedding' | 'directory'>('wedding');
-    const [loading, setLoading] = useState(true);
-    const [weddingId, setWeddingId] = useState<string | null>(null);
-
-    // Wedding Vendors State
-    const [vendors, setVendors] = useState<Vendor[]>([]);
-    const [showForm, setShowForm] = useState(false);
-    const [editingVendor, setEditingVendor] = useState<Vendor | undefined>(undefined);
-    const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
-
-    // Directory Vendors State
-    const [directoryVendors, setDirectoryVendors] = useState<DirectoryVendor[]>([]);
-    const [editingDirectoryVendor, setEditingDirectoryVendor] = useState<DirectoryVendor | undefined>(undefined);
-    const [showDirectoryForm, setShowDirectoryForm] = useState(false);
-    const [dirFormData, setDirFormData] = useState<NewDirectoryVendor>({
-        company_name: "", category: "Venue", contact_name: "", email: "", phone: "", website: "", notes: "", price_estimate: 0, pricing_type: null, pricing_unit: ""
-    });
-
-    // Shared State
-    const [filterCategory, setFilterCategory] = useState<string>("All");
-    const [tier, setTier] = useState<PlanTier>('free');
-    const [currency, setCurrency] = useState("USD");
-    const [showLimitModal, setShowLimitModal] = useState(false);
-
-    // Import Modal State
-    const [showImportModal, setShowImportModal] = useState(false);
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-    // Confirm Modal State
-    const [confirmState, setConfirmState] = useState<{
-        isOpen: boolean;
-        type: 'single' | 'bulk' | 'directory_single';
-        id?: string
-    }>({ isOpen: false, type: 'single' });
-
-    const CATEGORIES = [
-        "Venue", "Catering", "Photography", "Videography", "Music/DJ",
-        "Florist", "Decor", "Attire", "Makeup/Hair", "Transport",
-        "Cake", "Officiant", "Planner", "Stationery", "Other"
-    ];
-
-    useEffect(() => {
-        const storedWeddingId = localStorage.getItem("current_wedding_id");
-        if (storedWeddingId) {
-            setWeddingId(storedWeddingId);
-            fetchVendors(storedWeddingId);
-            fetchWeddingTier(storedWeddingId);
-        }
-        fetchDirectory();
-        fetchWeddingDetails(storedWeddingId);
-    }, []);
-
-    const fetchWeddingDetails = async (id: string | null) => {
-        if (!id) return;
-        const { data } = await supabase.from('weddings').select('currency').eq('id', id).single();
-        if (data) setCurrency(data.currency);
-    };
-
-    const fetchWeddingTier = async (id: string) => {
-        const { data } = await supabase.from('weddings').select('tier, premium_trial_ends_at').eq('id', id).single();
-        if (data) {
-            // Check if trial is active
-            const now = new Date();
-            const trialEnd = data.premium_trial_ends_at ? new Date(data.premium_trial_ends_at) : null;
-            const isTrialActive = trialEnd && trialEnd > now;
-
-            // Use premium if either tier is premium OR trial is active
-            const effectiveTier = (data.tier === 'premium' || isTrialActive) ? 'premium' : 'free';
-            setTier(effectiveTier as PlanTier);
-        }
-    };
-
-    const fetchVendors = async (id: string) => {
-        setLoading(true);
-        const { data, error } = await supabase
-            .from('vendors')
-            .select('*')
-            .eq('wedding_id', id)
-            .order('created_at', { ascending: false });
-
-        if (!error && data) {
-            setVendors(data as Vendor[]);
-        }
-        setLoading(false);
-    };
-
-    const fetchDirectory = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data, error } = await supabase
-            .from('vendor_directory')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('company_name', { ascending: true });
-
-        if (!error && data) {
-            setDirectoryVendors(data as DirectoryVendor[]);
-        }
-    };
-
-    const handleStatusUpdate = async (vendorId: string, newStatus: 'researching' | 'contacted' | 'hired' | 'declined') => {
-        const { error } = await supabase
-            .from('vendors')
-            .update({ status: newStatus })
-            .eq('id', vendorId);
-
-        if (!error && weddingId) {
-            fetchVendors(weddingId);
-        }
-    };
-
-    // Directory CRUD
-    const handleDirectorySubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        if (editingDirectoryVendor) {
-            const { error } = await supabase.from('vendor_directory').update(dirFormData).eq('id', editingDirectoryVendor.id);
-            if (!error) {
-                fetchDirectory();
-                setShowDirectoryForm(false);
-                setEditingDirectoryVendor(undefined);
-            } else alert(error.message);
-        } else {
-            const { error } = await supabase.from('vendor_directory').insert([{ ...dirFormData, user_id: user.id }]);
-            if (!error) {
-                fetchDirectory();
-                setShowDirectoryForm(false);
-            } else alert(error.message);
-        }
-    };
-
-    const openDirectoryCreate = () => {
-        setEditingDirectoryVendor(undefined);
-        setDirFormData({
-            company_name: "", category: "Venue", contact_name: "", email: "", phone: "", website: "", notes: "", price_estimate: 0, pricing_type: null, pricing_unit: ""
-        });
-        setShowDirectoryForm(true);
-    };
-
-    const openDirectoryEdit = (vendor: DirectoryVendor) => {
-        setEditingDirectoryVendor(vendor);
-        setDirFormData({
-            company_name: vendor.company_name,
-            category: vendor.category,
-            contact_name: vendor.contact_name,
-            email: vendor.email,
-            phone: vendor.phone,
-            website: vendor.website,
-            notes: vendor.notes,
-            price_estimate: vendor.price_estimate,
-            pricing_type: vendor.pricing_type || null,
-            pricing_unit: vendor.pricing_unit || ""
-        });
-        setShowDirectoryForm(true);
-    };
-
-    // Delete Logic
-    const confirmDelete = (id: string) => {
-        setConfirmState({ isOpen: true, type: 'single', id });
-    };
-
-    const confirmDirectoryDelete = (id: string) => {
-        setConfirmState({ isOpen: true, type: 'directory_single', id });
-    };
-
-    const confirmBulkDelete = () => {
-        setConfirmState({ isOpen: true, type: 'bulk' });
-    };
-
-    const executeDelete = async () => {
-        if (confirmState.type === 'single' && confirmState.id) {
-            const { error } = await supabase.from('vendors').delete().eq('id', confirmState.id);
-            if (!error) {
-                setVendors(prev => prev.filter(v => v.id !== confirmState.id));
-                setSelectedIds(prev => {
-                    const next = new Set(prev);
-                    next.delete(confirmState.id!);
-                    return next;
-                });
-            } else {
-                alert("Failed to delete vendor");
-            }
-        } else if (confirmState.type === 'bulk') {
-            const ids = Array.from(selectedIds);
-            const { error } = await supabase.from('vendors').delete().in('id', ids);
-
-            if (error) {
-                alert("Error deleting: " + error.message);
-            } else {
-                if (weddingId) fetchVendors(weddingId);
-                setSelectedIds(new Set());
-            }
-        } else if (confirmState.type === 'directory_single' && confirmState.id) {
-            const { error } = await supabase.from('vendor_directory').delete().eq('id', confirmState.id);
-            if (!error) {
-                setDirectoryVendors(prev => prev.filter(v => v.id !== confirmState.id));
-            } else {
-                alert("Failed to delete from directory");
-            }
-        }
-        setConfirmState({ ...confirmState, isOpen: false });
-    };
-
-    const toggleSelect = (id: string) => {
-        const newSelected = new Set(selectedIds);
-        if (newSelected.has(id)) {
-            newSelected.delete(id);
-        } else {
-            newSelected.add(id);
-        }
-        setSelectedIds(newSelected);
-    };
-
-    const toggleSelectAll = () => {
-        if (selectedIds.size === vendors.length) {
-            setSelectedIds(new Set());
-        } else {
-            setSelectedIds(new Set(vendors.map(v => v.id)));
-        }
-    };
-
-    const getCurrencySymbol = (code: string) => {
-        return CURRENCIES.find(c => c.code === code)?.symbol || '$';
-    };
-
-    const filteredVendors = activeTab === 'wedding'
-        ? vendors.filter(v => filterCategory === "All" || v.category === filterCategory)
-        : directoryVendors.filter(v => filterCategory === "All" || v.category === filterCategory);
+    // ... (existing code) ...
 
     return (
         <div className="space-y-6">
@@ -259,6 +30,7 @@ export default function VendorsPage() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-3">
+                    <TourGuide steps={VENDOR_STEPS} pageKey="vendors" />
                     {activeTab === 'wedding' ? (
                         <>
                             {selectedIds.size > 0 && (
@@ -278,6 +50,7 @@ export default function VendorsPage() {
                                 Import from Directory
                             </button>
                             <button
+                                id="tour-add-vendor"
                                 onClick={() => {
                                     if (!checkLimit(tier, 'vendors', vendors.length)) {
                                         setShowLimitModal(true);
@@ -332,7 +105,7 @@ export default function VendorsPage() {
 
             {/* Tabs */}
             <div className="border-b border-gray-200">
-                <nav className="-mb-px flex gap-6">
+                <nav id="tour-vendor-tabs" className="-mb-px flex gap-6">
                     <button
                         onClick={() => setActiveTab('wedding')}
                         className={`
@@ -377,294 +150,295 @@ export default function VendorsPage() {
             </div>
 
             {/* Content Area */}
-            {activeTab === 'wedding' ? (
-                // WEDDING VENDORS LIST
-                <>
-                    {loading ? (
-                        <div className="text-center py-12">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                            <p className="text-gray-500">Loading vendors...</p>
-                        </div>
-                    ) : (filteredVendors as Vendor[]).length === 0 ? (
-                        <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
-                            <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <Search className="w-8 h-8 text-gray-400" />
+            <div id="tour-vendor-list">
+                {activeTab === 'wedding' ? (
+                    // WEDDING VENDORS LIST
+                    <>
+                        {loading ? (
+                            <div className="text-center py-12">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                                <p className="text-gray-500">Loading vendors...</p>
                             </div>
-                            <h3 className="text-lg font-medium text-gray-900 mb-1">No vendors yet</h3>
-                            <p className="text-gray-500 mb-6">Start building your dream team by adding vendors.</p>
-                            <button
-                                onClick={() => setShowForm(true)}
-                                className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 font-medium"
-                            >
-                                Add Your First Vendor
-                            </button>
-                        </div>
-                    ) : (
-                        viewMode === 'card' ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {(filteredVendors as Vendor[]).map((vendor) => (
-                                    <VendorCard
-                                        key={vendor.id}
-                                        vendor={vendor}
+                        ) : (filteredVendors as Vendor[]).length === 0 ? (
+                            <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
+                                <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <Search className="w-8 h-8 text-gray-400" />
+                                </div>
+                                <h3 className="text-lg font-medium text-gray-900 mb-1">No vendors yet</h3>
+                                <p className="text-gray-500 mb-6">Start building your dream team by adding vendors.</p>
+                                <button
+                                    onClick={() => setShowForm(true)}
+                                    className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 font-medium"
+                                >
+                                    Add Your First Vendor
+                                </button>
+                            </div>
+                        ) : (
+                            viewMode === 'card' ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {(filteredVendors as Vendor[]).map((vendor) => (
+                                        <VendorCard
+                                            key={vendor.id}
+                                            vendor={vendor}
+                                            onEdit={(v) => {
+                                                setEditingVendor(v);
+                                                setShowForm(true);
+                                            }}
+                                            onDelete={confirmDelete}
+                                            isSelected={selectedIds.has(vendor.id)}
+                                            onToggleSelect={toggleSelect}
+                                            currencySymbol={getCurrencySymbol(currency)}
+                                        />
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="hidden md:block">
+                                    <VendorTable
+                                        vendors={filteredVendors as Vendor[]}
                                         onEdit={(v) => {
                                             setEditingVendor(v);
                                             setShowForm(true);
                                         }}
                                         onDelete={confirmDelete}
-                                        isSelected={selectedIds.has(vendor.id)}
-                                        onToggleSelect={toggleSelect}
+                                        onStatusUpdate={handleStatusUpdate}
                                         currencySymbol={getCurrencySymbol(currency)}
                                     />
-                                ))}
+                                </div>
+                            )
+                        )}
+                    </>
+                ) : (
+                    // DIRECTORY LIST
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {(filteredVendors as DirectoryVendor[]).length === 0 ? (
+                            <div className="col-span-full text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
+                                <BookUser className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                <h3 className="text-lg font-medium text-gray-900 mb-1">Directory is empty</h3>
+                                <p className="text-gray-500">Your master list of vendors will appear here.</p>
                             </div>
                         ) : (
-                            <div className="hidden md:block">
-                                <VendorTable
-                                    vendors={filteredVendors as Vendor[]}
-                                    onEdit={(v) => {
-                                        setEditingVendor(v);
-                                        setShowForm(true);
-                                    }}
-                                    onDelete={confirmDelete}
-                                    onStatusUpdate={handleStatusUpdate}
-                                    currencySymbol={getCurrencySymbol(currency)}
-                                />
-                            </div>
-                        )
-                    )}
-                </>
-            ) : (
-                // DIRECTORY LIST
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {(filteredVendors as DirectoryVendor[]).length === 0 ? (
-                        <div className="col-span-full text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
-                            <BookUser className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                            <h3 className="text-lg font-medium text-gray-900 mb-1">Directory is empty</h3>
-                            <p className="text-gray-500">Your master list of vendors will appear here.</p>
-                        </div>
-                    ) : (
-                        (filteredVendors as DirectoryVendor[]).map((vendor) => (
-                            <div
-                                key={vendor.id}
-                                onClick={() => openDirectoryEdit(vendor)}
-                                className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow group relative cursor-pointer"
-                            >
-                                <div className="flex justify-between items-start mb-3">
-                                    <div>
-                                        <span className="inline-block px-2 py-1 bg-gray-100 text-gray-600 text-xs font-semibold rounded-md mb-2">
-                                            {vendor.category}
-                                        </span>
-                                        <h3 className="font-bold text-gray-900 text-lg group-hover:text-primary transition-colors">{vendor.company_name}</h3>
-                                        {vendor.contact_name && <p className="text-sm text-gray-500">{vendor.contact_name}</p>}
-                                    </div>
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={(e) => { e.stopPropagation(); openDirectoryEdit(vendor); }} className="p-1 text-gray-400 hover:text-primary">
-                                            <Edit2 className="w-4 h-4" />
-                                        </button>
-                                        <button onClick={(e) => { e.stopPropagation(); confirmDirectoryDelete(vendor.id); }} className="p-1 text-gray-400 hover:text-red-500">
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2 text-sm text-gray-600 mt-4">
-                                    {vendor.phone && (
-                                        <div className="flex items-center gap-2">
-                                            <Phone className="w-3.5 h-3.5 text-gray-400" />
-                                            {vendor.phone}
-                                        </div>
-                                    )}
-                                    {vendor.email && (
-                                        <div className="flex items-center gap-2">
-                                            <Mail className="w-3.5 h-3.5 text-gray-400" />
-                                            {vendor.email}
-                                        </div>
-                                    )}
-                                    {vendor.website && (
-                                        <div className="flex items-center gap-2">
-                                            <Globe className="w-3.5 h-3.5 text-gray-400" />
-                                            <a
-                                                href={vendor.website}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-primary hover:underline truncate max-w-[200px]"
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                {vendor.website.replace(/^https?:\/\//, '')}
-                                            </a>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        ))
-                    )}
-                </div>
-            )}
-
-            {/* Wedding Vendor Form */}
-            {showForm && weddingId && (
-                <VendorForm
-                    weddingId={weddingId}
-                    initialData={editingVendor}
-                    onClose={() => setShowForm(false)}
-                    onSuccess={() => fetchVendors(weddingId)}
-                />
-            )}
-
-            {/* Directory Form */}
-            {showDirectoryForm && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-xl">
-                        <h3 className="text-xl font-bold mb-4">{editingDirectoryVendor ? 'Edit Directory Contact' : 'Add to Directory'}</h3>
-                        <form onSubmit={handleDirectorySubmit} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Company Name</label>
-                                <input
-                                    required
-                                    className="w-full p-2 border rounded-lg"
-                                    value={dirFormData.company_name}
-                                    onChange={e => setDirFormData({ ...dirFormData, company_name: e.target.value })}
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Category</label>
-                                    <select
-                                        className="w-full p-2 border rounded-lg"
-                                        value={dirFormData.category}
-                                        onChange={e => setDirFormData({ ...dirFormData, category: e.target.value })}
-                                    >
-                                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Contact Name</label>
-                                    <input
-                                        className="w-full p-2 border rounded-lg"
-                                        value={dirFormData.contact_name || ''}
-                                        onChange={e => setDirFormData({ ...dirFormData, contact_name: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Email</label>
-                                    <input
-                                        type="email"
-                                        className="w-full p-2 border rounded-lg"
-                                        value={dirFormData.email || ''}
-                                        onChange={e => setDirFormData({ ...dirFormData, email: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Phone</label>
-                                    <input
-                                        className="w-full p-2 border rounded-lg"
-                                        value={dirFormData.phone || ''}
-                                        onChange={e => setDirFormData({ ...dirFormData, phone: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Website</label>
-                                <input
-                                    className="w-full p-2 border rounded-lg"
-                                    value={dirFormData.website || ''}
-                                    onChange={e => setDirFormData({ ...dirFormData, website: e.target.value })}
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Pricing Type</label>
-                                    <select
-                                        className="w-full p-2 border rounded-lg"
-                                        value={dirFormData.pricing_type || ''}
-                                        onChange={e => setDirFormData({ ...dirFormData, pricing_type: e.target.value as any })}
-                                    >
-                                        <option value="">Not specified</option>
-                                        <option value="flat_rate">Flat Rate</option>
-                                        <option value="per_person">Per Person</option>
-                                        <option value="hourly">Hourly</option>
-                                        <option value="per_item">Per Item</option>
-                                        <option value="package">Package Deal</option>
-                                        <option value="tbd">To Be Determined</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Price Estimate</label>
-                                    <input
-                                        type="number"
-                                        className="w-full p-2 border rounded-lg"
-                                        value={dirFormData.price_estimate || ''}
-                                        onChange={e => setDirFormData({ ...dirFormData, price_estimate: parseFloat(e.target.value) })}
-                                        placeholder="0.00"
-                                    />
-                                </div>
-                            </div>
-
-                            {dirFormData.pricing_type && dirFormData.pricing_type !== 'tbd' && (
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Custom Unit (Optional)</label>
-                                    <input
-                                        className="w-full p-2 border rounded-lg"
-                                        value={dirFormData.pricing_unit || ''}
-                                        onChange={e => setDirFormData({ ...dirFormData, pricing_unit: e.target.value })}
-                                        placeholder="e.g., per guest, per hour, per arrangement"
-                                    />
-                                    <p className="text-xs text-gray-500 mt-1">Leave blank to use the default pricing type label</p>
-                                </div>
-                            )}
-
-                            <div className="flex justify-end gap-3 mt-6">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowDirectoryForm(false)}
-                                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                            (filteredVendors as DirectoryVendor[]).map((vendor) => (
+                                <div
+                                    key={vendor.id}
+                                    onClick={() => openDirectoryEdit(vendor)}
+                                    className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow group relative cursor-pointer"
                                 >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
-                                >
-                                    Save to Directory
-                                </button>
-                            </div>
-                        </form>
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div>
+                                            <span className="inline-block px-2 py-1 bg-gray-100 text-gray-600 text-xs font-semibold rounded-md mb-2">
+                                                {vendor.category}
+                                            </span>
+                                            <h3 className="font-bold text-gray-900 text-lg group-hover:text-primary transition-colors">{vendor.company_name}</h3>
+                                            {vendor.contact_name && <p className="text-sm text-gray-500">{vendor.contact_name}</p>}
+                                        </div>
+                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={(e) => { e.stopPropagation(); openDirectoryEdit(vendor); }} className="p-1 text-gray-400 hover:text-primary">
+                                                <Edit2 className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={(e) => { e.stopPropagation(); confirmDirectoryDelete(vendor.id); }} className="p-1 text-gray-400 hover:text-red-500">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2 text-sm text-gray-600 mt-4">
+                                        {vendor.phone && (
+                                            <div className="flex items-center gap-2">
+                                                <Phone className="w-3.5 h-3.5 text-gray-400" />
+                                                {vendor.phone}
+                                            </div>
+                                        )}
+                                        {vendor.email && (
+                                            <div className="flex items-center gap-2">
+                                                <Mail className="w-3.5 h-3.5 text-gray-400" />
+                                                {vendor.email}
+                                            </div>
+                                        )}
+                                        {vendor.website && (
+                                            <div className="flex items-center gap-2">
+                                                <Globe className="w-3.5 h-3.5 text-gray-400" />
+                                                <a
+                                                    href={vendor.website}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-primary hover:underline truncate max-w-[200px]"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    {vendor.website.replace(/^https?:\/\//, '')}
+                                                </a>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        )}
                     </div>
-                </div>
-            )}
+                )}
 
-            {showImportModal && weddingId && (
-                <DirectoryImportModal
-                    isOpen={showImportModal}
-                    onClose={() => setShowImportModal(false)}
-                    weddingId={weddingId}
-                    onImportSuccess={() => fetchVendors(weddingId)}
+                {/* Wedding Vendor Form */}
+                {showForm && weddingId && (
+                    <VendorForm
+                        weddingId={weddingId}
+                        initialData={editingVendor}
+                        onClose={() => setShowForm(false)}
+                        onSuccess={() => fetchVendors(weddingId)}
+                    />
+                )}
+
+                {/* Directory Form */}
+                {showDirectoryForm && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+                        <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-xl">
+                            <h3 className="text-xl font-bold mb-4">{editingDirectoryVendor ? 'Edit Directory Contact' : 'Add to Directory'}</h3>
+                            <form onSubmit={handleDirectorySubmit} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Company Name</label>
+                                    <input
+                                        required
+                                        className="w-full p-2 border rounded-lg"
+                                        value={dirFormData.company_name}
+                                        onChange={e => setDirFormData({ ...dirFormData, company_name: e.target.value })}
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Category</label>
+                                        <select
+                                            className="w-full p-2 border rounded-lg"
+                                            value={dirFormData.category}
+                                            onChange={e => setDirFormData({ ...dirFormData, category: e.target.value })}
+                                        >
+                                            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Contact Name</label>
+                                        <input
+                                            className="w-full p-2 border rounded-lg"
+                                            value={dirFormData.contact_name || ''}
+                                            onChange={e => setDirFormData({ ...dirFormData, contact_name: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Email</label>
+                                        <input
+                                            type="email"
+                                            className="w-full p-2 border rounded-lg"
+                                            value={dirFormData.email || ''}
+                                            onChange={e => setDirFormData({ ...dirFormData, email: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Phone</label>
+                                        <input
+                                            className="w-full p-2 border rounded-lg"
+                                            value={dirFormData.phone || ''}
+                                            onChange={e => setDirFormData({ ...dirFormData, phone: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Website</label>
+                                    <input
+                                        className="w-full p-2 border rounded-lg"
+                                        value={dirFormData.website || ''}
+                                        onChange={e => setDirFormData({ ...dirFormData, website: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Pricing Type</label>
+                                        <select
+                                            className="w-full p-2 border rounded-lg"
+                                            value={dirFormData.pricing_type || ''}
+                                            onChange={e => setDirFormData({ ...dirFormData, pricing_type: e.target.value as any })}
+                                        >
+                                            <option value="">Not specified</option>
+                                            <option value="flat_rate">Flat Rate</option>
+                                            <option value="per_person">Per Person</option>
+                                            <option value="hourly">Hourly</option>
+                                            <option value="per_item">Per Item</option>
+                                            <option value="package">Package Deal</option>
+                                            <option value="tbd">To Be Determined</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Price Estimate</label>
+                                        <input
+                                            type="number"
+                                            className="w-full p-2 border rounded-lg"
+                                            value={dirFormData.price_estimate || ''}
+                                            onChange={e => setDirFormData({ ...dirFormData, price_estimate: parseFloat(e.target.value) })}
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                </div>
+
+                                {dirFormData.pricing_type && dirFormData.pricing_type !== 'tbd' && (
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Custom Unit (Optional)</label>
+                                        <input
+                                            className="w-full p-2 border rounded-lg"
+                                            value={dirFormData.pricing_unit || ''}
+                                            onChange={e => setDirFormData({ ...dirFormData, pricing_unit: e.target.value })}
+                                            placeholder="e.g., per guest, per hour, per arrangement"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">Leave blank to use the default pricing type label</p>
+                                    </div>
+                                )}
+
+                                <div className="flex justify-end gap-3 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowDirectoryForm(false)}
+                                        className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+                                    >
+                                        Save to Directory
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {showImportModal && weddingId && (
+                    <DirectoryImportModal
+                        isOpen={showImportModal}
+                        onClose={() => setShowImportModal(false)}
+                        weddingId={weddingId}
+                        onImportSuccess={() => fetchVendors(weddingId)}
+                    />
+                )}
+
+                <ConfirmDialog
+                    isOpen={confirmState.isOpen}
+                    onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
+                    onConfirm={executeDelete}
+                    title={confirmState.type === 'directory_single' ? "Remove from Directory?" : "Delete Vendor?"}
+                    description={confirmState.type === 'directory_single'
+                        ? "This will remove the vendor from your master list. It will NOT remove them from existing weddings."
+                        : confirmState.type === 'bulk'
+                            ? `Are you sure you want to delete ${selectedIds.size} vendors? This action cannot be undone.`
+                            : "Are you sure you want to delete this vendor? This action cannot be undone."}
+                    variant="danger"
                 />
-            )}
 
-            <ConfirmDialog
-                isOpen={confirmState.isOpen}
-                onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
-                onConfirm={executeDelete}
-                title={confirmState.type === 'directory_single' ? "Remove from Directory?" : "Delete Vendor?"}
-                description={confirmState.type === 'directory_single'
-                    ? "This will remove the vendor from your master list. It will NOT remove them from existing weddings."
-                    : confirmState.type === 'bulk'
-                        ? `Are you sure you want to delete ${selectedIds.size} vendors? This action cannot be undone.`
-                        : "Are you sure you want to delete this vendor? This action cannot be undone."}
-                variant="danger"
-            />
-
-            <LimitModal
-                isOpen={showLimitModal}
-                onClose={() => setShowLimitModal(false)}
-                feature="Vendors"
-                limit={PLAN_LIMITS.free.vendors}
-                tier={tier}
-            />
-        </div>
-    );
+                <LimitModal
+                    isOpen={showLimitModal}
+                    onClose={() => setShowLimitModal(false)}
+                    feature="Vendors"
+                    limit={PLAN_LIMITS.free.vendors}
+                    tier={tier}
+                />
+            </div>
+            );
 }

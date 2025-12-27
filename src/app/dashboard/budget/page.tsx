@@ -223,6 +223,7 @@ export default function BudgetPage() {
                         <ModeToggle />
                     </div>
                     <div className="flex items-center gap-2">
+                        <TourGuide steps={BUDGET_STEPS} pageKey="budget" />
                         <button
                             onClick={() => setIsSearchVisible(!isSearchVisible)}
                             className="md:hidden flex items-center justify-center h-10 w-10 rounded-xl border border-border bg-white text-gray-500 shadow-sm"
@@ -230,6 +231,7 @@ export default function BudgetPage() {
                             <Search className="w-4 h-4" />
                         </button>
                         <button
+                            id="tour-add-item"
                             onClick={handleOpenAdd}
                             className="flex-1 md:flex-none flex items-center justify-center gap-2 rounded-xl bg-primary px-4 md:px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all">
                             <Plus className="w-4 h-4" />
@@ -239,10 +241,12 @@ export default function BudgetPage() {
                 </div>
 
                 {/* Search & Filter Bar */}
-                <div className={cn(
-                    "grid grid-cols-1 md:grid-cols-12 gap-3 transition-all duration-300",
-                    isSearchVisible ? "block" : "hidden md:grid"
-                )}>
+                <div
+                    id="tour-status-filter"
+                    className={cn(
+                        "grid grid-cols-1 md:grid-cols-12 gap-3 transition-all duration-300",
+                        isSearchVisible ? "block" : "hidden md:grid"
+                    )}>
                     <div className="md:col-span-7 relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <input
@@ -281,7 +285,7 @@ export default function BudgetPage() {
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div id="tour-budget-summary" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
                     <div className="flex items-center gap-4">
                         <div className="rounded-full bg-blue-100 p-3 text-blue-600">
@@ -329,7 +333,7 @@ export default function BudgetPage() {
             </div>
 
             {/* Main Content */}
-            <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
+            <div id="tour-budget-list" className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
                 {mode === "simple" ? (
                     /* SIMPLE MODE: Clean List */
                     <div className="divide-y divide-border">

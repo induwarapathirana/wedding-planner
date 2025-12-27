@@ -10,108 +10,11 @@ import { format } from "date-fns";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
-import { LimitModal } from "@/components/dashboard/limit-modal";
+import { TourGuide } from "@/components/dashboard/TourGuide";
+import { ITINERARY_STEPS } from "@/lib/tours";
 
 export default function ItineraryPage() {
-    const [events, setEvents] = useState<Event[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [weddingId, setWeddingId] = useState<string | null>(null);
-    const [weddingDate, setWeddingDate] = useState<string | undefined>(undefined);
-    const [showForm, setShowForm] = useState(false);
-    const [editingEvent, setEditingEvent] = useState<Event | undefined>(undefined);
-    const [tier, setTier] = useState<PlanTier>('free');
-    const [showLimitModal, setShowLimitModal] = useState(false);
-
-    // Confirm Modal State
-    const [confirmState, setConfirmState] = useState<{ isOpen: boolean; type: 'single' | 'bulk'; id?: string }>({ isOpen: false, type: 'single' });
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-    useEffect(() => {
-        const storedWeddingId = localStorage.getItem("current_wedding_id");
-        if (storedWeddingId) {
-            setWeddingId(storedWeddingId);
-            fetchWeddingDetails(storedWeddingId);
-            fetchEvents(storedWeddingId);
-            // Fetch Tier
-            supabase.from('weddings').select('tier').eq('id', storedWeddingId).single()
-                .then(({ data }) => { if (data) setTier((data.tier as PlanTier) || 'free'); });
-        }
-    }, []);
-
-    const fetchWeddingDetails = async (id: string) => {
-        const { data } = await supabase.from('weddings').select('wedding_date').eq('id', id).single();
-        if (data) {
-            setWeddingDate(data.wedding_date);
-        }
-    };
-
-    const fetchEvents = async (id: string) => {
-        setLoading(true);
-        const { data, error } = await supabase
-            .from('events')
-            .select('*')
-            .eq('wedding_id', id)
-            .order('start_time', { ascending: true });
-
-        if (!error && data) {
-            setEvents(data as Event[]);
-        }
-        setLoading(false);
-    };
-
-    // Delete Logic
-    const confirmDelete = (id: string) => {
-        setConfirmState({ isOpen: true, type: 'single', id });
-    };
-
-    const confirmBulkDelete = () => {
-        setConfirmState({ isOpen: true, type: 'bulk' });
-    };
-
-    const executeDelete = async () => {
-        if (confirmState.type === 'single' && confirmState.id) {
-            const { error } = await supabase.from('events').delete().eq('id', confirmState.id);
-            if (!error) {
-                setEvents(prev => prev.filter(e => e.id !== confirmState.id));
-                setSelectedIds(prev => {
-                    const next = new Set(prev);
-                    next.delete(confirmState.id!);
-                    return next;
-                });
-            } else {
-                alert("Failed to delete event");
-            }
-        } else if (confirmState.type === 'bulk') {
-            const ids = Array.from(selectedIds);
-            const { error } = await supabase.from('events').delete().in('id', ids);
-
-            if (error) {
-                alert("Error deleting: " + error.message);
-            } else {
-                if (weddingId) fetchEvents(weddingId);
-                setSelectedIds(new Set());
-            }
-        }
-        setConfirmState({ ...confirmState, isOpen: false });
-    };
-
-    const toggleSelectAll = () => {
-        if (selectedIds.size === events.length) {
-            setSelectedIds(new Set());
-        } else {
-            setSelectedIds(new Set(events.map(e => e.id)));
-        }
-    };
-
-    const toggleSelect = (id: string) => {
-        const newSelected = new Set(selectedIds);
-        if (newSelected.has(id)) {
-            newSelected.delete(id);
-        } else {
-            newSelected.add(id);
-        }
-        setSelectedIds(newSelected);
-    };
+    // ... (existing code) ...
 
     return (
         <div className="space-y-6">
@@ -121,8 +24,10 @@ export default function ItineraryPage() {
                     <p className="mt-1 text-muted-foreground">Detailed timeline for your big day.</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <TourGuide steps={ITINERARY_STEPS} pageKey="itinerary" />
                     {selectedIds.size > 0 && (
                         <button
+                            id="tour-bulk-actions"
                             onClick={confirmBulkDelete}
                             className="flex items-center gap-2 rounded-xl bg-red-100 px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 transition-all mr-2"
                         >
@@ -131,6 +36,7 @@ export default function ItineraryPage() {
                         </button>
                     )}
                     <button
+                        id="tour-add-event"
                         onClick={() => {
                             if (!checkLimit(tier, 'events', events.length)) {
                                 alert(`You have reached the event limit (${PLAN_LIMITS[tier].events}) for the ${tier} plan.\nPlease upgrade to Premium.`);
@@ -180,7 +86,7 @@ export default function ItineraryPage() {
                         </button>
                     </div>
                 ) : (
-                    <div className="bg-gray-50/50 rounded-2xl p-6 sm:p-8 ml-8"> {/* Added left margin to accommodate checkboxes */}
+                    <div id="tour-timeline" className="bg-gray-50/50 rounded-2xl p-6 sm:p-8 ml-8"> {/* Added left margin to accommodate checkboxes */}
                         {weddingDate && (
                             <div className="mb-8 text-center">
                                 <h3 className="text-lg font-serif font-bold text-gray-900">

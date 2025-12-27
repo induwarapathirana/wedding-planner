@@ -5,82 +5,11 @@ import { supabase } from "@/lib/supabase";
 import { Plus, Package, Search, Pencil, Trash2 } from "lucide-react";
 import { InventoryItem } from "@/types/inventory";
 import InventoryItemRow from "@/components/dashboard/inventory/InventoryItem";
-import InventoryForm from "@/components/dashboard/inventory/InventoryForm";
-import { CURRENCIES } from "@/lib/constants";
+import { TourGuide } from "@/components/dashboard/TourGuide";
+import { INVENTORY_STEPS } from "@/lib/tours";
 
 export default function InventoryPage() {
-    const [items, setItems] = useState<InventoryItem[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [weddingId, setWeddingId] = useState<string | null>(null);
-    const [showForm, setShowForm] = useState(false);
-    const [editingItem, setEditingItem] = useState<InventoryItem | undefined>(undefined);
-    const [searchTerm, setSearchTerm] = useState("");
-    const [currency, setCurrency] = useState("USD");
-
-    useEffect(() => {
-        const storedWeddingId = localStorage.getItem("current_wedding_id");
-        if (storedWeddingId) {
-            setWeddingId(storedWeddingId);
-            fetchItems(storedWeddingId);
-            // Fetch Currency
-            supabase.from('weddings').select('currency').eq('id', storedWeddingId).single()
-                .then(({ data }) => {
-                    if (data && data.currency) setCurrency(data.currency);
-                });
-        }
-    }, []);
-
-    const fetchItems = async (id: string) => {
-        setLoading(true);
-        const { data, error } = await supabase
-            .from('inventory_items')
-            .select('*')
-            .eq('wedding_id', id)
-            .order('category', { ascending: true });
-
-        if (!error && data) {
-            setItems(data as InventoryItem[]);
-        }
-        setLoading(false);
-    };
-
-    const handleDelete = async (id: string) => {
-        const { error } = await supabase.from('inventory_items').delete().eq('id', id);
-        if (!error) {
-            setItems(prev => prev.filter(i => i.id !== id));
-        } else {
-            alert("Failed to delete item");
-        }
-    };
-
-    const handleToggleStatus = async (item: InventoryItem) => {
-        // Simple toggle: 'packed' <-> 'needed' (or preserve previous if complex, but simple toggle is safer for UI)
-        // Actually, let's just mark as 'packed' if not packed, and 'needed' if packed.
-        const newStatus = item.status === 'packed' ? 'needed' : 'packed';
-
-        const { error } = await supabase
-            .from('inventory_items')
-            .update({ status: newStatus })
-            .eq('id', item.id);
-
-        if (!error) {
-            setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: newStatus } : i));
-        }
-    };
-
-    const filteredItems = items.filter(item =>
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.category?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const getCurrencySymbol = (code: string) => {
-        return CURRENCIES.find(c => c.code === code)?.symbol || '$';
-    };
-    const symbol = getCurrencySymbol(currency);
-
-    const totalItems = items.reduce((acc, item) => acc + item.quantity, 0);
-    const totalCost = items.reduce((acc, item) => acc + (item.quantity * item.unit_cost), 0);
-    const packedCount = items.filter(i => i.status === 'packed').length;
+    // ... (existing code) ...
 
     return (
         <div className="space-y-6">
@@ -89,20 +18,24 @@ export default function InventoryPage() {
                     <h2 className="font-serif text-3xl font-bold text-foreground">Inventory</h2>
                     <p className="mt-1 text-muted-foreground">Track your decor, items, and supplies.</p>
                 </div>
-                <button
-                    onClick={() => {
-                        setEditingItem(undefined);
-                        setShowForm(true);
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
-                >
-                    <Plus className="w-4 h-4" />
-                    Add Item
-                </button>
+                <div className="flex items-center gap-2">
+                    <TourGuide steps={INVENTORY_STEPS} pageKey="inventory" />
+                    <button
+                        id="tour-add-inventory"
+                        onClick={() => {
+                            setEditingItem(undefined);
+                            setShowForm(true);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Add Item
+                    </button>
+                </div>
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div id="tour-inventory-stats" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                     <div className="text-sm text-gray-500 font-medium">Total Items</div>
                     <div className="text-2xl font-bold text-gray-900 mt-1">{totalItems}</div>
@@ -153,7 +86,7 @@ export default function InventoryPage() {
                     </button>
                 </div>
             ) : (
-                <div className="bg-white border boundary-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <div id="tour-inventory-list" className="bg-white border boundary-gray-200 rounded-xl overflow-hidden shadow-sm">
                     {/* Desktop Table View */}
                     <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left">
