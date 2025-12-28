@@ -11,8 +11,8 @@ export default function Home() {
         <div className="mx-auto max-w-4xl">
           {/* Trial Badge */}
           <div className="mx-auto mb-6 w-fit animate-in fade-in zoom-in duration-300">
-            <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-bold text-primary ring-1 ring-primary/20">
-              ✨ Try Premium FREE for 14 Days
+            <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-4 py-2 text-sm font-bold text-amber-700 ring-1 ring-amber-200">
+              🚧 New Registrations Temporarily Paused
             </span>
           </div>
 
@@ -30,13 +30,12 @@ export default function Home() {
           </p>
 
           <div className="mt-10 flex flex-wrap justify-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300">
-            <Link
-              href="/login"
-              className="group flex items-center gap-2 rounded-xl bg-primary px-8 py-4 text-base font-semibold text-white shadow-lg shadow-primary/25 transition-all hover:scale-105 hover:bg-primary/90"
+            <button
+              disabled
+              className="group flex items-center gap-2 rounded-xl bg-gray-200 px-8 py-4 text-base font-semibold text-gray-500 cursor-not-allowed"
             >
-              Start Your Free Trial
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-            </Link>
+              Registrations Paused
+            </button>
             <Link
               href="#packages"
               className="rounded-xl px-8 py-4 text-base font-medium text-foreground transition-colors hover:bg-muted"
@@ -132,9 +131,9 @@ export default function Home() {
                 <span className="text-4xl font-bold text-gray-900">$0</span>
                 <span className="text-gray-500"> / forever</span>
               </div>
-              <Link href="/login" className="block w-full py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium rounded-xl text-center transition-colors">
-                Start Free Trial
-              </Link>
+              <button disabled className="block w-full py-3 px-4 bg-gray-100 text-gray-400 font-medium rounded-xl text-center cursor-not-allowed">
+                Registrations Paused
+              </button>
               <div className="mt-8 space-y-4">
                 <p className="text-sm font-semibold text-gray-900">Includes:</p>
                 <ul className="space-y-3 text-sm text-gray-600">
@@ -169,9 +168,9 @@ export default function Home() {
                 <span className="text-4xl font-bold text-gray-900">LKR 990</span>
                 <span className="text-gray-500"> / one-time</span>
               </div>
-              <Link href="/login" className="block w-full py-3 px-4 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl text-center shadow-lg shadow-primary/25 transition-all">
-                Start Premium Trial
-              </Link>
+              <button disabled className="block w-full py-3 px-4 bg-gray-200 text-gray-500 font-semibold rounded-xl text-center cursor-not-allowed">
+                Registrations Paused
+              </button>
               <div className="mt-8 space-y-4">
                 <p className="text-sm font-semibold text-gray-900">Everything in Free, plus:</p>
                 <ul className="space-y-3 text-sm text-gray-700">
@@ -243,13 +242,12 @@ export default function Home() {
       <section className="w-full px-4 py-20 bg-primary/5">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-serif font-bold text-gray-900 mb-6">Ready to plan the perfect day?</h2>
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-8 py-4 text-base font-medium text-white shadow-lg transition-all hover:scale-105 hover:bg-gray-800"
+          <button
+            disabled
+            className="inline-flex items-center gap-2 rounded-xl bg-gray-800/50 px-8 py-4 text-base font-medium text-gray-400 cursor-not-allowed"
           >
-            Get Started for Free
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+            Registrations Paused
+          </button>
         </div>
       </section>
     </div>

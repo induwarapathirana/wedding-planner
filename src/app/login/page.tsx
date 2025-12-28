@@ -209,6 +209,10 @@ export default function LoginPage() {
                     <p className="text-muted-foreground">Sign in to continue planning.</p>
                 </div>
 
+                <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
+                    <strong>Notice:</strong> New account registrations are currently paused. Only existing users can log in at this time.
+                </div>
+
                 <div className="rounded-2xl bg-white p-8 shadow-xl">
                     {isSignUp && (
                         <div className="flex items-center gap-2 mb-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
