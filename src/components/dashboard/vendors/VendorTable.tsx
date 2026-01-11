@@ -7,7 +7,6 @@ interface VendorTableProps {
     onEdit: (vendor: Vendor) => void;
     onDelete: (id: string) => void;
     onStatusUpdate: (id: string, status: VendorStatus) => void;
-    onStatusUpdate: (id: string, status: VendorStatus) => void;
     currencySymbol?: string;
     readonly?: boolean;
 }
