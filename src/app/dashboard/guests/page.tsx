@@ -7,13 +7,14 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { GuestDialog } from "@/components/dashboard/guest-dialog";
 import { GroupSummaryModal } from "@/components/dashboard/group-summary-modal";
-import { BulkSeatingDialog } from "@/components/dashboard/bulk-seating-dialog"; // New Import
+import { BulkSeatingDialog } from "@/components/dashboard/bulk-seating-dialog";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 import { getEffectiveTier } from "@/lib/trial";
+import { useWeddingPermission } from "@/hooks/use-wedding-permission";
 
 type Guest = {
-    id: string; // Changed to string for UUID
+    id: string;
     name: string;
     group_category: string;
     priority: "A" | "B" | "C";
@@ -21,9 +22,9 @@ type Guest = {
     meal_preference?: string;
     table_assignment?: string;
     plus_one: boolean;
-    companion_guest_count?: number; // Added for companion count
-    companion_names?: string[]; // Added: Optional names for companions
-    selected_companions?: string[]; // Added: Track which companions are selected
+    companion_guest_count?: number;
+    companion_names?: string[];
+    selected_companions?: string[];
 };
 
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
@@ -38,13 +39,16 @@ export default function GuestPage() {
     const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState<"name" | "priority" | "status">("priority");
     const [filterGroup, setFilterGroup] = useState<string>("All");
-    const [searchQuery, setSearchQuery] = useState(""); // Added: Search state
+    const [searchQuery, setSearchQuery] = useState("");
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [weddingId, setWeddingId] = useState<string | null>(null);
+
+    const { canEdit, loading: permLoading } = useWeddingPermission(weddingId);
 
     // Dialog State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
-    const [isSeatingDialogOpen, setIsSeatingDialogOpen] = useState(false); // New State
+    const [isSeatingDialogOpen, setIsSeatingDialogOpen] = useState(false);
     const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
 
     // Confirm Modal State
@@ -53,7 +57,6 @@ export default function GuestPage() {
     // Companion Expansion State
     const [expandedGuestIds, setExpandedGuestIds] = useState<Set<string>>(new Set());
 
-    // ... (fetch logic remains same)
     // Check if over limit based on CURRENT tier
     const isOverLimit = guests.length > PLAN_LIMITS[tier].guests;
 
@@ -61,24 +64,26 @@ export default function GuestPage() {
     useEffect(() => {
         async function loadData() {
             setLoading(true);
-            const weddingId = localStorage.getItem("current_wedding_id");
+            const wId = localStorage.getItem("current_wedding_id");
 
-            if (!weddingId) {
+            if (!wId) {
                 setLoading(false);
                 return;
             }
 
+            setWeddingId(wId);
+
             // Fetch wedding target
-            const { data: weddingData } = await supabase.from('weddings').select('target_guest_count').eq('id', weddingId).single();
+            const { data: weddingData } = await supabase.from('weddings').select('target_guest_count').eq('id', wId).single();
             if (weddingData) {
                 setTargetCount(weddingData.target_guest_count || 0);
             }
 
             // Fetch Effective Tier (checking trial status)
-            const trialInfo = await getEffectiveTier(weddingId);
+            const trialInfo = await getEffectiveTier(wId);
             setTier(trialInfo.effectiveTier);
 
-            fetchGuests(weddingId);
+            fetchGuests(wId);
         }
         loadData();
     }, []);
@@ -90,8 +95,8 @@ export default function GuestPage() {
         }
     }, [loading, isOverLimit]);
 
-    async function fetchGuests(weddingId: string) {
-        const { data } = await supabase.from('guests').select('*').eq('wedding_id', weddingId);
+    async function fetchGuests(wId: string) {
+        const { data } = await supabase.from('guests').select('*').eq('wedding_id', wId);
         if (data) {
             setGuests(data as unknown as Guest[]);
         }
@@ -99,6 +104,7 @@ export default function GuestPage() {
     }
 
     const handleOpenAdd = () => {
+        if (!canEdit) return;
         const canAdd = checkLimit(tier, 'guests', guests.length);
         if (!canAdd) {
             setShowLimitModal(true);
@@ -109,14 +115,14 @@ export default function GuestPage() {
     };
 
     const handleOpenEdit = (guest: Guest) => {
+        if (!canEdit) return;
         setEditingGuest(guest);
         setIsDialogOpen(true);
     };
 
     const handleSaveGuest = async (guestData: Partial<Guest>) => {
-        const weddingId = localStorage.getItem("current_wedding_id");
-        if (!weddingId) {
-            alert("Error: No wedding context found.");
+        if (!weddingId || !canEdit) {
+            if (!canEdit) alert("You do not have permission to edit guests.");
             return;
         }
 
@@ -140,6 +146,7 @@ export default function GuestPage() {
 
     // Selection Logic
     const toggleSelectAll = () => {
+        if (!canEdit) return;
         if (selectedIds.size === guests.length) {
             setSelectedIds(new Set());
         } else {
@@ -148,6 +155,7 @@ export default function GuestPage() {
     };
 
     const toggleSelect = (id: string) => {
+        if (!canEdit) return;
         setSelectedIds((prev) => {
             const newSet = new Set(prev);
             if (newSet.has(id)) {
@@ -160,6 +168,7 @@ export default function GuestPage() {
     };
 
     const toggleCompanionSelection = async (guestId: string, companionName: string) => {
+        if (!canEdit) return;
         const guest = guests.find(g => g.id === guestId);
         if (!guest) return;
 
@@ -181,6 +190,7 @@ export default function GuestPage() {
     };
 
     const toggleAllCompanions = async (guestId: string, selectAll: boolean) => {
+        if (!canEdit) return;
         const guest = guests.find(g => g.id === guestId);
         if (!guest || !guest.companion_names) return;
 
@@ -200,20 +210,22 @@ export default function GuestPage() {
 
     // Delete Logic
     const confirmDelete = (id: string) => {
+        if (!canEdit) return;
         setConfirmState({ isOpen: true, type: 'single', id });
     };
 
     const confirmBulkDelete = () => {
+        if (!canEdit) return;
         setConfirmState({ isOpen: true, type: 'bulk' });
     };
 
     const executeDelete = async () => {
+        if (!canEdit) return;
         if (confirmState.type === 'single' && confirmState.id) {
             const { error } = await supabase.from('guests').delete().eq('id', confirmState.id);
             if (error) {
                 alert("Error deleting: " + error.message);
             } else {
-                const weddingId = localStorage.getItem("current_wedding_id");
                 if (weddingId) fetchGuests(weddingId);
                 setSelectedIds(prev => {
                     const next = new Set(prev);
@@ -228,7 +240,6 @@ export default function GuestPage() {
             if (error) {
                 alert("Error deleting: " + error.message);
             } else {
-                const weddingId = localStorage.getItem("current_wedding_id");
                 if (weddingId) fetchGuests(weddingId);
                 setSelectedIds(new Set());
             }
@@ -237,6 +248,7 @@ export default function GuestPage() {
     };
 
     const handleBulkSeating = async (tableNo: string) => {
+        if (!canEdit) return;
         const ids = Array.from(selectedIds);
         if (ids.length === 0) return;
 
@@ -248,13 +260,13 @@ export default function GuestPage() {
         if (error) {
             alert("Error updating seating: " + error.message);
         } else {
-            const weddingId = localStorage.getItem("current_wedding_id");
             if (weddingId) fetchGuests(weddingId);
             setSelectedIds(new Set());
         }
     };
 
     const handleBulkUnassign = async () => {
+        if (!canEdit) return;
         const ids = Array.from(selectedIds);
         if (ids.length === 0) return;
 
@@ -266,7 +278,6 @@ export default function GuestPage() {
         if (error) {
             alert("Error unassigning seating: " + error.message);
         } else {
-            const weddingId = localStorage.getItem("current_wedding_id");
             if (weddingId) fetchGuests(weddingId);
             setSelectedIds(new Set());
         }
@@ -336,6 +347,10 @@ export default function GuestPage() {
         return a.localeCompare(b);
     });
 
+    if (loading || permLoading) {
+        return <div className="p-10 text-center text-muted-foreground">Loading guest list...</div>;
+    }
+
     return (
         <div className="space-y-8">
             <div className="space-y-6 md:space-y-8 pb-20 md:pb-0"> {/* Add padding for sticky bar */}
@@ -353,13 +368,15 @@ export default function GuestPage() {
                         <ModeToggle />
                     </div>
 
-                    <button
-                        onClick={handleOpenAdd}
-                        className="flex lg:hidden items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all w-full md:w-auto"
-                    >
-                        <UserPlus className="w-4 h-4" />
-                        Add Guest
-                    </button>
+                    {canEdit && (
+                        <button
+                            onClick={handleOpenAdd}
+                            className="flex lg:hidden items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all w-full md:w-auto"
+                        >
+                            <UserPlus className="w-4 h-4" />
+                            Add Guest
+                        </button>
+                    )}
                 </div>
 
                 {/* Controls Bar */}
@@ -406,19 +423,21 @@ export default function GuestPage() {
                                 <option value="status">Sort: Status</option>
                             </select>
 
-                            <button
-                                onClick={handleOpenAdd}
-                                className="hidden lg:flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all"
-                            >
-                                <UserPlus className="w-4 h-4" />
-                                Add Guest
-                            </button>
+                            {canEdit && (
+                                <button
+                                    onClick={handleOpenAdd}
+                                    className="hidden lg:flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all"
+                                >
+                                    <UserPlus className="w-4 h-4" />
+                                    Add Guest
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
 
                 {/* Selection Bar - Sticky at bottom for mobile, floated on desktop */}
-                {selectedIds.size > 0 && (
+                {selectedIds.size > 0 && canEdit && (
                     <div className="fixed bottom-20 left-4 right-4 md:relative md:bottom-auto md:left-auto md:right-auto z-40">
                         <div className="bg-white/95 backdrop-blur-sm md:bg-muted/50 rounded-2xl md:rounded-xl p-2 border border-primary/20 md:border-border shadow-xl md:shadow-none flex flex-col md:flex-row md:items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
                             <div className="flex items-center justify-between px-2 md:px-3">
@@ -557,9 +576,11 @@ export default function GuestPage() {
                                         <div key={guest.id} className={cn("hover:bg-muted/30 transition-colors", selectedIds.has(guest.id) && "bg-muted/50")}>
                                             <div className="flex items-center justify-between p-4 md:p-6">
                                                 <div className="flex items-center gap-3 md:gap-4">
-                                                    <button onClick={() => toggleSelect(guest.id)} className="text-muted-foreground hover:text-primary">
-                                                        {selectedIds.has(guest.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
-                                                    </button>
+                                                    {canEdit && (
+                                                        <button onClick={() => toggleSelect(guest.id)} className="text-muted-foreground hover:text-primary">
+                                                            {selectedIds.has(guest.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
+                                                        </button>
+                                                    )}
 
                                                     <div
                                                         onClick={() => handleOpenEdit(guest)}
@@ -606,26 +627,32 @@ export default function GuestPage() {
                                                     )}>
                                                         {guest.rsvp_status.charAt(0).toUpperCase() + guest.rsvp_status.slice(1)}
                                                     </span>
-                                                    <button onClick={() => handleOpenEdit(guest)} className="p-2 text-muted-foreground hover:text-primary transition-colors">
-                                                        <Edit2 className="w-4 h-4" />
-                                                    </button>
-                                                    <button onClick={() => confirmDelete(guest.id)} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
+                                                    {canEdit && (
+                                                        <>
+                                                            <button onClick={() => handleOpenEdit(guest)} className="p-2 text-muted-foreground hover:text-primary transition-colors">
+                                                                <Edit2 className="w-4 h-4" />
+                                                            </button>
+                                                            <button onClick={() => confirmDelete(guest.id)} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
 
                                             {/* Companion Expansion */}
                                             {isExpanded && hasCompanions && (
                                                 <div className="pl-14 pr-4 pb-4 space-y-2">
-                                                    <div className="flex items-center gap-2 mb-2">
-                                                        <button
-                                                            onClick={() => toggleAllCompanions(guest.id, !allCompanionsSelected)}
-                                                            className="text-xs text-primary hover:underline font-medium"
-                                                        >
-                                                            {allCompanionsSelected ? 'Deselect All' : 'Select All'}
-                                                        </button>
-                                                    </div>
+                                                    {canEdit && (
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <button
+                                                                onClick={() => toggleAllCompanions(guest.id, !allCompanionsSelected)}
+                                                                className="text-xs text-primary hover:underline font-medium"
+                                                            >
+                                                                {allCompanionsSelected ? 'Deselect All' : 'Select All'}
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                     {/* Main Guest */}
                                                     <div className="flex items-center gap-2 py-1.5 px-3 bg-green-50 rounded-lg">
                                                         <CheckSquare className="w-4 h-4 text-green-600" />
@@ -638,10 +665,14 @@ export default function GuestPage() {
                                                             <button
                                                                 key={idx}
                                                                 onClick={() => toggleCompanionSelection(guest.id, companionName)}
-                                                                className="flex items-center gap-2 py-1.5 px-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors w-full text-left"
+                                                                disabled={!canEdit}
+                                                                className={cn(
+                                                                    "flex items-center gap-2 py-1.5 px-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors w-full text-left",
+                                                                    !canEdit && "opacity-60 cursor-not-allowed hover:bg-gray-50"
+                                                                )}
                                                             >
                                                                 {isSelected ? (
-                                                                    <CheckSquare className="w-4 h-4 text-primary" />
+                                                                    <CheckSquare className={cn("w-4 h-4", canEdit ? "text-primary" : "text-gray-400")} />
                                                                 ) : (
                                                                     <Square className="w-4 h-4 text-gray-400" />
                                                                 )}
@@ -667,9 +698,11 @@ export default function GuestPage() {
                                         <div key={guest.id} className={cn("p-4 hover:bg-muted/30 transition-colors", selectedIds.has(guest.id) && "bg-muted/50")}>
                                             <div onClick={() => handleOpenEdit(guest)} className="flex items-start justify-between mb-3 cursor-pointer">
                                                 <div className="flex items-center gap-3">
-                                                    <button onClick={(e) => { e.stopPropagation(); toggleSelect(guest.id); }} className="text-muted-foreground pt-0.5 hover:text-primary">
-                                                        {selectedIds.has(guest.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
-                                                    </button>
+                                                    {canEdit && (
+                                                        <button onClick={(e) => { e.stopPropagation(); toggleSelect(guest.id); }} className="text-muted-foreground pt-0.5 hover:text-primary">
+                                                            {selectedIds.has(guest.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
+                                                        </button>
+                                                    )}
                                                     <div className="flex items-center gap-3 group">
                                                         <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary uppercase group-hover:bg-primary/20 transition-colors">
                                                             {guest.name.charAt(0)}
@@ -681,12 +714,16 @@ export default function GuestPage() {
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-1">
-                                                    <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(guest); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
-                                                        <Edit2 className="w-4 h-4" />
-                                                    </button>
-                                                    <button onClick={(e) => { e.stopPropagation(); confirmDelete(guest.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
+                                                    {canEdit && (
+                                                        <>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(guest); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
+                                                                <Edit2 className="w-4 h-4" />
+                                                            </button>
+                                                            <button onClick={(e) => { e.stopPropagation(); confirmDelete(guest.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -746,10 +783,14 @@ export default function GuestPage() {
                                                                     <button
                                                                         key={idx}
                                                                         onClick={() => toggleCompanionSelection(guest.id, companionName)}
-                                                                        className="flex items-center gap-2 w-full text-left py-1 hover:bg-white/50 rounded transition-colors"
+                                                                        disabled={!canEdit}
+                                                                        className={cn(
+                                                                            "flex items-center gap-2 w-full text-left py-1 hover:bg-white/50 rounded transition-colors",
+                                                                            !canEdit && "opacity-60 cursor-not-allowed"
+                                                                        )}
                                                                     >
                                                                         {isSelected ? (
-                                                                            <CheckSquare className="w-3.5 h-3.5 text-primary" />
+                                                                            <CheckSquare className={cn("w-3.5 h-3.5", canEdit ? "text-primary" : "text-gray-400")} />
                                                                         ) : (
                                                                             <Square className="w-3.5 h-3.5 text-gray-400" />
                                                                         )}
@@ -786,9 +827,11 @@ export default function GuestPage() {
                                         <thead className="bg-muted text-muted-foreground font-medium uppercase text-xs">
                                             <tr>
                                                 <th className="px-6 py-4 w-12">
-                                                    <button onClick={toggleSelectAll} className="flex items-center">
-                                                        {selectedIds.size > 0 && selectedIds.size === guests.length ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
-                                                    </button>
+                                                    {canEdit && (
+                                                        <button onClick={toggleSelectAll} className="flex items-center">
+                                                            {selectedIds.size > 0 && selectedIds.size === guests.length ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
+                                                        </button>
+                                                    )}
                                                 </th>
                                                 <th className="px-6 py-4 w-1/4">Guest Name</th>
                                                 <th className="px-6 py-4">Group</th>
@@ -801,155 +844,92 @@ export default function GuestPage() {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-border">
-                                            {sortedGuests.map((guest) => (
-                                                <>
-                                                    <tr
-                                                        key={guest.id}
-                                                        onClick={() => handleOpenEdit(guest)}
-                                                        className={cn(
-                                                            "group cursor-pointer hover:bg-muted/50 transition-colors",
-                                                            selectedIds.has(guest.id) && "bg-muted/50"
-                                                        )}
-                                                    >
+                                            {sortedGuests.map((guest) => {
+                                                const hasCompanions = guest.companion_names && guest.companion_names.length > 0;
+                                                const selectedCompanions = guest.selected_companions || guest.companion_names || [];
+
+                                                return (
+                                                    <tr key={guest.id} onClick={() => handleOpenEdit(guest)} className={cn("hover:bg-muted/30 transition-colors cursor-pointer group", selectedIds.has(guest.id) && "bg-muted/50")}>
                                                         <td className="px-6 py-4">
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); toggleSelect(guest.id); }}
-                                                                className="text-muted-foreground hover:text-primary"
-                                                            >
-                                                                {selectedIds.has(guest.id) ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
-                                                            </button>
+                                                            {canEdit && (
+                                                                <button onClick={(e) => { e.stopPropagation(); toggleSelect(guest.id); }} className="text-muted-foreground hover:text-primary">
+                                                                    {selectedIds.has(guest.id) ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
+                                                                </button>
+                                                            )}
                                                         </td>
-                                                        <td className="px-6 py-4 font-medium text-foreground">
+                                                        <td className="px-6 py-4 font-medium text-foreground relative">
                                                             <div className="flex items-center gap-3">
-                                                                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary uppercase">
+                                                                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
                                                                     {guest.name.charAt(0)}
                                                                 </div>
-                                                                {guest.name}
+                                                                <div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        {guest.name}
+                                                                        {hasCompanions && (
+                                                                            <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                                                                                <Users className="mr-1 w-3 h-3" />
+                                                                                {selectedCompanions.length}/{guest.companion_names!.length + 1}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    {hasCompanions && (
+                                                                        <div className="absolute left-6 top-full z-10 hidden w-48 rounded-lg border border-border bg-white p-2 shadow-lg group-hover:block">
+                                                                            <p className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">Companions</p>
+                                                                            <div className="space-y-1">
+                                                                                {guest.companion_names!.map((c, i) => (
+                                                                                    <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
+                                                                                        <div className="h-1.5 w-1.5 rounded-full bg-primary/40" />
+                                                                                        {c}
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </td>
                                                         <td className="px-6 py-4 text-muted-foreground">{guest.group_category || '-'}</td>
+                                                        <td className="px-6 py-4 text-muted-foreground">{guest.priority || 'B'}</td>
                                                         <td className="px-6 py-4">
                                                             <span className={cn(
-                                                                "inline-flex items-center rounded px-2 py-0.5 text-xs font-bold",
-                                                                guest.priority === 'A' ? "bg-red-100 text-red-700" :
-                                                                    guest.priority === 'C' ? "bg-gray-100 text-gray-600" : "bg-blue-50 text-blue-600"
-                                                            )}>
-                                                                {guest.priority || 'B'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <span className={cn(
-                                                                "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                                                                guest.rsvp_status === 'accepted' ? "bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20" :
-                                                                    guest.rsvp_status === 'declined' ? "bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20" : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20"
+                                                                "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium",
+                                                                guest.rsvp_status === 'accepted' ? "bg-green-100 text-green-700" :
+                                                                    guest.rsvp_status === 'declined' ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
                                                             )}>
                                                                 {guest.rsvp_status.charAt(0).toUpperCase() + guest.rsvp_status.slice(1)}
                                                             </span>
                                                         </td>
-                                                        <td className="px-6 py-4">
-                                                            {guest.rsvp_status === 'accepted' && guest.meal_preference ? (
-                                                                <div className="flex items-center gap-1.5 text-foreground">
-                                                                    <Utensils className="w-3.5 h-3.5 text-muted-foreground" />
-                                                                    {guest.meal_preference}
-                                                                </div>
-                                                            ) : <span className="text-muted-foreground">-</span>}
+                                                        <td className="px-6 py-4 text-muted-foreground">{guest.meal_preference || '-'}</td>
+                                                        <td className="px-6 py-4 text-muted-foreground">
+                                                            <div className="flex items-center gap-2">
+                                                                {guest.table_assignment && <Armchair className="w-3 h-3" />}
+                                                                {guest.table_assignment || '-'}
+                                                            </div>
                                                         </td>
+                                                        <td className="px-6 py-4 text-muted-foreground font-medium">{1 + (guest.companion_guest_count || 0)}</td>
                                                         <td className="px-6 py-4">
-                                                            {guest.rsvp_status === 'accepted' && guest.table_assignment ? (
-                                                                <div className="flex items-center gap-1.5 text-foreground">
-                                                                    <Armchair className="w-3.5 h-3.5 text-muted-foreground" />
-                                                                    {guest.table_assignment}
-                                                                </div>
-                                                            ) : <span className="text-muted-foreground text-xs italic">Unassigned</span>}
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <div className="flex flex-col gap-1.5">
-                                                                <div className="flex items-center gap-1">
-                                                                    <Users className="w-3.5 h-3.5 text-muted-foreground" />
-                                                                    <span className="font-medium">{1 + (guest.companion_guest_count || 0)}</span>
-                                                                </div>
-                                                                {/* Expansion Toggle */}
-                                                                {(guest.companion_names && guest.companion_names.length > 0) && (
-                                                                    <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            setExpandedGuestIds(prev => {
-                                                                                const newSet = new Set(prev);
-                                                                                if (newSet.has(guest.id)) newSet.delete(guest.id);
-                                                                                else newSet.add(guest.id);
-                                                                                return newSet;
-                                                                            });
-                                                                        }}
-                                                                        className="text-[10px] font-medium text-primary hover:underline text-left"
-                                                                    >
-                                                                        {expandedGuestIds.has(guest.id) ? "Hide List" : "View List"}
-                                                                    </button>
+                                                            <div className="flex items-center gap-2">
+                                                                {canEdit && (
+                                                                    <>
+                                                                        <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(guest); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
+                                                                            <Edit2 className="w-4 h-4" />
+                                                                        </button>
+                                                                        <button onClick={(e) => { e.stopPropagation(); confirmDelete(guest.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
+                                                                            <Trash2 className="w-4 h-4" />
+                                                                        </button>
+                                                                    </>
                                                                 )}
                                                             </div>
                                                         </td>
-                                                        <td className="px-6 py-4">
-                                                            <div className="flex items-center gap-2">
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); handleOpenEdit(guest); }}
-                                                                    className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-primary transition-colors"
-                                                                >
-                                                                    <Edit2 className="w-4 h-4" />
-                                                                </button>
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); confirmDelete(guest.id); }}
-                                                                    className="p-1.5 rounded-lg text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-colors"
-                                                                >
-                                                                    <Trash2 className="w-4 h-4" />
-                                                                </button>
-                                                            </div>
-                                                        </td>
                                                     </tr>
-                                                    {/* Expanded Row for Companions */}
-                                                    {
-                                                        expandedGuestIds.has(guest.id) && guest.companion_names && guest.companion_names.length > 0 && (
-                                                            <tr key={`${guest.id}-companions`} className="bg-muted/30">
-                                                                <td colSpan={9} className="px-6 py-3">
-                                                                    <div className="pl-12 flex flex-wrap gap-4">
-                                                                        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded border border-border">
-                                                                            <CheckSquare className="w-3.5 h-3.5 text-green-600" />
-                                                                            <span className="text-xs text-gray-700 font-medium">{guest.name} (Main)</span>
-                                                                        </div>
-                                                                        {guest.companion_names.map((companionName, idx) => {
-                                                                            const isSelected = (guest.selected_companions || guest.companion_names || []).includes(companionName);
-                                                                            return (
-                                                                                <button
-                                                                                    key={idx}
-                                                                                    onClick={(e) => { e.stopPropagation(); toggleCompanionSelection(guest.id, companionName); }}
-                                                                                    className="flex items-center gap-2 bg-white px-3 py-1.5 rounded border border-border hover:border-primary/50 transition-colors"
-                                                                                >
-                                                                                    {isSelected ? (
-                                                                                        <CheckSquare className="w-3.5 h-3.5 text-primary" />
-                                                                                    ) : (
-                                                                                        <Square className="w-3.5 h-3.5 text-gray-400" />
-                                                                                    )}
-                                                                                    <span className={cn("text-xs", isSelected ? "text-gray-900 font-medium" : "text-gray-500")}>
-                                                                                        {companionName}
-                                                                                    </span>
-                                                                                </button>
-                                                                            );
-                                                                        })}
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        )
-                                                    }
-                                                </>
-                                            ))}
-                                            {sortedGuests.length === 0 && (
-                                                <tr>
-                                                    <td colSpan={9} className="p-8 text-center text-muted-foreground">No guests found matching this filter.</td>
-                                                </tr>
-                                            )}
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>
                             </>
                         )}
+                        {sortedGuests.length === 0 && <div className="p-10 text-center text-muted-foreground italic">No guests found.</div>}
                     </div>
                 </div>
 
@@ -958,14 +938,24 @@ export default function GuestPage() {
                     onClose={() => setIsDialogOpen(false)}
                     onSubmit={handleSaveGuest}
                     initialData={editingGuest}
-                    customGroups={Array.from(new Set(guests.map(g => g.group_category).filter(g => g && !DEFAULT_GROUPS.includes(g))))}
-                    readOnly={editingGuest ? isOverLimit : false}
                 />
-
+                <LimitModal
+                    isOpen={showLimitModal}
+                    onClose={() => setShowLimitModal(false)}
+                    feature="Guests"
+                    limit={PLAN_LIMITS[tier]?.guests || PLAN_LIMITS.free.guests}
+                    tier={tier}
+                />
                 <GroupSummaryModal
                     isOpen={isGroupModalOpen}
                     onClose={() => setIsGroupModalOpen(false)}
                     guests={guests}
+                />
+                <BulkSeatingDialog
+                    isOpen={isSeatingDialogOpen}
+                    onClose={() => setIsSeatingDialogOpen(false)}
+                    onSave={handleBulkSeating}
+                    selectedIds={selectedIds}
                 />
 
                 <ConfirmDialog
@@ -978,22 +968,7 @@ export default function GuestPage() {
                         : "Are you sure you want to delete this guest? This action cannot be undone."}
                     variant="danger"
                 />
-
-                <BulkSeatingDialog
-                    isOpen={isSeatingDialogOpen}
-                    onClose={() => setIsSeatingDialogOpen(false)}
-                    onConfirm={handleBulkSeating}
-                    selectedCount={selectedHeadcount}
-                />
-
-                <LimitModal
-                    isOpen={showLimitModal}
-                    onClose={() => setShowLimitModal(false)}
-                    feature="Guests"
-                    limit={PLAN_LIMITS[tier].guests}
-                    tier={tier}
-                />
             </div>
-        </div >
+        </div>
     );
 }

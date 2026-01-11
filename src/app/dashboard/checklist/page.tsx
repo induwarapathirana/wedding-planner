@@ -10,6 +10,7 @@ import { useSearchParams } from "next/navigation";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 import { getEffectiveTier } from "@/lib/trial";
 import { LimitModal } from "@/components/dashboard/limit-modal";
+import { useWeddingPermission } from "@/hooks/use-wedding-permission";
 
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { ModeToggle } from "@/components/dashboard/mode-toggle";
@@ -35,6 +36,8 @@ function ChecklistContent() {
     const [showLimitModal, setShowLimitModal] = useState(false);
     const searchParams = useSearchParams();
 
+    const { canEdit, loading: permLoading } = useWeddingPermission(weddingId);
+
     // Dialog State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<ChecklistItem | null>(null);
@@ -49,11 +52,9 @@ function ChecklistContent() {
         async function loadData() {
             setLoading(true);
             const wId = localStorage.getItem("current_wedding_id");
-            let currentTier: PlanTier = 'free';
 
             if (wId) {
                 setWeddingId(wId);
-                // Use getEffectiveTier for proper trial/payment validation
                 const trialInfo = await getEffectiveTier(wId);
                 setTier(trialInfo.effectiveTier);
                 await fetchItems(wId);
@@ -64,7 +65,6 @@ function ChecklistContent() {
                     if (collab) {
                         localStorage.setItem("current_wedding_id", collab.wedding_id);
                         setWeddingId(collab.wedding_id);
-                        // Use getEffectiveTier for proper trial/payment validation
                         const trialInfo = await getEffectiveTier(collab.wedding_id);
                         setTier(trialInfo.effectiveTier);
                         await fetchItems(collab.wedding_id);
@@ -89,6 +89,7 @@ function ChecklistContent() {
     }
 
     const handleOpenAdd = () => {
+        if (!canEdit) return;
         if (!checkLimit(tier, 'checklist_items', items.length)) {
             setShowLimitModal(true);
             return;
@@ -98,12 +99,13 @@ function ChecklistContent() {
     };
 
     const handleOpenEdit = (item: ChecklistItem) => {
+        if (!canEdit) return;
         setEditingItem(item);
         setIsDialogOpen(true);
     };
 
     const handleSaveItem = async (itemData: Partial<ChecklistItem>) => {
-        if (!weddingId) return;
+        if (!weddingId || !canEdit) return;
 
         const payload = {
             ...itemData,
@@ -122,6 +124,7 @@ function ChecklistContent() {
     };
 
     const toggleComplete = async (item: ChecklistItem) => {
+        if (!canEdit) return;
         const newStatus = !item.is_completed;
         setItems(items.map(i => i.id === item.id ? { ...i, is_completed: newStatus } : i));
 
@@ -133,6 +136,7 @@ function ChecklistContent() {
     };
 
     const toggleSelectAll = () => {
+        if (!canEdit) return;
         if (selectedIds.size === items.length) {
             setSelectedIds(new Set());
         } else {
@@ -141,6 +145,7 @@ function ChecklistContent() {
     };
 
     const toggleSelect = (id: string) => {
+        if (!canEdit) return;
         const newSelected = new Set(selectedIds);
         if (newSelected.has(id)) {
             newSelected.delete(id);
@@ -151,10 +156,12 @@ function ChecklistContent() {
     };
 
     const confirmDelete = (id: string) => {
+        if (!canEdit) return;
         setConfirmState({ isOpen: true, type: 'single', id });
     };
 
     const confirmBulkDelete = () => {
+        if (!canEdit) return;
         setConfirmState({ isOpen: true, type: 'bulk' });
     };
 
@@ -207,6 +214,10 @@ function ChecklistContent() {
         ...existingCategories.filter(c => !preferredOrder.includes(c))
     ];
 
+    if (loading || permLoading) {
+        return <div className="p-10 text-center text-muted-foreground">Loading checklist...</div>;
+    }
+
     return (
         <TierGate weddingId={weddingId} featureName="Checklist">
             <div className="space-y-8">
@@ -222,18 +233,20 @@ function ChecklistContent() {
                     </div>
                     <div className="flex items-center gap-3">
                         <TourGuide steps={CHECKLIST_STEPS} pageKey="checklist" />
-                        <button
-                            id="tour-add-task"
-                            onClick={handleOpenAdd}
-                            className="flex-1 md:flex-none flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 md:py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all w-full md:w-auto"
-                        >
-                            <Plus className="w-4 h-4" />
-                            Add Task
-                        </button>
+                        {canEdit && (
+                            <button
+                                id="tour-add-task"
+                                onClick={handleOpenAdd}
+                                className="flex-1 md:flex-none flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 md:py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all w-full md:w-auto"
+                            >
+                                <Plus className="w-4 h-4" />
+                                Add Task
+                            </button>
+                        )}
                     </div>
                 </div>
 
-                {selectedIds.size > 0 && (
+                {canEdit && selectedIds.size > 0 && (
                     <div className="fixed bottom-4 left-4 right-4 md:relative md:bottom-auto md:left-auto md:right-auto z-40">
                         <div className="bg-white/95 backdrop-blur-sm md:bg-muted/50 rounded-2xl md:rounded-xl p-2 border border-primary/20 md:border-border shadow-xl md:shadow-none flex flex-col md:flex-row md:items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
                             <div className="flex items-center justify-between px-2 md:px-3">
@@ -263,10 +276,12 @@ function ChecklistContent() {
 
                 {items.length > 0 && (
                     <div className="flex justify-end">
-                        <button onClick={toggleSelectAll} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-2">
-                            {selectedIds.size > 0 && selectedIds.size === items.length ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
-                            {selectedIds.size === items.length ? "Deselect All" : "Select All"}
-                        </button>
+                        {canEdit && (
+                            <button onClick={toggleSelectAll} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-2">
+                                {selectedIds.size > 0 && selectedIds.size === items.length ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                                {selectedIds.size === items.length ? "Deselect All" : "Select All"}
+                            </button>
+                        )}
                     </div>
                 )}
 
@@ -296,18 +311,24 @@ function ChecklistContent() {
                                             className={cn("group flex items-start gap-4 p-4 rounded-2xl hover:bg-muted/50 transition-all border border-transparent hover:border-border/50 cursor-pointer", selectedIds.has(item.id) ? "bg-primary/5 border-primary/20 shadow-sm" : "bg-white md:bg-transparent shadow-sm md:shadow-none border-border/50 md:border-transparent")}
                                         >
                                             <div className="flex items-center h-6">
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }}
-                                                    className="text-muted-foreground hover:text-primary transition-colors"
-                                                >
-                                                    {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
-                                                </button>
+                                                {canEdit && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }}
+                                                        className="text-muted-foreground hover:text-primary transition-colors"
+                                                    >
+                                                        {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
+                                                    </button>
+                                                )}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-start gap-3 w-full text-left">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); toggleComplete(item); }}
-                                                        className="mt-0.5 rounded-full border-2 border-muted-foreground/30 hover:border-primary/50 transition-colors p-0.5"
+                                                        disabled={!canEdit}
+                                                        className={cn(
+                                                            "mt-0.5 rounded-full border-2 border-muted-foreground/30 transition-colors p-0.5",
+                                                            canEdit ? "hover:border-primary/50" : "cursor-not-allowed opacity-50"
+                                                        )}
                                                     >
                                                         <Circle className="w-4 h-4 text-transparent" />
                                                     </button>
@@ -317,14 +338,16 @@ function ChecklistContent() {
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="flex items-start gap-1">
-                                                <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-white md:hover:bg-muted">
-                                                    <Edit2 className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-all rounded-lg hover:bg-white md:hover:bg-muted">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
+                                            {canEdit && (
+                                                <div className="flex items-start gap-1">
+                                                    <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-white md:hover:bg-muted">
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </button>
+                                                    <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-all rounded-lg hover:bg-white md:hover:bg-muted">
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                     {pendingItems.length === 0 && <p className="text-sm text-muted-foreground italic px-2">No pending tasks.</p>}
@@ -343,13 +366,19 @@ function ChecklistContent() {
                                             className={cn("group flex items-start gap-4 p-4 rounded-2xl opacity-80 hover:opacity-100 transition-all border border-transparent hover:border-border/50 cursor-pointer", selectedIds.has(item.id) ? "bg-primary/5 border-primary/20" : "bg-white/50 md:bg-transparent border-border/30 md:border-transparent shadow-sm md:shadow-none")}
                                         >
                                             <div className="flex items-center h-6">
-                                                <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground hover:text-primary transition-colors">
-                                                    {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
-                                                </button>
+                                                {canEdit && (
+                                                    <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground hover:text-primary transition-colors">
+                                                        {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
+                                                    </button>
+                                                )}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-start gap-3 w-full text-left">
-                                                    <button onClick={(e) => { e.stopPropagation(); toggleComplete(item); }}>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); toggleComplete(item); }}
+                                                        disabled={!canEdit}
+                                                        className={cn(canEdit ? "" : "cursor-not-allowed opacity-50")}
+                                                    >
                                                         <CheckCircle2 className="mt-0.5 w-5 h-5 text-green-600 hover:text-green-700 transition-colors" />
                                                     </button>
                                                     <div>
@@ -358,14 +387,16 @@ function ChecklistContent() {
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="flex items-start gap-1">
-                                                <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-white md:hover:bg-muted">
-                                                    <Edit2 className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-all rounded-lg hover:bg-white md:hover:bg-muted">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
+                                            {canEdit && (
+                                                <div className="flex items-start gap-1">
+                                                    <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-white md:hover:bg-muted">
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </button>
+                                                    <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-all rounded-lg hover:bg-white md:hover:bg-muted">
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -390,12 +421,14 @@ function ChecklistContent() {
                                                         selectedIds.has(item.id) && "ring-2 ring-primary border-primary bg-primary/5"
                                                     )}
                                                 >
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }}
-                                                        className="absolute top-5 right-5 z-10 text-muted-foreground hover:text-primary transition-colors"
-                                                    >
-                                                        {selectedIds.has(item.id) ? <CheckSquare className="w-6 h-6 text-primary" /> : <Square className="w-6 h-6 opacity-40 hover:opacity-100" />}
-                                                    </button>
+                                                    {canEdit && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }}
+                                                            className="absolute top-5 right-5 z-10 text-muted-foreground hover:text-primary transition-colors"
+                                                        >
+                                                            {selectedIds.has(item.id) ? <CheckSquare className="w-6 h-6 text-primary" /> : <Square className="w-6 h-6 opacity-40 hover:opacity-100" />}
+                                                        </button>
+                                                    )}
 
                                                     <div className="flex items-center gap-3 mb-4">
                                                         <span className={cn(
@@ -424,27 +457,29 @@ function ChecklistContent() {
                                                         )}
                                                     </div>
 
-                                                    <div className="flex items-center gap-2 pt-2 border-t border-border/50">
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); toggleComplete(item); }}
-                                                            className={cn(
-                                                                "flex-1 rounded-xl py-2.5 text-xs font-bold transition-all shadow-sm",
-                                                                item.is_completed
-                                                                    ? "bg-white border border-border text-foreground hover:bg-muted"
-                                                                    : "bg-primary text-white hover:bg-primary/90 shadow-primary/20"
-                                                            )}
-                                                        >
-                                                            {item.is_completed ? "Mark Undone" : "Mark Complete"}
-                                                        </button>
-                                                        <div className="flex gap-1">
-                                                            <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2.5 text-muted-foreground hover:text-primary hover:bg-muted rounded-xl transition-all">
-                                                                <Edit2 className="w-4 h-4" />
+                                                    {canEdit && (
+                                                        <div className="flex items-center gap-2 pt-2 border-t border-border/50">
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); toggleComplete(item); }}
+                                                                className={cn(
+                                                                    "flex-1 rounded-xl py-2.5 text-xs font-bold transition-all shadow-sm",
+                                                                    item.is_completed
+                                                                        ? "bg-white border border-border text-foreground hover:bg-muted"
+                                                                        : "bg-primary text-white hover:bg-primary/90 shadow-primary/20"
+                                                                )}
+                                                            >
+                                                                {item.is_completed ? "Mark Undone" : "Mark Complete"}
                                                             </button>
-                                                            <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </button>
+                                                            <div className="flex gap-1">
+                                                                <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2.5 text-muted-foreground hover:text-primary hover:bg-muted rounded-xl transition-all">
+                                                                    <Edit2 className="w-4 h-4" />
+                                                                </button>
+                                                                <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
                                                         </div>
-                                                    </div>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>

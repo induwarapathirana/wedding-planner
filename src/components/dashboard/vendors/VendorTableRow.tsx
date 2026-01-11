@@ -8,6 +8,7 @@ interface VendorTableRowProps {
     onDelete: (id: string) => void;
     onStatusUpdate: (id: string, status: VendorStatus) => void;
     currencySymbol?: string;
+    readonly?: boolean;
 }
 
 const statusColors: Record<VendorStatus, string> = {
@@ -37,7 +38,7 @@ const getPricingDisplay = (vendor: Vendor, currencySymbol: string) => {
     return display;
 };
 
-export default function VendorTableRow({ vendor, onEdit, onDelete, onStatusUpdate, currencySymbol = '$' }: VendorTableRowProps) {
+export default function VendorTableRow({ vendor, onEdit, onDelete, onStatusUpdate, currencySymbol = '$', readonly = false }: VendorTableRowProps) {
     return (
         <tr
             onClick={() => onEdit(vendor)}
@@ -64,7 +65,8 @@ export default function VendorTableRow({ vendor, onEdit, onDelete, onStatusUpdat
                     value={vendor.status}
                     onClick={(e) => e.stopPropagation()}
                     onChange={(e) => onStatusUpdate(vendor.id, e.target.value as VendorStatus)}
-                    className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide cursor-pointer border-0 focus:ring-2 focus:ring-primary/20 transition-all ${statusColors[vendor.status]}`}
+                    disabled={readonly}
+                    className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide cursor-pointer border-0 focus:ring-2 focus:ring-primary/20 transition-all ${statusColors[vendor.status]} ${readonly ? 'opacity-70 cursor-not-allowed' : ''}`}
                 >
                     <option value="researching">Researching</option>
                     <option value="contacted">Contacted</option>
@@ -76,27 +78,29 @@ export default function VendorTableRow({ vendor, onEdit, onDelete, onStatusUpdat
                 {getPricingDisplay(vendor, currencySymbol)}
             </td>
             <td className="px-4 py-3">
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onEdit(vendor); }}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        aria-label="Edit vendor"
-                    >
-                        <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm("Are you sure you want to delete this vendor?")) {
-                                onDelete(vendor.id);
-                            }
-                        }}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        aria-label="Delete vendor"
-                    >
-                        <Trash2 className="w-4 h-4" />
-                    </button>
-                </div>
+                {!readonly && (
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onEdit(vendor); }}
+                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            aria-label="Edit vendor"
+                        >
+                            <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm("Are you sure you want to delete this vendor?")) {
+                                    onDelete(vendor.id);
+                                }
+                            }}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            aria-label="Delete vendor"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    </div>
+                )}
             </td>
         </tr>
     );

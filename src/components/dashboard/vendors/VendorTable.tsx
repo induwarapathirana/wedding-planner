@@ -7,10 +7,12 @@ interface VendorTableProps {
     onEdit: (vendor: Vendor) => void;
     onDelete: (id: string) => void;
     onStatusUpdate: (id: string, status: VendorStatus) => void;
+    onStatusUpdate: (id: string, status: VendorStatus) => void;
     currencySymbol?: string;
+    readonly?: boolean;
 }
 
-export default function VendorTable({ vendors, onEdit, onDelete, onStatusUpdate, currencySymbol = '$' }: VendorTableProps) {
+export default function VendorTable({ vendors, onEdit, onDelete, onStatusUpdate, currencySymbol = '$', readonly = false }: VendorTableProps) {
     if (vendors.length === 0) {
         return (
             <div className="bg-white border border-gray-200 rounded-xl p-12 text-center">
@@ -54,6 +56,7 @@ export default function VendorTable({ vendors, onEdit, onDelete, onStatusUpdate,
                                 onDelete={onDelete}
                                 onStatusUpdate={onStatusUpdate}
                                 currencySymbol={currencySymbol}
+                                readonly={readonly}
                             />
                         ))}
                     </tbody>

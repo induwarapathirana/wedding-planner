@@ -10,6 +10,7 @@ interface VendorCardProps {
     isSelected?: boolean;
     onToggleSelect?: (id: string) => void;
     currencySymbol?: string;
+    readonly?: boolean;
 }
 
 const statusColors: Record<VendorStatus, string> = {
@@ -31,7 +32,7 @@ const getPricingTypeLabel = (type: string): string => {
     return labels[type] || '';
 };
 
-export default function VendorCard({ vendor, onEdit, onDelete, isSelected, onToggleSelect, currencySymbol = '$' }: VendorCardProps) {
+export default function VendorCard({ vendor, onEdit, onDelete, isSelected, onToggleSelect, currencySymbol = '$', readonly = false }: VendorCardProps) {
     const [showActions, setShowActions] = useState(false);
 
     return (
@@ -111,27 +112,29 @@ export default function VendorCard({ vendor, onEdit, onDelete, isSelected, onTog
             </div>
 
             {/* Actions */}
-            <div className="absolute top-4 right-4 md:right-14 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex gap-2">
-                <button
-                    onClick={(e) => { e.stopPropagation(); onEdit(vendor); }}
-                    className="p-2 md:p-1.5 bg-gray-50 md:bg-transparent text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors shadow-sm md:shadow-none"
-                    aria-label="Edit vendor"
-                >
-                    <Pencil className="w-4 h-4" />
-                </button>
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm("Are you sure you want to delete this vendor?")) {
-                            onDelete(vendor.id);
-                        }
-                    }}
-                    className="p-2 md:p-1.5 bg-gray-50 md:bg-transparent text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shadow-sm md:shadow-none"
-                    aria-label="Delete vendor"
-                >
-                    <Trash2 className="w-4 h-4" />
-                </button>
-            </div>
+            {!readonly && (
+                <div className="absolute top-4 right-4 md:right-14 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex gap-2">
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onEdit(vendor); }}
+                        className="p-2 md:p-1.5 bg-gray-50 md:bg-transparent text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors shadow-sm md:shadow-none"
+                        aria-label="Edit vendor"
+                    >
+                        <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm("Are you sure you want to delete this vendor?")) {
+                                onDelete(vendor.id);
+                            }
+                        }}
+                        className="p-2 md:p-1.5 bg-gray-50 md:bg-transparent text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shadow-sm md:shadow-none"
+                        aria-label="Delete vendor"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
