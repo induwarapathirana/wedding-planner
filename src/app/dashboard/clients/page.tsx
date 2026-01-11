@@ -63,9 +63,8 @@ export default function ClientsPage() {
             .insert({
                 user_id: user.id, // Planner owns it initially
                 name: `${client.name}'s Wedding`,
-                wedding_date: client.wedding_date || null,
-                budget: client.budget || 0,
-                currency: 'USD'
+                wedding_date: client.wedding_date || null
+                // Removed budget/currency to prevent errors if schema is outdated
             })
             .select()
             .single();
