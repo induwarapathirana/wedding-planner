@@ -61,12 +61,12 @@ export default function ClientsPage() {
         const { data: wedding, error: weddingError } = await supabase
             .from('weddings')
             .insert({
-                user_id: user.id, // Planner owns it initially
-                name: `${client.name}'s Wedding`, // Title
-                partner1_name: client.name.split(' and ')[0] || client.name.split(' & ')[0] || client.name,
-                partner2_name: client.name.split(' and ')[1] || client.name.split(' & ')[1] || '',
+                user_id: user.id,
+                // name: `${client.name}'s Wedding`, // Optional: requires 'name' column
+                couple_name_1: client.name.split(' and ')[0] || client.name.split(' & ')[0] || client.name,
+                couple_name_2: client.name.split(' and ')[1] || client.name.split(' & ')[1] || '',
                 wedding_date: client.wedding_date || null,
-                budget: client.budget || 0,
+                estimated_budget: client.budget || 0,
                 currency: 'USD'
             })
             .select()
