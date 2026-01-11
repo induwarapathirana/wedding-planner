@@ -87,24 +87,18 @@ export default function LoginPage() {
         const params = new URLSearchParams(window.location.search);
         const inviteToken = params.get('invite_token') || localStorage.getItem('pending_invite_token');
 
-        let redirectUrl = `${window.location.origin}/auth/callback`;
-        if (inviteToken) {
-            redirectUrl += `?invite_token=${inviteToken}`;
-        }
+        // Append role to redirect URL so we can capture it in the callback
+        const redirectUrlWithRole = new URL(redirectUrl);
+        redirectUrlWithRole.searchParams.set('role', role);
 
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: redirectUrl,
+                redirectTo: redirectUrlWithRole.toString(),
                 queryParams: {
                     access_type: 'offline',
                     prompt: 'consent select_account',
                 },
-                // Pass metadata for the trigger to capture
-                data: {
-                    role: role,
-                    full_name: 'New User', // Fallback, Google will overwrite if it provides one, but this satisfies 'not null' checks if any
-                }
             },
         });
 
