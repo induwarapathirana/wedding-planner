@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Plus, Search, Calendar, Mail, Phone, MoreHorizontal } from "lucide-react";
+import { Plus, Search, Calendar, Mail, Phone, MoreHorizontal, Users } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 // Note: We'll add the 'Add Client' Modal later, for now just the list.
 
@@ -83,8 +83,8 @@ export default function ClientsPage() {
                             key={f}
                             onClick={() => setFilter(f)}
                             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${filter === f
-                                    ? 'bg-white text-gray-900 shadow-sm'
-                                    : 'text-gray-500 hover:text-gray-700'
+                                ? 'bg-white text-gray-900 shadow-sm'
+                                : 'text-gray-500 hover:text-gray-700'
                                 }`}
                         >
                             {f.charAt(0).toUpperCase() + f.slice(1)}s
@@ -116,8 +116,8 @@ export default function ClientsPage() {
                                     <div>
                                         <h3 className="font-semibold text-gray-900 leading-tight">{client.name}</h3>
                                         <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${client.status === 'lead' ? 'bg-amber-100 text-amber-700' :
-                                                client.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
-                                                    'bg-gray-100 text-gray-600'
+                                            client.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
+                                                'bg-gray-100 text-gray-600'
                                             }`}>
                                             {client.status}
                                         </span>
