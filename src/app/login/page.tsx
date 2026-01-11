@@ -87,6 +87,11 @@ export default function LoginPage() {
         const params = new URLSearchParams(window.location.search);
         const inviteToken = params.get('invite_token') || localStorage.getItem('pending_invite_token');
 
+        let redirectUrl = `${window.location.origin}/auth/callback`;
+        if (inviteToken) {
+            redirectUrl += `?invite_token=${inviteToken}`;
+        }
+
         // Append role to redirect URL so we can capture it in the callback
         const redirectUrlWithRole = new URL(redirectUrl);
         redirectUrlWithRole.searchParams.set('role', role);
