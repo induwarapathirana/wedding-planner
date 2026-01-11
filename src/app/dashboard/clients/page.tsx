@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Plus, Search, Calendar, Mail, Phone, MoreHorizontal, Users } from "lucide-react";
+import { Check, Loader2, Sparkles, FolderOpen } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/format";
 import { AddClientModal } from "@/components/dashboard/clients/AddClientModal";
 // Note: We'll add the 'Add Client' Modal later, for now just the list.
@@ -14,15 +16,18 @@ type Client = {
     phone: string;
     wedding_date: string;
     budget: number;
-    status: 'lead' | 'active' | 'completed';
+    status: 'lead' | 'active' | 'completed' | 'lost';
+    wedding_id?: string;
 };
 
 export default function ClientsPage() {
+    const router = useRouter();
     const [clients, setClients] = useState<Client[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all'); // all, lead, active
     const [search, setSearch] = useState('');
     const [isAddModalOpen, setIsAddModalOpen] = useState(false); // NEW STATE
+    const [creatingWeddingFor, setCreatingWeddingFor] = useState<string | null>(null);
 
     useEffect(() => {
         fetchClients();
@@ -42,6 +47,53 @@ export default function ClientsPage() {
             if (data) setClients(data as Client[]);
         }
         setLoading(false);
+    }
+
+    async function handleCreateWedding(client: Client) {
+        if (!confirm(`Create a new wedding workspace for ${client.name}?`)) return;
+
+        setCreatingWeddingFor(client.id);
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (!user) return;
+
+        // 1. Create the Wedding
+        const { data: wedding, error: weddingError } = await supabase
+            .from('weddings')
+            .insert({
+                user_id: user.id, // Planner owns it initially
+                name: `${client.name}'s Wedding`,
+                wedding_date: client.wedding_date || null,
+                budget: client.budget || 0,
+                curency: 'USD'
+            })
+            .select()
+            .single();
+
+        if (weddingError) {
+            alert("Error creating wedding: " + weddingError.message);
+            setCreatingWeddingFor(null);
+            return;
+        }
+
+        // 2. Link Client to Wedding
+        const { error: linkError } = await supabase
+            .from('clients')
+            .update({
+                wedding_id: wedding.id,
+                status: 'active' // Auto-promote to active
+            })
+            .eq('id', client.id);
+
+        if (linkError) {
+            alert("Warning: Wedding created but link failed: " + linkError.message);
+        } else {
+            // Success! Refresh logic
+            fetchClients();
+            // Option: Redirect to that wedding immediately?
+            // router.push(`/dashboard?weddingId=${wedding.id}`);
+        }
+        setCreatingWeddingFor(null);
     }
 
     const filteredClients = clients.filter(client => {
@@ -86,7 +138,7 @@ export default function ClientsPage() {
                     />
                 </div>
                 <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
-                    {['all', 'lead', 'active', 'completed'].map((f) => (
+                    {['all', 'lead', 'active', 'completed', 'lost'].map((f) => (
                         <button
                             key={f}
                             onClick={() => setFilter(f)}
@@ -123,12 +175,32 @@ export default function ClientsPage() {
                                     </div>
                                     <div>
                                         <h3 className="font-semibold text-gray-900 leading-tight">{client.name}</h3>
-                                        <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${client.status === 'lead' ? 'bg-amber-100 text-amber-700' :
-                                            client.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
-                                                'bg-gray-100 text-gray-600'
-                                            }`}>
-                                            {client.status}
-                                        </span>
+
+                                        {/* Status Dropdown Group */}
+                                        <div className="relative group/status inline-block mt-1">
+                                            <button className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1 ${client.status === 'lead' ? 'bg-amber-100 text-amber-700' :
+                                                client.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
+                                                    client.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                                                        'bg-gray-100 text-gray-600'
+                                                }`}>
+                                                {client.status}
+                                                <span className="opacity-0 group-hover/status:opacity-100 transition-opacity">▼</span>
+                                            </button>
+
+                                            {/* Dropdown Menu */}
+                                            <div className="absolute top-full left-0 mt-1 w-32 bg-white rounded-lg shadow-xl border border-gray-100 py-1 hidden group-hover/status:block z-10">
+                                                {['lead', 'active', 'completed', 'lost'].map((s) => (
+                                                    <button
+                                                        key={s}
+                                                        onClick={() => updateStatus(client.id, s as any)}
+                                                        className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 capitalize ${client.status === s ? 'font-bold text-gray-900' : 'text-gray-600'
+                                                            }`}
+                                                    >
+                                                        {s}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 <button className="text-gray-400 hover:text-gray-600">
@@ -154,6 +226,32 @@ export default function ClientsPage() {
                                         <span>Budget</span>
                                         <span>{formatCurrency(client.budget)}</span>
                                     </div>
+                                )}
+                            </div>
+
+                            {/* Actions Footer */}
+                            <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between items-center">
+                                {client.wedding_id ? (
+                                    <button
+                                        onClick={() => router.push(`/dashboard?weddingId=${client.wedding_id}`)}
+                                        className="text-primary text-sm font-medium flex items-center gap-2 hover:underline"
+                                    >
+                                        <FolderOpen className="w-4 h-4" />
+                                        Open Workspace
+                                    </button>
+                                ) : (
+                                    <button
+                                        disabled={!!creatingWeddingFor}
+                                        onClick={() => handleCreateWedding(client)}
+                                        className="text-xs bg-gray-900 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 hover:bg-gray-800 transition-colors"
+                                    >
+                                        {creatingWeddingFor === client.id ? (
+                                            <Loader2 className="w-3 h-3 animate-spin" />
+                                        ) : (
+                                            <Sparkles className="w-3 h-3" />
+                                        )}
+                                        Create Workspace
+                                    </button>
                                 )}
                             </div>
                         </div>
