@@ -96,6 +96,21 @@ export default function ClientsPage() {
         setCreatingWeddingFor(null);
     }
 
+    async function updateStatus(clientId: string, newStatus: Client['status']) {
+        // Optimistic update
+        setClients(clients.map(c => c.id === clientId ? { ...c, status: newStatus } : c));
+
+        const { error } = await supabase
+            .from('clients')
+            .update({ status: newStatus })
+            .eq('id', clientId);
+
+        if (error) {
+            alert("Error updating status: " + error.message);
+            fetchClients(); // Revert
+        }
+    }
+
     const filteredClients = clients.filter(client => {
         const matchesStatus = filter === 'all' || client.status === filter;
         const matchesSearch = client.name.toLowerCase().includes(search.toLowerCase()) ||

@@ -17,7 +17,9 @@ import {
     CalendarClock,
     CheckSquare,
     BookUser,
-    DollarSign // New icon import
+    DollarSign, // New icon import
+    Share2,
+    MessageSquare
 } from "lucide-react";
 import WeddingSelector from "./WeddingSelector";
 import { supabase } from "@/lib/supabase";
@@ -90,6 +92,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         { name: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
         // Planners might want a master directory
         { name: "Vendor Library", href: "/dashboard/vendors", icon: HeartHandshake },
+        { name: "Settings", href: "/dashboard/settings", icon: Settings }, // NEW
     ] : navItems;
 
     return (
