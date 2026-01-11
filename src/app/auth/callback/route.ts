@@ -35,11 +35,16 @@ export async function GET(request: NextRequest) {
             if (role && (role === 'planner' || role === 'vendor' || role === 'couple')) {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (user) {
-                    // 1. Update Profile (The trigger likely created it as 'couple' by default)
+                    // 1. Upsert Profile (Ensure it exists, even if trigger failed)
                     await supabase
                         .from('profiles')
-                        .update({ role: role })
-                        .eq('id', user.id);
+                        .upsert({
+                            id: user.id,
+                            role: role,
+                            email: user.email, // Ensure email is captured
+                            full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+                            updated_at: new Date().toISOString()
+                        }, { onConflict: 'id' });
 
                     // 2. Update Metadata (for consistency)
                     await supabase.auth.updateUser({
