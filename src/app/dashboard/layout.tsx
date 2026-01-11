@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { BottomNav } from "@/components/dashboard/bottom-nav";
@@ -77,7 +77,10 @@ export default function DashboardLayout({
                     md:translate-x-0
                     ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
                 `}>
-                    <Sidebar onClose={() => setIsMobileOpen(false)} />
+
+                    <Suspense fallback={<div className="h-full w-full bg-white border-r border-border" />}>
+                        <Sidebar onClose={() => setIsMobileOpen(false)} />
+                    </Suspense>
 
                     {/* Close button for mobile inside sidebar (optional, for better UX) */}
                     <button
