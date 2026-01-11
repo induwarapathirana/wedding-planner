@@ -30,8 +30,24 @@ export async function GET(request: NextRequest) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
 
         if (!error) {
-            // We redirect everyone to the dashboard (or 'next' param).
-            // The dashboard page handles the empty state (Create vs Join).
+            // Check for 'role' passed from login page
+            const role = requestUrl.searchParams.get("role");
+            if (role && (role === 'planner' || role === 'vendor' || role === 'couple')) {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    // 1. Update Profile (The trigger likely created it as 'couple' by default)
+                    await supabase
+                        .from('profiles')
+                        .update({ role: role })
+                        .eq('id', user.id);
+
+                    // 2. Update Metadata (for consistency)
+                    await supabase.auth.updateUser({
+                        data: { role: role }
+                    });
+                }
+            }
+
             return NextResponse.redirect(`${requestUrl.origin}${next}`);
         }
     }
