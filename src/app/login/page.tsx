@@ -96,6 +96,10 @@ export default function LoginPage() {
             provider: 'google',
             options: {
                 redirectTo: redirectUrl,
+                queryParams: {
+                    access_type: 'offline',
+                    prompt: 'consent select_account',
+                },
             },
         });
 
@@ -129,14 +133,18 @@ export default function LoginPage() {
                 options.emailRedirectTo = `${window.location.origin}/auth/callback?invite_token=${inviteToken}`;
             }
 
+            const nameFromEmail = email.split('@')[0];
+            // Ensure name meets minimum length requirements (fallback for DB constraints)
+            const fullName = nameFromEmail.length < 3 ? `${nameFromEmail} User` : nameFromEmail;
+
             const { error } = await supabase.auth.signUp({
                 email,
                 password,
                 options: {
                     ...options,
                     data: {
-                        role: role, // Pass role to metadata
-                        full_name: email.split('@')[0] // Default name
+                        role: role,
+                        full_name: fullName
                     }
                 }
             });
