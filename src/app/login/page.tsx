@@ -100,10 +100,16 @@ export default function LoginPage() {
                     access_type: 'offline',
                     prompt: 'consent select_account',
                 },
+                // Pass metadata for the trigger to capture
+                data: {
+                    role: role,
+                    full_name: 'New User', // Fallback, Google will overwrite if it provides one, but this satisfies 'not null' checks if any
+                }
             },
         });
 
         if (error) {
+            console.error("Google Auth Error:", error);
             alert(error.message);
             setLoading(false);
         }
