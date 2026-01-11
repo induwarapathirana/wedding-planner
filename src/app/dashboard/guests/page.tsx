@@ -954,8 +954,8 @@ export default function GuestPage() {
                 <BulkSeatingDialog
                     isOpen={isSeatingDialogOpen}
                     onClose={() => setIsSeatingDialogOpen(false)}
-                    onSave={handleBulkSeating}
-                    selectedIds={selectedIds}
+                    onConfirm={handleBulkSeating}
+                    selectedCount={selectedIds.size}
                 />
 
                 <ConfirmDialog
