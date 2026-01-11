@@ -65,7 +65,7 @@ export default function ClientsPage() {
                 name: `${client.name}'s Wedding`,
                 wedding_date: client.wedding_date || null,
                 budget: client.budget || 0,
-                curency: 'USD'
+                currency: 'USD'
             })
             .select()
             .single();
