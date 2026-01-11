@@ -13,6 +13,8 @@ const GoogleIcon = () => (
     </svg>
 );
 
+import { Lock, Heart, BookUser } from "lucide-react";
+
 export default function LoginPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -20,6 +22,7 @@ export default function LoginPage() {
     const [isSignUp, setIsSignUp] = useState(false);
     const [redirecting, setRedirecting] = useState(false);
     const [agreedToPolicy, setAgreedToPolicy] = useState(false);
+    const [role, setRole] = useState<'couple' | 'planner'>('couple');
 
     // Handle OAuth hash tokens (implicit flow)
     useEffect(() => {
@@ -129,7 +132,13 @@ export default function LoginPage() {
             const { error } = await supabase.auth.signUp({
                 email,
                 password,
-                options
+                options: {
+                    ...options,
+                    data: {
+                        role: role, // Pass role to metadata
+                        full_name: email.split('@')[0] // Default name
+                    }
+                }
             });
 
             if (error) {
@@ -212,6 +221,35 @@ export default function LoginPage() {
 
 
                 <div className="rounded-2xl bg-white p-8 shadow-xl">
+                    {isSignUp && (
+                        <div className="space-y-4 mb-6">
+                            <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100/80 rounded-xl border border-gray-200">
+                                <button
+                                    type="button"
+                                    onClick={() => setRole('couple')}
+                                    className={`flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg transition-all ${role === 'couple'
+                                        ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5'
+                                        : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    <Heart className={`w-4 h-4 ${role === 'couple' ? 'text-rose-500' : ''}`} />
+                                    Couple
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setRole('planner')}
+                                    className={`flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg transition-all ${role === 'planner'
+                                        ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5'
+                                        : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    <BookUser className={`w-4 h-4 ${role === 'planner' ? 'text-purple-600' : ''}`} />
+                                    Wedding Pro
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     {isSignUp && (
                         <div className="flex items-center gap-2 mb-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
                             <input
