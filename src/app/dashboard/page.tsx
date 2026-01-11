@@ -352,23 +352,14 @@ export default function DashboardPage() {
 
     return (
         <div className="space-y-6 md:space-y-8 pb-6">
-            {role === 'planner' ? (
-                <PlannerWorkspace
-                    wedding={wedding}
-                    stats={stats}
-                    upcomingTasks={upcomingTasks}
-                    pendingPayments={pendingPayments}
-                    pendingGuests={pendingGuests}
-                />
-            ) : (
-                <CoupleDashboard
-                    wedding={wedding}
-                    stats={stats}
-                    upcomingTasks={upcomingTasks}
-                    pendingPayments={pendingPayments}
-                    pendingGuests={pendingGuests}
-                />
-            )}
+            {/* Always show CoupleDashboard when viewing a specific wedding */}
+            <CoupleDashboard
+                wedding={wedding}
+                stats={stats}
+                upcomingTasks={upcomingTasks}
+                pendingPayments={pendingPayments}
+                pendingGuests={pendingGuests}
+            />
         </div>
     );
 }
