@@ -203,18 +203,94 @@ export default function DashboardPage() {
         );
     }
 
+    // ... (imports)
+
+    // Role Selection Component
+    function RoleSelectionScreen({ onSelect }: { onSelect: (role: 'couple' | 'planner') => void }) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
+                <div className="max-w-4xl w-full text-center space-y-8">
+                    <div className="space-y-2">
+                        <h1 className="font-serif text-4xl font-bold text-gray-900">Welcome to Vow & Venue</h1>
+                        <p className="text-xl text-gray-500">How will you be using the platform?</p>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-6">
+                        {/* Couple Option */}
+                        <button
+                            onClick={() => onSelect('couple')}
+                            className="group relative flex flex-col items-center p-8 bg-white rounded-3xl border-2 border-transparent hover:border-primary/50 shadow-xl hover:shadow-2xl transition-all duration-300 overflow-hidden"
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center text-5xl mb-6 group-hover:scale-110 transition-transform">
+                                💍
+                            </div>
+                            <h3 className="text-2xl font-bold text-gray-900 mb-2">I'm Planning My Wedding</h3>
+                            <p className="text-gray-500">
+                                Create your dream wedding, manage guests, budget, and vendors in one place.
+                            </p>
+                        </button>
+
+                        {/* Planner Option */}
+                        <button
+                            onClick={() => onSelect('planner')}
+                            className="group relative flex flex-col items-center p-8 bg-white rounded-3xl border-2 border-transparent hover:border-gray-900/50 shadow-xl hover:shadow-2xl transition-all duration-300 overflow-hidden"
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-br from-gray-900/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center text-5xl mb-6 group-hover:scale-110 transition-transform">
+                                💼
+                            </div>
+                            <h3 className="text-2xl font-bold text-gray-900 mb-2">I'm a Wedding Professional</h3>
+                            <p className="text-gray-500">
+                                Manage multiple clients, leads, and streamline your wedding planning business.
+                            </p>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!role && !loading) {
+        // If loading is done and we STILL have no role, it means no profile exists (or no role set).
+        // Show Layout for selecting role.
+        return <RoleSelectionScreen onSelect={async (selectedRole) => {
+            setLoading(true);
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            // Manual Profile Creation
+            const { error } = await supabase.from('profiles').upsert({
+                id: user.id,
+                email: user.email,
+                role: selectedRole,
+                full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+                updated_at: new Date().toISOString()
+            });
+
+            if (error) {
+                console.error("Profile Creation Error:", error);
+                alert("Failed to create profile: " + error.message + ". Please ensure you have run the 'allow_profile_insert.sql' script in Supabase.");
+                setLoading(false);
+            } else {
+                setRole(selectedRole);
+                window.location.reload(); // Refresh to load full UI
+            }
+        }} />;
+    }
+
     if (!wedding) {
-        // If no wedding selected, check if they are a planner
+        // If no wedding selected, check if they are a planner (Role would be set by now if they just selected it)
         if (role === 'planner') {
             return <PlannerEmptyState router={router} />;
         }
 
+        // COUPLE EMPTY STATE
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
                 <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center text-4xl mb-4">
                     ✨
                 </div>
-                {/* ... existing Couple Empty State ... */}
                 <h2 className="font-serif text-3xl font-bold text-foreground">Welcome to Vow & Venue</h2>
                 <p className="text-muted-foreground max-w-md">
                     You haven't created or joined a wedding plan yet. Start your journey by creating a new wedding plan.
