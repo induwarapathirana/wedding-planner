@@ -264,8 +264,8 @@ export default function DashboardPage() {
                 id: user.id,
                 email: user.email,
                 role: selectedRole,
-                full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-                updated_at: new Date().toISOString()
+                full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'
+                // updated_at removed to prevent schema errors if column is missing
             });
 
             if (error) {

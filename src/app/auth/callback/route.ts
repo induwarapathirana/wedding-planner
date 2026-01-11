@@ -42,8 +42,8 @@ export async function GET(request: NextRequest) {
                             id: user.id,
                             role: role,
                             email: user.email, // Ensure email is captured
-                            full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-                            updated_at: new Date().toISOString()
+                            full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'
+                            // updated_at removed
                         }, { onConflict: 'id' });
 
                     // 2. Update Metadata (for consistency)
