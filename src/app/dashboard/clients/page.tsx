@@ -61,7 +61,7 @@ export default function ClientsPage() {
         const { data: wedding, error: weddingError } = await supabase
             .from('weddings')
             .insert({
-                user_id: user.id,
+                created_by: user.id,
                 // name: `${client.name}'s Wedding`, // Optional: requires 'name' column
                 couple_name_1: client.name.split(' and ')[0] || client.name.split(' & ')[0] || client.name,
                 couple_name_2: client.name.split(' and ')[1] || client.name.split(' & ')[1] || '',

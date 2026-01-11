@@ -417,8 +417,46 @@ function NotificationSettings({ weddingId }: { weddingId: string }) {
 
     const handleEnable = async () => {
         setLoading(true);
-        // ... simplified notification logic for now ..
-        alert("Notification logic placeholder (to avoid large import errors unless files exist).");
+        try {
+            const { registerServiceWorker, requestNotificationPermission, subscribeToPush } = await import('@/lib/registerServiceWorker');
+
+            // Register service worker
+            const registration = await registerServiceWorker();
+            if (!registration) throw new Error("Service worker registration failed. Please ensure you are using Safari on iOS and have added the app to your home screen.");
+
+            // Request permission
+            const status = await requestNotificationPermission();
+            setPermission(status);
+            if (status !== "granted") throw new Error("Notification permission denied.");
+
+            // Subscribe to push
+            const subscription = await subscribeToPush(registration);
+            // Error is now thrown by subscribeToPush directly
+
+            // Save to DB
+            const response = await fetch("/api/push/subscribe", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    subscription: subscription!.toJSON(),
+                    userId,
+                    weddingId,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: "Unknown server error" }));
+                throw new Error(errorData.details || errorData.error || "Failed to save subscription to database.");
+            }
+
+            alert("Notifications enabled successfully! 🎉");
+            localStorage.setItem("notification-enabled", "true");
+        } catch (error: any) {
+            console.error(error);
+            alert(error.message || "Failed to enable notifications.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     const resetPrompt = () => {
