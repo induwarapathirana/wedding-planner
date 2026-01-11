@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { PlannerSettings } from "@/components/dashboard/settings/PlannerSettings";
 import { CoupleSettings } from "@/components/dashboard/settings/CoupleSettings";
 import { Loader2 } from "lucide-react";
 
-export default function SettingsPage() {
+function SettingsContent() {
     const [role, setRole] = useState<'couple' | 'planner' | 'vendor' | null>(null);
     const [loading, setLoading] = useState(true);
+    const searchParams = useSearchParams();
+    const weddingIdFromUrl = searchParams.get('weddingId');
 
     useEffect(() => {
         checkRole();
@@ -36,10 +39,23 @@ export default function SettingsPage() {
         );
     }
 
+    // If Planner is in a specific Wedding Workspace, show Wedding Settings (CoupleSettings)
+    if (role === 'planner' && weddingIdFromUrl) {
+        return <CoupleSettings weddingIdProp={weddingIdFromUrl} />;
+    }
+
     if (role === 'planner') {
         return <PlannerSettings />;
     }
 
     // Default to Couple settings for couples (or fallback)
     return <CoupleSettings />;
+}
+
+export default function SettingsPage() {
+    return (
+        <Suspense fallback={<div className="p-8">Loading...</div>}>
+            <SettingsContent />
+        </Suspense>
+    );
 }
