@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Plus, Search, Calendar, Mail, Phone, MoreHorizontal, Users } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
+import { AddClientModal } from "@/components/dashboard/clients/AddClientModal";
 // Note: We'll add the 'Add Client' Modal later, for now just the list.
 
 type Client = {
@@ -21,6 +22,7 @@ export default function ClientsPage() {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all'); // all, lead, active
     const [search, setSearch] = useState('');
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false); // NEW STATE
 
     useEffect(() => {
         fetchClients();
@@ -51,13 +53,19 @@ export default function ClientsPage() {
 
     return (
         <div className="space-y-6">
+            <AddClientModal
+                isOpen={isAddModalOpen}
+                onClose={() => setIsAddModalOpen(false)}
+                onSuccess={fetchClients}
+            />
+
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <h1 className="font-serif text-3xl font-bold text-gray-900">Clients</h1>
                     <p className="text-muted-foreground mt-1">Manage your leads and active weddings.</p>
                 </div>
                 <button
-                    onClick={() => alert("Add Client Modal Coming Next!")}
+                    onClick={() => setIsAddModalOpen(true)}
                     className="flex items-center justify-center gap-2 bg-gray-900 text-white px-5 py-2.5 rounded-xl hover:bg-gray-800 transition-all shadow-sm"
                 >
                     <Plus className="w-4 h-4" />
