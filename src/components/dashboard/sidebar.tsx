@@ -178,7 +178,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                 <div className="border-t border-border pt-6 mt-auto">
                     {hasWeddings && (
                         <Link
-                            href="/dashboard/settings"
+                            href={role === 'planner' && weddingId ? `/dashboard/settings?weddingId=${weddingId}` : "/dashboard/settings"}
                             onClick={onClose}
                             className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                         >

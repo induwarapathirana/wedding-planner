@@ -31,6 +31,9 @@ type BudgetItem = {
 };
 
 
+
+import { useWeddingPermission } from "@/hooks/use-wedding-permission";
+
 export default function BudgetPage() {
     const { mode } = useMode();
     const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
@@ -40,6 +43,9 @@ export default function BudgetPage() {
     const [tier, setTier] = useState<PlanTier>('free');
     const [showLimitModal, setShowLimitModal] = useState(false); // Added state
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    const { canEdit, loading: permLoading } = useWeddingPermission(weddingId);
+
 
     // Dialog State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -76,7 +82,11 @@ export default function BudgetPage() {
     useEffect(() => {
         async function loadData() {
             setLoading(true);
-            const wId = localStorage.getItem("current_wedding_id");
+            // Check URL param first (Planner View), then localStorage (Standard View)
+            const params = new URLSearchParams(window.location.search);
+            const urlWeddingId = params.get('weddingId');
+            const wId = urlWeddingId || localStorage.getItem("current_wedding_id");
+
             if (wId) {
                 setWeddingId(wId);
                 // Fetch Settings (Currency & Tier)
@@ -113,6 +123,7 @@ export default function BudgetPage() {
 
     // Selection Logic
     const toggleSelectAll = () => {
+        if (!canEdit) return; // Prevent selection if viewer
         if (selectedIds.size === budgetItems.length) {
             setSelectedIds(new Set());
         } else {
@@ -121,6 +132,7 @@ export default function BudgetPage() {
     };
 
     const toggleSelect = (id: string) => {
+        if (!canEdit) return; // Prevent selection if viewer
         const newSelected = new Set(selectedIds);
         if (newSelected.has(id)) {
             newSelected.delete(id);
@@ -133,10 +145,12 @@ export default function BudgetPage() {
     // Delete Logic
     // Delete Logic
     const confirmDelete = (id: string) => {
+        if (!canEdit) return;
         setConfirmState({ isOpen: true, type: 'single', id });
     };
 
     const confirmBulkDelete = () => {
+        if (!canEdit) return;
         setConfirmState({ isOpen: true, type: 'bulk' });
     };
 
@@ -168,6 +182,7 @@ export default function BudgetPage() {
     };
 
     const handleOpenAdd = () => {
+        if (!canEdit) return;
         const canAdd = checkLimit(tier, 'budget_items', budgetItems.length);
         if (!canAdd) {
             setShowLimitModal(true);
@@ -178,12 +193,13 @@ export default function BudgetPage() {
     };
 
     const handleOpenEdit = (item: BudgetItem) => {
+        if (!canEdit) return;
         setEditingItem(item);
         setIsDialogOpen(true);
     };
 
     const handleSaveItem = async (itemData: Partial<BudgetItem>) => {
-        if (!weddingId) return;
+        if (!weddingId || !canEdit) return;
 
         // Map UI fields to DB columns
         const { item_name, is_paid, id, ...rest } = itemData;
@@ -216,6 +232,10 @@ export default function BudgetPage() {
         return `${symbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
     };
 
+    if (loading || permLoading) {
+        return <div className="p-8 text-center text-muted-foreground">Loading budget...</div>;
+    }
+
     return (
         <TierGate weddingId={weddingId} featureName="Budget Tracker">
             <div className="space-y-6 md:space-y-8 pb-20 md:pb-0">
@@ -237,13 +257,15 @@ export default function BudgetPage() {
                             >
                                 <Search className="w-4 h-4" />
                             </button>
-                            <button
-                                id="tour-add-item"
-                                onClick={handleOpenAdd}
-                                className="flex-1 md:flex-none flex items-center justify-center gap-2 rounded-xl bg-primary px-4 md:px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all">
-                                <Plus className="w-4 h-4" />
-                                Add Item
-                            </button>
+                            {canEdit && (
+                                <button
+                                    id="tour-add-item"
+                                    onClick={handleOpenAdd}
+                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 rounded-xl bg-primary px-4 md:px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all">
+                                    <Plus className="w-4 h-4" />
+                                    Add Item
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -277,7 +299,7 @@ export default function BudgetPage() {
                                     ))}
                                 </select>
                             </div>
-                            {selectedIds.size > 0 && (
+                            {canEdit && selectedIds.size > 0 && (
                                 <button
                                     onClick={confirmBulkDelete}
                                     className="flex items-center justify-center p-2.5 rounded-xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 transition-all shadow-sm"
@@ -354,9 +376,11 @@ export default function BudgetPage() {
                                     )}
                                 >
                                     <div className="flex items-start md:items-center gap-3 md:gap-4 mb-3 md:mb-0">
-                                        <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground hover:text-primary mt-0.5 md:mt-0">
-                                            {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
-                                        </button>
+                                        {canEdit && (
+                                            <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground hover:text-primary mt-0.5 md:mt-0">
+                                                {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
+                                            </button>
+                                        )}
 
                                         <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0 group-hover:bg-primary/20 transition-colors">
                                             <Wallet className="w-5 h-5" />
@@ -391,14 +415,16 @@ export default function BudgetPage() {
                                                 {item.is_paid ? "Paid" : "Pending"}
                                             </span>
                                         </div>
-                                        <div className="flex items-center gap-1 md:gap-2">
-                                            <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
-                                                <Edit2 className="w-4 h-4" />
-                                            </button>
-                                            <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </div>
+                                        {canEdit && (
+                                            <div className="flex items-center gap-1 md:gap-2">
+                                                <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
+                                                    <Edit2 className="w-4 h-4" />
+                                                </button>
+                                                <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ))}
@@ -420,9 +446,11 @@ export default function BudgetPage() {
                                     >
                                         <div className="flex items-start justify-between mb-4">
                                             <div className="flex items-center gap-3">
-                                                <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground pt-0.5 hover:text-primary">
-                                                    {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
-                                                </button>
+                                                {canEdit && (
+                                                    <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground pt-0.5 hover:text-primary">
+                                                        {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
+                                                    </button>
+                                                )}
                                                 <div>
                                                     <p className="font-bold text-foreground group-hover:text-primary transition-colors">{item.item_name}</p>
                                                     <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-1">
@@ -430,14 +458,16 @@ export default function BudgetPage() {
                                                     </span>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-1">
-                                                <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
-                                                    <Edit2 className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
+                                            {canEdit && (
+                                                <div className="flex items-center gap-1">
+                                                    <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </button>
+                                                    <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className="grid grid-cols-3 gap-2 mb-3">
@@ -482,9 +512,11 @@ export default function BudgetPage() {
                                     <thead className="bg-muted text-muted-foreground font-medium uppercase text-xs">
                                         <tr>
                                             <th className="px-6 py-4 w-12">
-                                                <button onClick={toggleSelectAll} className="flex items-center">
-                                                    {selectedIds.size > 0 && selectedIds.size === budgetItems.length ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
-                                                </button>
+                                                {canEdit && (
+                                                    <button onClick={toggleSelectAll} className="flex items-center">
+                                                        {selectedIds.size > 0 && selectedIds.size === budgetItems.length ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
+                                                    </button>
+                                                )}
                                             </th>
                                             <th className="px-6 py-4">Item</th>
                                             <th className="px-6 py-4">Category</th>
@@ -507,9 +539,11 @@ export default function BudgetPage() {
                                                 )}
                                             >
                                                 <td className="px-6 py-4">
-                                                    <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground hover:text-primary">
-                                                        {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-4 h-4" />}
-                                                    </button>
+                                                    {canEdit && (
+                                                        <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground hover:text-primary">
+                                                            {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-4 h-4" />}
+                                                        </button>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 font-medium text-foreground">
                                                     <div className="group-hover:text-primary transition-colors">{item.item_name}</div>
@@ -533,12 +567,16 @@ export default function BudgetPage() {
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 flex items-center gap-2">
-                                                    <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="text-muted-foreground hover:text-primary transition-colors">
-                                                        <Edit2 className="w-4 h-4" />
-                                                    </button>
-                                                    <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="text-muted-foreground hover:text-red-600 transition-colors">
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
+                                                    {canEdit && (
+                                                        <>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="text-muted-foreground hover:text-primary transition-colors">
+                                                                <Edit2 className="w-4 h-4" />
+                                                            </button>
+                                                            <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="text-muted-foreground hover:text-red-600 transition-colors">
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}
@@ -560,9 +598,12 @@ export default function BudgetPage() {
                     onSubmit={handleSaveItem}
                     initialData={editingItem}
                     currencySymbol={symbol}
+                // Pass readOnly if needed, but we prevent opening dialog above
                 />
 
                 <ConfirmDialog
+                    // ... keeping remaining components ...
+
                     isOpen={confirmState.isOpen}
                     onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
                     onConfirm={executeDelete}
