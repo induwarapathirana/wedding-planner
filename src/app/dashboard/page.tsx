@@ -34,6 +34,7 @@ export default function DashboardPage() {
         estBudget: 0,
         currency: 'USD'
     });
+    const [role, setRole] = useState<'couple' | 'planner' | null>(null);
 
     const [inviteCode, setInviteCode] = useState("");
     const [upcomingTasks, setUpcomingTasks] = useState<any[]>([]);
@@ -62,6 +63,10 @@ export default function DashboardPage() {
                 router.push("/login");
                 return;
             }
+
+            // Fetch Role
+            const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+            if (profile) setRole(profile.role);
 
             if (!weddingId) {
                 // If no stored ID, try to find one
@@ -166,12 +171,50 @@ export default function DashboardPage() {
 
     if (loading) return <div className="p-10 text-center text-muted-foreground">Loading dashboard...</div>;
 
+    // ... (previous imports)
+
+    // Planner Dashboard Component (Inline for now, can extract later)
+    function PlannerEmptyState({ router }: { router: any }) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
+                <div className="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 text-4xl mb-4">
+                    💼
+                </div>
+                <h2 className="font-serif text-3xl font-bold text-foreground">Welcome to your Pro Dashboard</h2>
+                <p className="text-muted-foreground max-w-md">
+                    Manage your clients, leads, and weddings all in one place.
+                </p>
+                <div className="flex gap-4">
+                    <button
+                        onClick={() => router.push('/dashboard/clients')}
+                        className="rounded-xl bg-gray-900 px-8 py-4 text-base font-medium text-white shadow-lg hover:bg-gray-800 transition-all hover:scale-105"
+                    >
+                        View Clients
+                    </button>
+                    <button
+                        // Future: Add new client modal
+                        onClick={() => router.push('/dashboard/clients?new=true')}
+                        className="rounded-xl bg-primary px-8 py-4 text-base font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all hover:scale-105"
+                    >
+                        + Add New Client
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     if (!wedding) {
+        // If no wedding selected, check if they are a planner
+        if (role === 'planner') {
+            return <PlannerEmptyState router={router} />;
+        }
+
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
                 <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center text-4xl mb-4">
                     ✨
                 </div>
+                {/* ... existing Couple Empty State ... */}
                 <h2 className="font-serif text-3xl font-bold text-foreground">Welcome to Vow & Venue</h2>
                 <p className="text-muted-foreground max-w-md">
                     You haven't created or joined a wedding plan yet. Start your journey by creating a new wedding plan.
