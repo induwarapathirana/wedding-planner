@@ -127,8 +127,77 @@ export function PlannerWorkspace({ wedding, stats, upcomingTasks, pendingPayment
             </div>
 
 
-            {/* Stat Cards Reuse or Modify */}
-            {/* We can reuse the widgets but style them differently or pass different props. For now, let's keep the widgets as they are useful for planners too. */}
+
+            {/* Event Overview Cards (B2C Parity) */}
+            <div className="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-3">
+                <Link href="/dashboard/budget" className="block group">
+                    <div className="min-h-[160px] md:h-40 rounded-3xl border-2 border-border bg-white p-5 md:p-6 shadow-sm relative overflow-hidden hover:shadow-xl hover:border-primary/40 hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                        <div className="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <span className="text-6xl md:text-7xl">💰</span>
+                        </div>
+                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide relative z-10 group-hover:text-primary transition-colors">Budget</h3>
+                        <div className="mt-3 relative z-10">
+                            <p className={cn("font-bold text-primary leading-none", getNumberFontSize(stats.totalBudget))}>
+                                {stats.currency}{formatLargeNumber(stats.totalBudget)}
+                            </p>
+                            <p className="mt-1 text-xs md:text-sm text-muted-foreground font-medium">
+                                of {stats.currency}{formatLargeNumber(stats.estBudget)} estimated
+                            </p>
+                        </div>
+                        <div className="mt-4 h-2 w-full bg-gray-100 rounded-full overflow-hidden relative z-10">
+                            <div
+                                className="h-full bg-gradient-to-r from-primary to-primary/80 rounded-full transition-all duration-500"
+                                style={{ width: `${stats.estBudget > 0 ? Math.min((stats.totalBudget / stats.estBudget) * 100, 100) : 0}%` }}
+                            />
+                        </div>
+                    </div>
+                </Link>
+
+                <Link href="/dashboard/guests" className="block group">
+                    <div className="min-h-[160px] md:h-40 rounded-3xl border-2 border-border bg-white p-5 md:p-6 shadow-sm relative overflow-hidden hover:shadow-xl hover:border-secondary-foreground/40 hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                        <div className="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <span className="text-6xl md:text-7xl">👥</span>
+                        </div>
+                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide relative z-10 group-hover:text-secondary-foreground transition-colors">Confirmed Guests</h3>
+                        <div className="mt-3 relative z-10">
+                            <p className={cn("font-bold text-secondary-foreground leading-none", getNumberFontSize(stats.confirmedGuest))}>
+                                {formatLargeNumber(stats.confirmedGuest)}
+                            </p>
+                            <p className="mt-1 text-xs md:text-sm text-muted-foreground font-medium">
+                                of {formatLargeNumber(stats.targetGuest)} target
+                            </p>
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] md:text-xs text-muted-foreground relative z-10">
+                            <span className="bg-gray-50 px-2 py-1 rounded-full">Total: <span className="font-bold text-foreground">{stats.guestCount}</span></span>
+                            <span className="bg-amber-50 px-2 py-1 rounded-full">Pending: <span className="font-bold text-amber-600">{stats.pendingGuest}</span></span>
+                        </div>
+                        <div className="mt-3 h-2 w-full bg-gray-100 rounded-full overflow-hidden relative z-10">
+                            <div
+                                className="h-full bg-gradient-to-r from-secondary-foreground to-secondary-foreground/80 rounded-full transition-all duration-500"
+                                style={{ width: `${stats.targetGuest > 0 ? Math.min((stats.confirmedGuest / stats.targetGuest) * 100, 100) : 0}%` }}
+                            />
+                        </div>
+                    </div>
+                </Link>
+
+                <Link href="/dashboard/itinerary" className="block group">
+                    <div className="min-h-[160px] md:h-40 rounded-3xl border-2 border-border bg-white p-5 md:p-6 shadow-sm relative overflow-hidden hover:shadow-xl hover:border-purple-500/40 hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                        <div className="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <span className="text-6xl md:text-7xl">📅</span>
+                        </div>
+                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide relative z-10 group-hover:text-purple-600 transition-colors">Days to Go</h3>
+                        <div className="mt-3 relative z-10">
+                            <p className={cn("font-bold text-foreground leading-none", daysToGo > 99 ? "text-3xl md:text-4xl" : "text-4xl md:text-5xl")}>
+                                {daysToGo > 0 ? daysToGo : "🎉"}
+                            </p>
+                            <p className="mt-2 text-xs md:text-sm text-muted-foreground font-medium">
+                                {daysToGo > 0 ? new Date(wedding.wedding_date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : "Today's the day!"}
+                            </p>
+                        </div>
+                    </div>
+                </Link>
+            </div>
+
 
             {/* Actionable Widgets */}
             <div className="pt-2">

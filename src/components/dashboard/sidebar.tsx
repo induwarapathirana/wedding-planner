@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -17,9 +17,10 @@ import {
     CalendarClock,
     CheckSquare,
     BookUser,
-    DollarSign, // New icon import
+    DollarSign,
     Share2,
-    MessageSquare
+    MessageSquare,
+    ArrowLeft
 } from "lucide-react";
 import WeddingSelector from "./WeddingSelector";
 import { supabase } from "@/lib/supabase";
@@ -37,6 +38,9 @@ const navItems = [
 export function Sidebar({ onClose }: { onClose?: () => void }) {
     const pathname = usePathname();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const weddingId = searchParams.get('weddingId');
+
     const [hasWeddings, setHasWeddings] = useState(false);
     const [role, setRole] = useState<'couple' | 'planner' | 'vendor' | null>(null);
 
@@ -86,14 +90,31 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         router.push("/login");
     }
 
-    const currentNavItems = role === 'planner' ? [
-        { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
-        { name: "Clients", href: "/dashboard/clients", icon: Users },
-        { name: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
-        // Planners might want a master directory
-        { name: "Vendor Library", href: "/dashboard/vendors", icon: HeartHandshake },
-        { name: "Settings", href: "/dashboard/settings", icon: Settings }, // NEW
-    ] : navItems;
+    const currentNavItems = (() => {
+        if (role === 'planner') {
+            if (weddingId) {
+                // Planner in Workspace Mode - Show Couple Features + Back Button
+                return [
+                    { name: "Back to Clients", href: "/dashboard/clients", icon: ArrowLeft },
+                    ...navItems.map(item => ({
+                        ...item,
+                        href: `${item.href}?weddingId=${weddingId}`
+                    }))
+                ];
+            } else {
+                // Planner Global Mode
+                return [
+                    { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+                    { name: "Clients", href: "/dashboard/clients", icon: Users },
+                    { name: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
+                    // Planners might want a master directory
+                    { name: "Vendor Library", href: "/dashboard/vendors", icon: HeartHandshake },
+                    { name: "Settings", href: "/dashboard/settings", icon: Settings }, // NEW
+                ];
+            }
+        }
+        return navItems;
+    })();
 
     return (
         <aside className="h-full w-full border-r border-border bg-white/50 backdrop-blur-xl">
@@ -126,10 +147,12 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                 {/* Navigation */}
                 <nav className="flex-1 space-y-1 overflow-y-auto">
                     {hasWeddings && currentNavItems.map((item) => {
-                        const isActive = pathname === item.href;
+                        // Check match ignoring query params
+                        const currentPath = item.href.split('?')[0];
+                        const isActive = pathname === currentPath;
                         return (
                             <Link
-                                key={item.href}
+                                key={item.name} // usage of item.href as key causes duplicates if mapping logic changes, name is stable
                                 href={item.href}
                                 onClick={onClose}
                                 className={cn(
