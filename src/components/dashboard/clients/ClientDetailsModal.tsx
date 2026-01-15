@@ -33,6 +33,8 @@ export function ClientDetailsModal({ client, isOpen, onClose, onUpdate }: Client
     const currentData = editing ? { ...client, ...formData } : client;
 
     async function handleSave() {
+        if (!client) return; // Guard against null
+
         setSaving(true);
         const { error } = await supabase
             .from('clients')
