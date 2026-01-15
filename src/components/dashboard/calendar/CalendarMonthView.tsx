@@ -15,12 +15,12 @@ import {
     isToday,
     parseISO
 } from "date-fns";
-import { ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
-import { Event } from "@/types/itinerary";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CalendarItem } from "@/app/dashboard/calendar/page";
 
 interface CalendarMonthViewProps {
-    events: Event[];
+    events: CalendarItem[];
 }
 
 export function CalendarMonthView({ events }: CalendarMonthViewProps) {
@@ -36,7 +36,10 @@ export function CalendarMonthView({ events }: CalendarMonthViewProps) {
     const calendarEnd = endOfWeek(monthEnd);
 
     const checkEventsForDay = (day: Date) => {
-        return events.filter(event => isSameDay(parseISO(event.start_time), day));
+        // NOTE: We used to compare ISO strings, but now we have strict dates.
+        // Some dates might be "YYYY-MM-DD" (Tasks/Payments) and some ISO (Events).
+        // parseISO handles both well enough for date comparison.
+        return events.filter(event => isSameDay(parseISO(event.date), day));
     };
 
     const days = eachDayOfInterval({
@@ -103,22 +106,47 @@ export function CalendarMonthView({ events }: CalendarMonthViewProps) {
                             </span>
 
                             <div className="mt-2 space-y-1.5">
-                                {dayEvents.map(event => (
-                                    <div
-                                        key={event.id}
-                                        className="text-xs p-1.5 rounded-md bg-purple-50 border border-purple-100 text-purple-900 truncate hover:opacity-80 transition-opacity cursor-pointer flex items-center gap-1"
-                                        title={`${event.title} (${format(parseISO(event.start_time), "h:mm a")})`}
-                                    >
-                                        <div className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
-                                        <span className="truncate flex-1 font-medium">{event.title}</span>
-                                        <span className="text-[10px] text-purple-700/70 shrink-0 hidden group-hover:block">
-                                            {format(parseISO(event.start_time), "h:mm a")}
-                                        </span>
-                                    </div>
-                                ))}
-                                {dayEvents.length > 3 && (
+                                {dayEvents.map(event => {
+                                    // Style based on type
+                                    let bgClass = "bg-gray-50 border-gray-100 text-gray-700";
+                                    let dotClass = "bg-gray-400";
+
+                                    if (event.type === 'event') {
+                                        bgClass = "bg-purple-50 border-purple-100 text-purple-900";
+                                        dotClass = "bg-purple-400";
+                                    } else if (event.type === 'task') {
+                                        bgClass = event.isCompleted ? "bg-green-50 border-green-100 text-green-700 opacity-60 line-through" : "bg-blue-50 border-blue-100 text-blue-900";
+                                        dotClass = event.isCompleted ? "bg-green-400" : "bg-blue-400";
+                                    } else if (event.type === 'payment') {
+                                        bgClass = event.isPaid ? "bg-green-50 border-green-100 text-green-700 opacity-60" : "bg-amber-50 border-amber-100 text-amber-900";
+                                        dotClass = event.isPaid ? "bg-green-400" : "bg-amber-400";
+                                    }
+
+                                    return (
+                                        <div
+                                            key={event.id}
+                                            className={cn(
+                                                "text-xs p-1.5 rounded-md border truncate hover:opacity-80 transition-opacity cursor-pointer flex items-center gap-1",
+                                                bgClass
+                                            )}
+                                            title={`${event.weddingName ? event.weddingName + ' - ' : ''}${event.title}`}
+                                        >
+                                            <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", dotClass)} />
+                                            <span className="truncate flex-1 font-medium">
+                                                {event.weddingName && <span className="opacity-70 font-normal mr-1">[{event.weddingName.split(' ')[0]}]</span>}
+                                                {event.title}
+                                            </span>
+                                            {event.time && (
+                                                <span className="text-[10px] opacity-70 shrink-0 hidden group-hover:block">
+                                                    {format(parseISO(event.time), "h:mm a")}
+                                                </span>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                                {dayEvents.length > 4 && (
                                     <div className="text-[10px] text-gray-400 pl-2">
-                                        + {dayEvents.length - 3} more
+                                        + {dayEvents.length - 4} more
                                     </div>
                                 )}
                             </div>
