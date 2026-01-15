@@ -12,7 +12,7 @@ export type CalendarItem = {
     id: string;
     title: string;
     date: string; // ISO string
-    type: 'event' | 'task' | 'payment';
+    type: 'event' | 'task' | 'payment' | 'wedding-date';
     weddingId: string;
     weddingName?: string;
     time?: string; // For events
@@ -56,40 +56,57 @@ function CalendarContent() {
         let targetWeddingIds: string[] = [];
         let weddingMap: Record<string, string> = {};
 
+        // We need wedding dates too
+        let weddingDates: Record<string, string> = {};
+
         // Fetch user's weddings (Collaborator)
-        const { data: collaborations, error: collabError } = await supabase
+        const { data: collaborations } = await supabase
             .from('collaborators')
             .select(`
                 wedding_id,
                 weddings (
                     id,
-                    couple_name
+                    couple_name_1,
+                    couple_name_2,
+                    wedding_date
                 )
             `)
             .eq('user_id', user.id);
 
         if (collaborations) {
             const validCollabs = collaborations.filter(c => c.weddings);
-            setWeddings(validCollabs.map((c: any) => {
-                // Supabase join might return an array or object depending on relationship definition
-                const weddingData = Array.isArray(c.weddings) ? c.weddings[0] : c.weddings;
+
+            // Process weddings data
+            const processedWeddings = validCollabs.map((c: any) => {
+                const w = Array.isArray(c.weddings) ? c.weddings[0] : c.weddings;
+                const coupleName = w.couple_name_1 && w.couple_name_2
+                    ? `${w.couple_name_1} & ${w.couple_name_2}`
+                    : w.couple_name_1 || "Unnamed Wedding";
+
                 return {
                     id: c.wedding_id,
-                    couple_name: weddingData?.couple_name || "Unknown Wedding"
+                    couple_name: coupleName,
+                    wedding_date: w.wedding_date
                 };
-            }));
+            });
 
-            validCollabs.forEach((c: any) => {
-                const weddingData = Array.isArray(c.weddings) ? c.weddings[0] : c.weddings;
-                if (weddingData) {
-                    weddingMap[c.wedding_id] = weddingData.couple_name;
+            setWeddings(processedWeddings.map(w => ({ id: w.id, couple_name: w.couple_name })));
+
+            processedWeddings.forEach(w => {
+                weddingMap[w.id] = w.couple_name;
+                if (w.wedding_date) {
+                    weddingDates[w.id] = w.wedding_date;
                 }
             });
 
-            if (selectedWeddingId !== "all") {
+            // Logic: If urlWeddingId matches one of our weddings, lock to it (Single Mode)
+            // If "all", show all.
+            if (urlWeddingId && weddingMap[urlWeddingId]) {
+                targetWeddingIds = [urlWeddingId];
+            } else if (selectedWeddingId !== "all") {
                 targetWeddingIds = [selectedWeddingId];
             } else {
-                targetWeddingIds = validCollabs.map(c => c.wedding_id);
+                targetWeddingIds = processedWeddings.map(w => w.id);
             }
         }
 
@@ -122,6 +139,20 @@ function CalendarContent() {
         // 5. Normalize Data
         const normalizedItems: CalendarItem[] = [];
 
+        // Add Wedding Dates as special events
+        targetWeddingIds.forEach(wid => {
+            if (weddingDates[wid]) {
+                normalizedItems.push({
+                    id: `wed-${wid}`,
+                    title: `💍 Wedding Day: ${weddingMap[wid]}`,
+                    date: weddingDates[wid],
+                    type: 'wedding-date',
+                    weddingId: wid,
+                    weddingName: weddingMap[wid]
+                });
+            }
+        });
+
         // Events
         events?.forEach((e: any) => {
             normalizedItems.push({
@@ -141,7 +172,7 @@ function CalendarContent() {
                 normalizedItems.push({
                     id: `tsk-${t.id}`,
                     title: t.title,
-                    date: t.due_date, // Usually YYYY-MM-DD
+                    date: t.due_date,
                     type: 'task',
                     weddingId: t.wedding_id,
                     weddingName: weddingMap[t.wedding_id],
@@ -189,20 +220,22 @@ function CalendarContent() {
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
-                    {/* Wedding Filter */}
-                    <div className="relative min-w-[240px]">
-                        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
-                        <select
-                            value={selectedWeddingId}
-                            onChange={(e) => setSelectedWeddingId(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm appearance-none cursor-pointer h-[42px]"
-                        >
-                            <option value="all">All Weddings</option>
-                            {weddings.map(w => (
-                                <option key={w.id} value={w.id}>{w.couple_name}</option>
-                            ))}
-                        </select>
-                    </div>
+                    {/* Wedding Filter - Only show if NO weddingId in URL (Master Mode) */}
+                    {!urlWeddingId && (
+                        <div className="relative min-w-[240px]">
+                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                            <select
+                                value={selectedWeddingId}
+                                onChange={(e) => setSelectedWeddingId(e.target.value)}
+                                className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm appearance-none cursor-pointer h-[42px]"
+                            >
+                                <option value="all">All Weddings</option>
+                                {weddings.map(w => (
+                                    <option key={w.id} value={w.id}>{w.couple_name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
 
                     {/* View Toggles */}
                     <div className="flex p-1 bg-gray-100/80 rounded-xl border border-gray-200 h-[42px]">

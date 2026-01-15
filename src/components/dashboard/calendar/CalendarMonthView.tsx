@@ -111,15 +111,18 @@ export function CalendarMonthView({ events }: CalendarMonthViewProps) {
                                     let bgClass = "bg-gray-50 border-gray-100 text-gray-700";
                                     let dotClass = "bg-gray-400";
 
-                                    if (event.type === 'event') {
+                                    if (event.type === 'wedding-date') {
+                                        bgClass = "bg-rose-50 border-rose-100 text-rose-900 font-semibold";
+                                        dotClass = "bg-rose-500";
+                                    } else if (event.type === 'event') {
                                         bgClass = "bg-purple-50 border-purple-100 text-purple-900";
                                         dotClass = "bg-purple-400";
                                     } else if (event.type === 'task') {
-                                        bgClass = event.isCompleted ? "bg-green-50 border-green-100 text-green-700 opacity-60 line-through" : "bg-blue-50 border-blue-100 text-blue-900";
-                                        dotClass = event.isCompleted ? "bg-green-400" : "bg-blue-400";
+                                        bgClass = event.isCompleted ? "bg-emerald-50 border-emerald-100 text-emerald-700 opacity-60 line-through" : "bg-sky-50 border-sky-100 text-sky-900";
+                                        dotClass = event.isCompleted ? "bg-emerald-400" : "bg-sky-400";
                                     } else if (event.type === 'payment') {
-                                        bgClass = event.isPaid ? "bg-green-50 border-green-100 text-green-700 opacity-60" : "bg-amber-50 border-amber-100 text-amber-900";
-                                        dotClass = event.isPaid ? "bg-green-400" : "bg-amber-400";
+                                        bgClass = event.isPaid ? "bg-emerald-50 border-emerald-100 text-emerald-700 opacity-60 line-through" : "bg-amber-50 border-amber-100 text-amber-900";
+                                        dotClass = event.isPaid ? "bg-emerald-400" : "bg-amber-400";
                                     }
 
                                     return (
@@ -129,11 +132,12 @@ export function CalendarMonthView({ events }: CalendarMonthViewProps) {
                                                 "text-xs p-1.5 rounded-md border truncate hover:opacity-80 transition-opacity cursor-pointer flex items-center gap-1",
                                                 bgClass
                                             )}
-                                            title={`${event.weddingName ? event.weddingName + ' - ' : ''}${event.title}`}
+                                            title={`${event.weddingName ? event.weddingName + ' | ' : ''}${event.title}`}
                                         >
                                             <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", dotClass)} />
                                             <span className="truncate flex-1 font-medium">
-                                                {event.weddingName && <span className="opacity-70 font-normal mr-1">[{event.weddingName.split(' ')[0]}]</span>}
+                                                {/* In Master Mode (many weddings), show the wedding name. In Single mode, maybe redundant but harmless. */}
+                                                {event.weddingName && event.type !== 'wedding-date' && <span className="opacity-70 font-normal mr-1">[{event.weddingName.split('&')[0].trim()}]</span>}
                                                 {event.title}
                                             </span>
                                             {event.time && (

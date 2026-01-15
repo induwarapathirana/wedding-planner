@@ -67,15 +67,21 @@ export function ScheduleView({ events }: ScheduleViewProps) {
                                 >
                                     <div className="min-w-[100px] flex items-center gap-2 text-sm font-semibold text-gray-900">
                                         {/* Icon based on Type */}
+                                        {item.type === 'wedding-date' && <div className="text-xl">💍</div>}
                                         {item.type === 'event' && <Clock className="w-4 h-4 text-purple-600" />}
-                                        {item.type === 'task' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
+                                        {item.type === 'task' && <CheckCircle2 className="w-4 h-4 text-sky-600" />}
                                         {item.type === 'payment' && <DollarSign className="w-4 h-4 text-amber-600" />}
 
                                         {/* Time or Label */}
                                         {item.time ? (
                                             format(parseISO(item.time), "h:mm a")
                                         ) : (
-                                            <span className="text-xs uppercase tracking-wide text-gray-500 font-bold">{item.type}</span>
+                                            <span className={cn(
+                                                "text-xs uppercase tracking-wide font-bold",
+                                                item.type === 'wedding-date' ? "text-rose-600" : "text-gray-500"
+                                            )}>
+                                                {item.type === 'wedding-date' ? 'The Big Day' : item.type}
+                                            </span>
                                         )}
                                     </div>
 
@@ -88,8 +94,11 @@ export function ScheduleView({ events }: ScheduleViewProps) {
                                             )}
                                             <h4 className={cn(
                                                 "font-semibold text-gray-900 truncate pr-4",
-                                                item.isCompleted && "line-through text-gray-400"
-                                            )}>{item.title}</h4>
+                                                (item.isCompleted || item.isPaid) && "line-through text-gray-400",
+                                                item.type === 'wedding-date' && "text-xl font-serif text-rose-700"
+                                            )}>
+                                                {item.title}
+                                            </h4>
                                         </div>
                                     </div>
 
@@ -98,7 +107,7 @@ export function ScheduleView({ events }: ScheduleViewProps) {
                                         {item.isCompleted !== undefined && (
                                             <span className={cn(
                                                 "text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md border shrink-0",
-                                                item.isCompleted ? "bg-green-50 text-green-700 border-green-100" : "bg-gray-50 text-gray-500 border-gray-100"
+                                                item.isCompleted ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-gray-50 text-gray-500 border-gray-100"
                                             )}>
                                                 {item.isCompleted ? "Completed" : "Pending"}
                                             </span>
@@ -106,7 +115,7 @@ export function ScheduleView({ events }: ScheduleViewProps) {
                                         {item.isPaid !== undefined && (
                                             <span className={cn(
                                                 "text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md border shrink-0",
-                                                item.isPaid ? "bg-green-50 text-green-700 border-green-100" : "bg-amber-50 text-amber-700 border-amber-100"
+                                                item.isPaid ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-amber-50 text-amber-700 border-amber-100"
                                             )}>
                                                 {item.isPaid ? "Paid" : "Unpaid"}
                                             </span>
