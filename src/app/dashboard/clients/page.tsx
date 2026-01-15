@@ -50,13 +50,93 @@ export default function ClientsPage() {
         }
         setLoading(false);
     }
-    // ... (rest of function omitted for brevity, logic remains same)
-
     async function handleCreateWedding(client: Client) {
-        // ...
+        if (!confirm(`Create a new wedding workspace for ${client.name}?`)) return;
+
+        setCreatingWeddingFor(client.id);
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (!user) return;
+
+        const trialEndsAt = new Date();
+        trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+
+        // 1. Create the Wedding
+        const { data: wedding, error: weddingError } = await supabase
+            .from('weddings')
+            .insert({
+                created_by: user.id,
+                // name: `${client.name}'s Wedding`, // Optional: requires 'name' column
+                couple_name_1: client.name.split(' and ')[0] || client.name.split(' & ')[0] || client.name,
+                couple_name_2: client.name.split(' and ')[1] || client.name.split(' & ')[1] || '',
+                wedding_date: client.wedding_date || null,
+                estimated_budget: client.budget || 0,
+                currency: 'USD',
+                tier: 'free',
+                premium_trial_ends_at: trialEndsAt.toISOString()
+            })
+            .select()
+            .single();
+
+        if (weddingError) {
+            alert("Error creating wedding: " + weddingError.message);
+            setCreatingWeddingFor(null);
+            return;
+        }
+
+        // 2. Add Planner as Collaborator (Owner) - CRITICAL for RLS
+        const { error: collabError } = await supabase.from('collaborators').insert({
+            wedding_id: wedding.id,
+            user_id: user.id,
+            role: 'owner'
+        });
+
+        if (collabError) {
+            console.error("Error adding collaborator:", collabError);
+            alert("Warning: Wedding created but permission setting failed. Please contact support.");
+        }
+
+        // 3. Link Client to Wedding
+        const { error: linkError } = await supabase
+            .from('clients')
+            .update({
+                wedding_id: wedding.id,
+                status: 'active' // Auto-promote to active
+            })
+            .eq('id', client.id);
+
+        if (linkError) {
+            alert("Warning: Wedding created but link failed: " + linkError.message);
+        } else {
+            // Success! Refresh logic
+            fetchClients();
+            // Option: Redirect to that wedding immediately?
+            // router.push(`/dashboard?weddingId=${wedding.id}`);
+        }
+        setCreatingWeddingFor(null);
     }
-    // ...
-    // ...
+
+    async function updateStatus(clientId: string, newStatus: Client['status']) {
+        // Optimistic update
+        setClients(clients.map(c => c.id === clientId ? { ...c, status: newStatus } : c));
+
+        const { error } = await supabase
+            .from('clients')
+            .update({ status: newStatus })
+            .eq('id', clientId);
+
+        if (error) {
+            alert("Error updating status: " + error.message);
+            fetchClients(); // Revert
+        }
+    }
+
+    const filteredClients = clients.filter(client => {
+        const matchesStatus = filter === 'all' || client.status === filter;
+        const matchesSearch = client.name.toLowerCase().includes(search.toLowerCase()) ||
+            (client.email && client.email.toLowerCase().includes(search.toLowerCase()));
+        return matchesStatus && matchesSearch;
+    });
     return (
         <div className="space-y-6">
             <AddClientModal
