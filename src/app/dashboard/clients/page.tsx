@@ -7,7 +7,7 @@ import { Check, Loader2, Sparkles, FolderOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/format";
 import { AddClientModal } from "@/components/dashboard/clients/AddClientModal";
-// Note: We'll add the 'Add Client' Modal later, for now just the list.
+import { ClientDetailsModal } from "@/components/dashboard/clients/ClientDetailsModal";
 
 type Client = {
     id: string;
@@ -18,6 +18,7 @@ type Client = {
     budget: number;
     status: 'lead' | 'active' | 'completed' | 'lost';
     wedding_id?: string;
+    notes?: string;
 };
 
 export default function ClientsPage() {
@@ -29,6 +30,8 @@ export default function ClientsPage() {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false); // NEW STATE
     const [creatingWeddingFor, setCreatingWeddingFor] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
+    const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+    const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 
     useEffect(() => {
         fetchClients();
@@ -139,6 +142,15 @@ export default function ClientsPage() {
     });
     return (
         <div className="space-y-6">
+            <ClientDetailsModal
+                client={selectedClient}
+                isOpen={isDetailsModalOpen}
+                onClose={() => {
+                    setIsDetailsModalOpen(false);
+                    setSelectedClient(null);
+                }}
+                onUpdate={fetchClients}
+            />
             <AddClientModal
                 isOpen={isAddModalOpen}
                 onClose={() => setIsAddModalOpen(false)}
@@ -252,7 +264,13 @@ export default function ClientsPage() {
                                         </div>
                                     </div>
                                 </div>
-                                <button className="text-gray-400 hover:text-gray-600">
+                                <button
+                                    onClick={() => {
+                                        setSelectedClient(client);
+                                        setIsDetailsModalOpen(true);
+                                    }}
+                                    className="text-gray-400 hover:text-gray-600"
+                                >
                                     <MoreHorizontal className="w-5 h-5" />
                                 </button>
                             </div>
