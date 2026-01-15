@@ -5,15 +5,17 @@ export default async function InquiryPage({ params }: { params: Promise<{ planne
     const { plannerId } = await params;
     const planner = await getPlannerDetails(plannerId);
 
-    const businessName = planner?.business_name || planner?.full_name || "Wedding Planner";
+    // Use company_name from planner settings, fallback to full_name or generic name
+    const businessName = planner?.company_name || planner?.full_name || "Wedding Planner";
+    const logoUrl = planner?.logo_url || null;
 
     return (
         <div className="min-h-screen bg-[#FDFBF7] py-12 px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-center font-sans">
             <div className="max-w-xl w-full">
                 {/* Header */}
                 <div className="text-center mb-10 space-y-4">
-                    {planner?.avatar_url && (
-                        <img src={planner.avatar_url} alt="Logo" className="w-20 h-20 rounded-full mx-auto object-cover shadow-md" />
+                    {logoUrl && (
+                        <img src={logoUrl} alt="Logo" className="w-20 h-20 rounded-full mx-auto object-cover shadow-md" />
                     )}
                     <h1 className="text-4xl font-serif font-bold text-gray-900">{businessName}</h1>
                     <p className="text-gray-500 text-lg">Inquiry Form</p>
