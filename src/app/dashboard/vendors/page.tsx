@@ -58,23 +58,32 @@ export default function VendorsPage() {
         const fetchUser = async () => {
             try {
                 const { data: { user } } = await supabase.auth.getUser();
-                if (!user) return; // Handle auth redirect matching your app flow
+                if (!user) return;
 
-                // Check collaborator
-                const { data: collab } = await supabase.from('collaborators').select('wedding_id').eq('user_id', user.id).single();
-                if (collab) {
-                    setWeddingId(collab.wedding_id);
-                    // Fetch wedding details (tier/currency) and vendors
-                    await fetchWeddingDetails(collab.wedding_id);
-                    await fetchVendors(collab.wedding_id);
-                } else {
-                    // Try to find wedding if owner (legacy/direct)
-                    const { data: wedding } = await supabase.from('weddings').select('id').eq('owner_id', user.id).single();
-                    if (wedding) {
-                        setWeddingId(wedding.id);
-                        await fetchWeddingDetails(wedding.id);
-                        await fetchVendors(wedding.id);
+                // Priority 1: URL Param
+                const params = new URLSearchParams(window.location.search);
+                const urlWeddingId = params.get('weddingId');
+
+                // Priority 2: LocalStorage
+                const localWeddingId = localStorage.getItem("current_wedding_id");
+
+                let targetWeddingId = urlWeddingId || localWeddingId;
+
+                // Priority 3: Fetch from Collaborators/Owner (Fallback)
+                if (!targetWeddingId) {
+                    const { data: collab } = await supabase.from('collaborators').select('wedding_id').eq('user_id', user.id).single();
+                    if (collab) {
+                        targetWeddingId = collab.wedding_id;
+                    } else {
+                        const { data: wedding } = await supabase.from('weddings').select('id').eq('owner_id', user.id).single();
+                        if (wedding) targetWeddingId = wedding.id;
                     }
+                }
+
+                if (targetWeddingId) {
+                    setWeddingId(targetWeddingId);
+                    await fetchWeddingDetails(targetWeddingId);
+                    await fetchVendors(targetWeddingId);
                 }
             } catch (error) {
                 console.error("Error fetching user:", error);

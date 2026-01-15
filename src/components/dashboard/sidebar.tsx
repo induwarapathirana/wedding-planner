@@ -99,7 +99,6 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                 return [
                     { name: "Back to Clients", href: "/dashboard/clients", icon: ArrowLeft },
                     { name: "Calendar", href: `/dashboard/calendar?weddingId=${weddingId}`, icon: CalendarDays },
-                    { name: "Master Calendar", href: "/dashboard/calendar", icon: Users }, // Quick access to global calendar
                     ...navItems.map(item => ({
                         ...item,
                         href: `${item.href}?weddingId=${weddingId}`
@@ -110,7 +109,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                 return [
                     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
                     { name: "Clients", href: "/dashboard/clients", icon: Users },
-                    { name: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
+                    { name: "Master Calendar", href: "/dashboard/calendar", icon: CalendarDays },
                     // Planners might want a master directory
                     { name: "Vendor Library", href: "/dashboard/vendors", icon: HeartHandshake },
                     { name: "Settings", href: "/dashboard/settings", icon: Settings }, // NEW
