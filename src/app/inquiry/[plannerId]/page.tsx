@@ -17,9 +17,10 @@ export default async function InquiryPage({ params }: { params: Promise<{ planne
                     {logoUrl && (
                         <img
                             src={(() => {
-                                const driveMatch = logoUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                                if (driveMatch && driveMatch[1]) {
-                                    return `https://drive.google.com/uc?export=view&id=${driveMatch[1]}`;
+                                // Improved Google Drive conversion
+                                if (logoUrl.includes('drive.google.com') && logoUrl.includes('/file/d/')) {
+                                    const fileId = logoUrl.split('/file/d/')[1].split('/')[0];
+                                    return `https://lh3.googleusercontent.com/d/${fileId}`;
                                 }
                                 return logoUrl;
                             })()}

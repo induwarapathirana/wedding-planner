@@ -110,10 +110,10 @@ export function PlannerSettings() {
                             {formData.logo_url && (
                                 <img
                                     src={(() => {
-                                        // Helper to convert Google Drive share links to direct view links
-                                        const driveMatch = formData.logo_url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                                        if (driveMatch && driveMatch[1]) {
-                                            return `https://drive.google.com/uc?export=view&id=${driveMatch[1]}`;
+                                        // Improved Google Drive conversion
+                                        if (formData.logo_url.includes('drive.google.com') && formData.logo_url.includes('/file/d/')) {
+                                            const fileId = formData.logo_url.split('/file/d/')[1].split('/')[0];
+                                            return `https://lh3.googleusercontent.com/d/${fileId}`;
                                         }
                                         return formData.logo_url;
                                     })()}
