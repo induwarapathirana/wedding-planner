@@ -59,11 +59,13 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
             .single();
 
         if (profile) {
-            setRole(profile.role);
-            if (profile.role === 'couple') {
+            // Normalize role to lowercase to handle 'Planner' vs 'planner'
+            const normalizedRole = profile.role?.toLowerCase() as 'couple' | 'planner' | 'vendor';
+            setRole(normalizedRole);
+            if (normalizedRole === 'couple') {
                 checkWeddings();
             } else {
-                // Planners always have "weddings" (access to dashboard), but conceptually different
+                // Planners/Pros always have "weddings" (access to dashboard), but conceptually different
                 setHasWeddings(true);
             }
         }
@@ -97,6 +99,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                 return [
                     { name: "Back to Clients", href: "/dashboard/clients", icon: ArrowLeft },
                     { name: "Calendar", href: `/dashboard/calendar?weddingId=${weddingId}`, icon: CalendarDays },
+                    { name: "Master Calendar", href: "/dashboard/calendar", icon: Users }, // Quick access to global calendar
                     ...navItems.map(item => ({
                         ...item,
                         href: `${item.href}?weddingId=${weddingId}`

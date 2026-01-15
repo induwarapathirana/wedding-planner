@@ -31,7 +31,7 @@ export function TierGate({ weddingId, children, featureName = "This feature" }: 
                     .eq('id', user.id)
                     .single();
 
-                if (profile?.role === 'planner') {
+                if (profile?.role?.toLowerCase() === 'planner' || profile?.role?.toLowerCase() === 'pro') {
                     setTrialInfo({
                         effectiveTier: 'premium',
                         isInTrial: false,

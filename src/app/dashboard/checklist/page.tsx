@@ -61,7 +61,7 @@ function ChecklistContent() {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (user) {
                     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-                    if (profile?.role === 'planner') {
+                    if (profile?.role?.toLowerCase() === 'planner' || profile?.role?.toLowerCase() === 'pro') {
                         effectiveTier = 'premium';
                     }
                 }
@@ -79,7 +79,7 @@ function ChecklistContent() {
 
                         if (user) {
                             const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-                            if (profile?.role === 'planner') {
+                            if (profile?.role?.toLowerCase() === 'planner' || profile?.role?.toLowerCase() === 'pro') {
                                 effectiveTier = 'premium';
                             }
                         }

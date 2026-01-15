@@ -24,7 +24,19 @@ export function useWeddingPermission(weddingId: string | null) {
                 return;
             }
 
-            // check collaborators table
+            // 1. Check Global Planner Role (Super Admin for Weddings)
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single();
+
+            if (profile?.role?.toLowerCase() === 'planner' || profile?.role?.toLowerCase() === 'pro') {
+                setRole('owner'); // Treat planner as owner for permission purposes
+                return;
+            }
+
+            // 2. Check Collaborators Table (Standard Access)
             const { data, error } = await supabase
                 .from('collaborators')
                 .select('role')
