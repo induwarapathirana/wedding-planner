@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getEffectiveTier, TrialInfo } from "@/lib/trial";
 import { LockKeyhole, Sparkles } from "lucide-react";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase";
 
 interface TierGateProps {
     weddingId: string | null;
@@ -21,6 +22,28 @@ export function TierGate({ weddingId, children, featureName = "This feature" }: 
 
     useEffect(() => {
         async function checkTier() {
+            // Bypass logic for Planners (they have Pro access to everything)
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('id', user.id)
+                    .single();
+
+                if (profile?.role === 'planner') {
+                    setTrialInfo({
+                        effectiveTier: 'premium',
+                        isInTrial: false,
+                        trialEndsAt: null,
+                        daysRemaining: null,
+                        isPaidPremium: true
+                    });
+                    setLoading(false);
+                    return;
+                }
+            }
+
             if (!weddingId) {
                 setLoading(false);
                 return;
