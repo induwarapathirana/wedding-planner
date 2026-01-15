@@ -125,6 +125,7 @@ export function PlannerSettings() {
                                     onLoad={(e) => {
                                         (e.target as HTMLImageElement).style.display = 'block';
                                     }}
+                                    referrerPolicy="no-referrer"
                                     alt="Logo"
                                     className="w-16 h-16 rounded-lg object-contain border border-gray-100 bg-gray-50"
                                 />

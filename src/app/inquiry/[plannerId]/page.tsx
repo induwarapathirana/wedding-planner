@@ -24,6 +24,7 @@ export default async function InquiryPage({ params }: { params: Promise<{ planne
                                 return logoUrl;
                             })()}
                             alt="Logo"
+                            referrerPolicy="no-referrer"
                             className="w-20 h-20 rounded-full mx-auto object-cover shadow-md"
                         />
                     )}
