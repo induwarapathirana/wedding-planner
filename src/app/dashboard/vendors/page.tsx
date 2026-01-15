@@ -92,6 +92,17 @@ export default function VendorsPage() {
         }
         // Use getEffectiveTier for proper trial/payment validation
         const trialInfo = await getEffectiveTier(wId);
+
+        // Force premium for Planners
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+            if (profile?.role === 'planner') {
+                setTier('premium');
+                return;
+            }
+        }
+
         setTier(trialInfo.effectiveTier);
     };
 
