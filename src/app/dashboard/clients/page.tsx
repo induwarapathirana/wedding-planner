@@ -81,9 +81,22 @@ export default function ClientsPage() {
             alert("Error creating wedding: " + weddingError.message);
             setCreatingWeddingFor(null);
             return;
+            return;
         }
 
-        // 2. Link Client to Wedding
+        // 2. Add Planner as Collaborator (Owner) - CRITICAL for RLS
+        const { error: collabError } = await supabase.from('collaborators').insert({
+            wedding_id: wedding.id,
+            user_id: user.id,
+            role: 'owner'
+        });
+
+        if (collabError) {
+            console.error("Error adding collaborator:", collabError);
+            alert("Warning: Wedding created but permission setting failed. Please contact support.");
+        }
+
+        // 3. Link Client to Wedding
         const { error: linkError } = await supabase
             .from('clients')
             .update({
