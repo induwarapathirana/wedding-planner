@@ -15,7 +15,17 @@ export default async function InquiryPage({ params }: { params: Promise<{ planne
                 {/* Header */}
                 <div className="text-center mb-10 space-y-4">
                     {logoUrl && (
-                        <img src={logoUrl} alt="Logo" className="w-20 h-20 rounded-full mx-auto object-cover shadow-md" />
+                        <img
+                            src={(() => {
+                                const driveMatch = logoUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                                if (driveMatch && driveMatch[1]) {
+                                    return `https://drive.google.com/uc?export=view&id=${driveMatch[1]}`;
+                                }
+                                return logoUrl;
+                            })()}
+                            alt="Logo"
+                            className="w-20 h-20 rounded-full mx-auto object-cover shadow-md"
+                        />
                     )}
                     <h1 className="text-4xl font-serif font-bold text-gray-900">{businessName}</h1>
                     <p className="text-gray-500 text-lg">Inquiry Form</p>
