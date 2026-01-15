@@ -57,6 +57,9 @@ export default function ClientsPage() {
 
         if (!user) return;
 
+        const trialEndsAt = new Date();
+        trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+
         // 1. Create the Wedding
         const { data: wedding, error: weddingError } = await supabase
             .from('weddings')
@@ -67,7 +70,9 @@ export default function ClientsPage() {
                 couple_name_2: client.name.split(' and ')[1] || client.name.split(' & ')[1] || '',
                 wedding_date: client.wedding_date || null,
                 estimated_budget: client.budget || 0,
-                currency: 'USD'
+                currency: 'USD',
+                tier: 'free',
+                premium_trial_ends_at: trialEndsAt.toISOString()
             })
             .select()
             .single();

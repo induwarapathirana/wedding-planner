@@ -131,7 +131,7 @@ export default function LoginPage() {
             }
 
             const options: any = {
-                emailRedirectTo: `${window.location.origin}/auth/callback`,
+                emailRedirectTo: `${window.location.origin}/auth/callback?role=${role}`,
             };
 
             if (inviteToken) {

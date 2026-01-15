@@ -30,33 +30,38 @@ export async function GET(request: NextRequest) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
 
         if (!error) {
-            // Check for 'role' passed from login page
-            const role = requestUrl.searchParams.get("role");
-            if (role && (role === 'planner' || role === 'vendor' || role === 'couple')) {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (user) {
-                    // 1. Upsert Profile (Ensure it exists, even if trigger failed)
-                    await supabase
-                        .from('profiles')
-                        .upsert({
-                            id: user.id,
-                            role: role,
-                            email: user.email, // Ensure email is captured
-                            full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'
-                            // updated_at removed
-                        }, { onConflict: 'id' });
+            // Get user immediately to check metadata
+            const { data: { user } } = await supabase.auth.getUser();
 
-                    // 2. Update Metadata (for consistency)
-                    await supabase.auth.updateUser({
-                        data: { role: role }
-                    });
-                }
+            // Check for 'role' passed from login page or metadata
+            let role = requestUrl.searchParams.get("role");
+            if (!role && user?.user_metadata?.role) {
+                role = user.user_metadata.role;
             }
 
-            return NextResponse.redirect(`${requestUrl.origin}${next}`);
+            if (user && role && (role === 'planner' || role === 'vendor' || role === 'couple' || role === 'pro')) {
+                // 1. Upsert Profile (Ensure it exists, even if trigger failed)
+                await supabase
+                    .from('profiles')
+                    .upsert({
+                        id: user.id,
+                        role: role,
+                        email: user.email, // Ensure email is captured
+                        full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'
+                        // updated_at removed
+                    }, { onConflict: 'id' });
+
+                // 2. Update Metadata (for consistency)
+                await supabase.auth.updateUser({
+                    data: { role: role }
+                });
+            }
         }
+
+        // Auth failed (if code is invalid)
+        return NextResponse.redirect(`${requestUrl.origin}/login?error=auth_failed`);
     }
 
-    // Auth failed
-    return NextResponse.redirect(`${requestUrl.origin}/login?error=auth_failed`);
+    // No code present (direct access)
+    return NextResponse.redirect(`${requestUrl.origin}/login`);
 }
