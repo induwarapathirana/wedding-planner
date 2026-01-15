@@ -10,6 +10,7 @@ import { formatLargeNumber, getNumberFontSize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { PlannerWorkspace } from "@/components/dashboard/PlannerWorkspace";
 import { CoupleDashboard } from "@/components/dashboard/CoupleDashboard";
+import { PlannerDashboard } from "@/components/dashboard/PlannerDashboard";
 
 type WeddingData = {
     id: string;
@@ -36,7 +37,7 @@ export default function DashboardPage() {
         estBudget: 0,
         currency: 'USD'
     });
-    const [role, setRole] = useState<'couple' | 'planner' | null>(null);
+    const [role, setRole] = useState<'couple' | 'planner' | 'pro' | null>(null);
 
     const [inviteCode, setInviteCode] = useState("");
     const [upcomingTasks, setUpcomingTasks] = useState<any[]>([]);
@@ -66,8 +67,12 @@ export default function DashboardPage() {
             }
 
             // Fetch Role
+            let userRole = null;
             const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-            if (profile) setRole(profile.role);
+            if (profile) {
+                userRole = profile.role;
+                setRole(profile.role);
+            }
 
             // Priority 1: Check URL params for weddingId (allows direct linking to specific wedding)
             let weddingId: string | null = null;
@@ -79,6 +84,15 @@ export default function DashboardPage() {
                     localStorage.setItem("current_wedding_id", weddingId);
                 }
             }
+
+            // START: Planner Logic Change
+            // If user is a Planner and NO weddingId is in the URL, stop here.
+            // We want to show them the Planner Dashboard, not auto-select a random wedding.
+            if ((userRole === 'planner' || userRole === 'pro') && !weddingId) {
+                setLoading(false);
+                return;
+            }
+            // END: Planner Logic Change
 
             // Priority 2: Fall back to localStorage
             if (!weddingId) {
@@ -297,8 +311,8 @@ export default function DashboardPage() {
 
     if (!wedding) {
         // If no wedding selected, check if they are a planner (Role would be set by now if they just selected it)
-        if (role === 'planner') {
-            return <PlannerEmptyState router={router} />;
+        if (role === 'planner' || role === 'pro') {
+            return <PlannerDashboard />;
         }
 
         // COUPLE EMPTY STATE
