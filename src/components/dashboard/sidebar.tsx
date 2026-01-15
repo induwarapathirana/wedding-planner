@@ -96,6 +96,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                 // Planner in Workspace Mode - Show Couple Features + Back Button
                 return [
                     { name: "Back to Clients", href: "/dashboard/clients", icon: ArrowLeft },
+                    { name: "Calendar", href: `/dashboard/calendar?weddingId=${weddingId}`, icon: CalendarDays },
                     ...navItems.map(item => ({
                         ...item,
                         href: `${item.href}?weddingId=${weddingId}`
