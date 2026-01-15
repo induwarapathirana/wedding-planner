@@ -1,15 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { useFormStatus } from "react-dom";
+import { useState, useEffect } from "react";
+// import { useFormStatus } from "react-dom"; // Removing unused import to be safe
 import { submitInquiry } from "./actions";
 import { Loader2, CheckCircle2, Calendar, DollarSign, Mail, Phone, User, MessageSquare } from "lucide-react";
 
 // Client Component for the Form
 function InquiryForm({ plannerId }: { plannerId: string }) {
+    console.log("InquiryForm rendering", { plannerId });
+
     const [submitted, setSubmitted] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        console.log("InquiryForm mounted");
+    }, []);
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
