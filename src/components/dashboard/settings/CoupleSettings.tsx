@@ -319,10 +319,23 @@ export function CoupleSettings({ weddingIdProp }: { weddingIdProp?: string }) {
                                         : "Upgrade to unlock unlimited guests, budget items, and more."}
                                 </p>
                             </div>
-                            {wedding?.tier !== 'premium' && (
-                                <div className="shrink-0 w-full md:w-auto">
-                                    {/* PayHere Button Logic */}
-                                </div>
+                            {wedding?.tier !== 'premium' && wedding?.id && (
+                                <PayHereButton
+                                    orderId={`premium-${wedding.id}-${Date.now()}`}
+                                    items="Vow & Venue Premium Plan"
+                                    amount={1990}
+                                    currency="LKR"
+                                    first_name={wedding.couple_name_1 || "User"}
+                                    last_name={wedding.couple_name_2 || ""}
+                                    email=""
+                                    phone=""
+                                    address=""
+                                    city=""
+                                    country="Sri Lanka"
+                                    className="w-full md:w-auto px-6 py-3 bg-purple-600 text-white text-sm font-semibold rounded-xl hover:bg-purple-700 transition-colors shadow-sm"
+                                >
+                                    Upgrade to Premium
+                                </PayHereButton>
                             )}
                         </div>
                     </div>
@@ -757,6 +770,7 @@ See you there!`);
                                 <p className="text-xs text-gray-500 truncate">
                                     {member.profiles?.email}
                                 </p>
+
                             </div>
                             <div className="ml-auto flex items-center gap-2">
                                 <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full capitalize">
