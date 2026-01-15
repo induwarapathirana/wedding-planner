@@ -1,7 +1,7 @@
 "use client";
 
 import { useMode } from "@/context/mode-context";
-import { Users, UserPlus, Check, X, HelpCircle, Utensils, Armchair, Edit2, Trash2, CheckSquare, Square, LayoutGrid, Search } from "lucide-react";
+import { Users, UserPlus, Check, X, HelpCircle, Utensils, Armchair, Edit2, Trash2, CheckSquare, Square, LayoutGrid, Search, Link as LinkIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -637,6 +637,18 @@ export default function GuestPage() {
                                                     )}>
                                                         {guest.rsvp_status.charAt(0).toUpperCase() + guest.rsvp_status.slice(1)}
                                                     </span>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const link = `${window.location.origin}/invitation/${guest.id}`;
+                                                            navigator.clipboard.writeText(link);
+                                                            alert("Invitation link copied!");
+                                                        }}
+                                                        className="p-2 text-muted-foreground hover:text-primary transition-colors"
+                                                        title="Copy Invitation Link"
+                                                    >
+                                                        <LinkIcon className="w-4 h-4" />
+                                                    </button>
                                                     {canEdit && (
                                                         <>
                                                             <button onClick={() => handleOpenEdit(guest)} className="p-2 text-muted-foreground hover:text-primary transition-colors">
