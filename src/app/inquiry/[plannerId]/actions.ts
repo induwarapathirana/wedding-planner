@@ -16,19 +16,28 @@ function getAdminClient() {
 export async function getPlannerDetails(plannerId: string) {
     const supabase = getAdminClient();
 
+    console.log(`Fetching planner details for: ${plannerId}`);
+
     // Fetch planner profile to show name/business name
+    // Using * to safeguard against missing optional columns like business_name
     const { data, error } = await supabase
         .from('profiles')
-        .select('full_name, business_name, avatar_url') // Assuming these fields exist
+        .select('*')
         .eq('id', plannerId)
         .single();
 
-    if (error) return null;
+    if (error) {
+        console.error("Error fetching planner details:", error);
+        return null;
+    }
+
     return data;
 }
 
 export async function submitInquiry(plannerId: string, formData: any) {
     const supabase = getAdminClient();
+
+    console.log(`Submitting inquiry for planner: ${plannerId}`, formData);
 
     // Validate required fields
     if (!formData.name || !formData.email) {
