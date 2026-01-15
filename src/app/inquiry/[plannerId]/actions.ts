@@ -54,7 +54,7 @@ export async function submitInquiry(plannerId: string, formData: any) {
             wedding_date: formData.date || null,
             budget: formData.budget ? parseFloat(formData.budget) : 0,
             status: 'lead',
-            // notes: formData.message || null, // TODO: Uncomment after running migration
+            notes: formData.message || null, // Save the message as notes
         });
 
     if (error) {
