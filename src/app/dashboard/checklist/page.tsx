@@ -56,7 +56,16 @@ function ChecklistContent() {
             if (wId) {
                 setWeddingId(wId);
                 const trialInfo = await getEffectiveTier(wId);
-                setTier(trialInfo.effectiveTier);
+                let effectiveTier = trialInfo.effectiveTier;
+
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+                    if (profile?.role === 'planner') {
+                        effectiveTier = 'premium';
+                    }
+                }
+                setTier(effectiveTier);
                 await fetchItems(wId);
             } else {
                 const { data: { user } } = await supabase.auth.getUser();
@@ -66,7 +75,15 @@ function ChecklistContent() {
                         localStorage.setItem("current_wedding_id", collab.wedding_id);
                         setWeddingId(collab.wedding_id);
                         const trialInfo = await getEffectiveTier(collab.wedding_id);
-                        setTier(trialInfo.effectiveTier);
+                        let effectiveTier = trialInfo.effectiveTier;
+
+                        if (user) {
+                            const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+                            if (profile?.role === 'planner') {
+                                effectiveTier = 'premium';
+                            }
+                        }
+                        setTier(effectiveTier);
                         await fetchItems(collab.wedding_id);
                     }
                 }

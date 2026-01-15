@@ -48,7 +48,17 @@ export default function InventoryPage() {
             }
             // Get effective tier (validates trial & payment)
             const trialInfo = await getEffectiveTier(wId);
-            setTier(trialInfo.effectiveTier);
+            let effectiveTier = trialInfo.effectiveTier;
+
+            // Force premium for Planners
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+                if (profile?.role === 'planner') {
+                    effectiveTier = 'premium';
+                }
+            }
+            setTier(effectiveTier);
             fetchItems(wId);
         }
         setLoading(false);

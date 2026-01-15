@@ -36,11 +36,12 @@ export async function getEffectiveTier(weddingId: string): Promise<TrialInfo> {
     }
 
     // STRICT CHECK:
-    // A user is 'premium' ONLY if:
+    // A user is 'premium' if:
     // 1. They have a verified payment_id
     // 2. OR their trial is still active
-    // We IGNORE the 'tier' column unless payment_id is present.
+    // 3. OR the DB explicitly says 'premium' (Manual Grant)
     const isPaidPremium = !!wedding.payment_id;
+    const isManualPremium = wedding.tier === 'premium';
     const trialEndsAt = wedding.premium_trial_ends_at;
 
     // Check if trial is active
@@ -56,16 +57,12 @@ export async function getEffectiveTier(weddingId: string): Promise<TrialInfo> {
     }
 
     // Determine effective tier
-    const effectiveTier: PlanTier = isPaidPremium || isInTrial ? 'premium' : 'free';
+    // If DB says premium, we trust it (allows manual overrides)
+    const effectiveTier: PlanTier = isManualPremium || isPaidPremium || isInTrial ? 'premium' : 'free';
 
-    // AUTO-SYNC DB: If trial has expired and user hasn't paid, update tier to 'free' in DB
-    // This keeps the DB tier column in sync for admin visibility
-    if (!isPaidPremium && !isInTrial && wedding.tier === 'premium') {
-        await supabase
-            .from('weddings')
-            .update({ tier: 'free' })
-            .eq('id', weddingId);
-    }
+    // AUTO-SYNC LOGIC REMOVED: We no longer auto-downgrade based on payment_id alone,
+    // as this breaks manual grants.
+    // If we want auto-downgrade for trials, it should be a separate scheduled job, not on read.
 
     return {
         effectiveTier,
