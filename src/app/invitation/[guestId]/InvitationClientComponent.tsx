@@ -29,6 +29,9 @@ export default function InvitationClient({ data }: { data: InvitationData }) {
     const coupleTitle = `${wedding.couple_name_1 || 'Partner 1'} & ${wedding.couple_name_2 || 'Partner 2'}`;
 
     const [whatsapp, setWhatsapp] = useState(guest.whatsapp_number || "");
+    const [rsvpStatus, setRsvpStatus] = useState<"accepted" | "declined" | "pending">(guest.rsvp_status as any);
+    const [saving, setSaving] = useState(false);
+    const [mealPref, setMealPref] = useState(guest.meal_preference || "");
 
     const handleRsvp = async (status: "accepted" | "declined") => {
         if (status === 'accepted' && !whatsapp) {
