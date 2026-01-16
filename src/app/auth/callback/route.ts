@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
             const { data: { user } } = await supabase.auth.getUser();
 
             // Check for 'role' passed from login page or metadata
+            // PRIORITY: URL param (from fresh login) > User Metadata (existing)
             let role = requestUrl.searchParams.get("role");
             if (!role && user?.user_metadata?.role) {
                 role = user.user_metadata.role;
@@ -56,9 +57,13 @@ export async function GET(request: NextRequest) {
                     data: { role: role }
                 });
             }
+
+            // SUCCESS: Redirect to dashboard (or 'next')
+            return NextResponse.redirect(`${requestUrl.origin}${next}`);
         }
 
-        // Auth failed (if code is invalid)
+        console.error("Auth callback error or code exchange failed:", error);
+        // Auth failed (if code is invalid or exchange failed)
         return NextResponse.redirect(`${requestUrl.origin}/login?error=auth_failed`);
     }
 
