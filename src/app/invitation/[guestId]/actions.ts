@@ -19,7 +19,7 @@ export async function getInvitationData(guestId: string) {
     const { data: guestData, error } = await supabase
         .from('guests')
         .select(`
-            id, name, rsvp_status, meal_preference, plus_one, companion_guest_count,
+            id, name, rsvp_status, meal_preference, plus_one, companion_guest_count, whatsapp_number,
             weddings (
                 id, couple_name_1, couple_name_2, wedding_date, location
             )
@@ -40,7 +40,8 @@ export async function getInvitationData(guestId: string) {
             rsvp_status: guestData.rsvp_status,
             meal_preference: guestData.meal_preference,
             plus_one: guestData.plus_one,
-            companion_guest_count: guestData.companion_guest_count
+            companion_guest_count: guestData.companion_guest_count,
+            whatsapp_number: guestData.whatsapp_number
         },
         wedding: {
             id: wedding.id,
@@ -52,14 +53,15 @@ export async function getInvitationData(guestId: string) {
     };
 }
 
-export async function updateGuestRsvp(guestId: string, status: string, mealPreference: string) {
+export async function updateGuestRsvp(guestId: string, status: string, mealPreference: string, whatsappNumber?: string) {
     const supabase = getAdminClient();
 
     const { error } = await supabase
         .from('guests')
         .update({
             rsvp_status: status,
-            meal_preference: mealPreference
+            meal_preference: mealPreference,
+            whatsapp_number: whatsappNumber || null
         })
         .eq('id', guestId);
 
