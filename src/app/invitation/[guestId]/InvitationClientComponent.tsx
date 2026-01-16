@@ -173,5 +173,7 @@ export default function InvitationClient({ data }: { data: InvitationData }) {
                 </div>
             </div>
 
-            );
+        </div>
+        </div >
+    );
 }
