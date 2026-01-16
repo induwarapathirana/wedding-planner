@@ -21,6 +21,7 @@ type WeddingData = {
     target_guest_count?: number;
     estimated_budget?: number; // Added
     tier?: 'free' | 'premium'; // Added
+    whatsapp_business_number?: string; // For automated RSVP messages
 };
 
 
@@ -146,6 +147,7 @@ export function CoupleSettings({ weddingIdProp }: { weddingIdProp?: string }) {
                 currency: wedding.currency,
                 target_guest_count: wedding.target_guest_count,
                 estimated_budget: wedding.estimated_budget, // Added
+                whatsapp_business_number: wedding.whatsapp_business_number, // For automated messages
             })
             .eq('id', wedding.id);
 
@@ -286,6 +288,20 @@ export function CoupleSettings({ weddingIdProp }: { weddingIdProp?: string }) {
                                     <option value="LKR">LKR (Rs)</option>
                                     <option value="INR">INR (₹)</option>
                                 </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                                    WhatsApp Business Number (Optional)
+                                </label>
+                                <input
+                                    type="tel"
+                                    value={wedding?.whatsapp_business_number || ''}
+                                    onChange={(e) => setWedding(prev => prev ? { ...prev, whatsapp_business_number: e.target.value } : null)}
+                                    className="w-full px-4 h-11 md:h-12 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-base"
+                                    placeholder="e.g., +94771234567"
+                                />
+                                <p className="text-xs text-gray-400 mt-1.5 ml-1">Used to send automated RSVP confirmation messages to guests via WhatsApp</p>
                             </div>
 
                             <div className="flex gap-4 pt-6 border-t border-gray-100">
