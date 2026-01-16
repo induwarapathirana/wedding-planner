@@ -128,6 +128,6 @@ export default function InvitationClient({ data }: { data: InvitationData }) {
                 <p className="text-xs text-stone-400 font-medium">Powered by Wedding Planner App</p>
             </div>
         </div>
-        </div >
+
     );
 }
