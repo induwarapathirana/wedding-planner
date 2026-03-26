@@ -58,7 +58,6 @@ export default function DashboardPage() {
 
         async function fetchWedding() {
             setLoading(true);
-            const weddingId = localStorage.getItem("current_wedding_id");
             const { data: { user } } = await supabase.auth.getUser();
 
             if (!user) {
@@ -70,8 +69,24 @@ export default function DashboardPage() {
             const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
             if (profile) setRole(profile.role);
 
+            // Priority 1: Check URL params for weddingId (allows direct linking to specific wedding)
+            let weddingId: string | null = null;
+            if (typeof window !== 'undefined') {
+                const params = new URLSearchParams(window.location.search);
+                weddingId = params.get('weddingId');
+                if (weddingId) {
+                    // Set to localStorage so sidebar and other pages use the same wedding
+                    localStorage.setItem("current_wedding_id", weddingId);
+                }
+            }
+
+            // Priority 2: Fall back to localStorage
             if (!weddingId) {
-                // If no stored ID, try to find one
+                weddingId = localStorage.getItem("current_wedding_id");
+            }
+
+            if (!weddingId) {
+                // If no stored ID, try to find one from collaborators
                 const { data: collaboration } = await supabase
                     .from('collaborators')
                     .select('wedding_id')
@@ -81,7 +96,6 @@ export default function DashboardPage() {
 
                 if (collaboration) {
                     localStorage.setItem("current_wedding_id", collaboration.wedding_id);
-                    // Recursively call or just let the next render/effect pick it up? 
                     // Better to just continue here with the new ID
                     return fetchWeddingDetails(collaboration.wedding_id);
                 } else {

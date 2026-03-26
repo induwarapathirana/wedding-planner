@@ -1,0 +1,105 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ============================================
+// NEXTAUTH MODELS (Including Profile Details)
+// ============================================
+
+model Account {
+  id                String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String  @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionToken String   @unique
+  userId       String   @db.Uuid
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  
+  // Transferred from profiles table (Supabase)
+  role           String   @default("couple") // 'couple', 'planner', 'vendor'
+  companyName    String?
+  logoUrl        String?
+  website        String?
+  signatureUrl   String?
+  brandingColor  String   @default("#000000")
+
+  accounts      Account[]
+  sessions      Session[]
+  
+  // Relations
+  clients       Client[]   @relation("PlannerClients")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================
+// DOMAIN SPECIFIC MODELS
+// ============================================
+
+model Client {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  plannerId     String    @db.Uuid
+  name          String?
+  firstName     String?
+  lastName      String?
+  email         String?
+  phone         String?
+  weddingDate   DateTime? @db.Date
+  budget        Decimal?
+  status        String    @default("lead")
+  notes         String?
+  createdAt     DateTime  @default(now()) @db.Timestamptz()
+  
+  weddingId     String?   @db.Uuid
+
+  planner       User      @relation("PlannerClients", fields: [plannerId], references: [id], onDelete: Cascade)
+  wedding       Wedding?  @relation(fields: [weddingId], references: [id], onDelete: SetNull)
+}
+
+model Wedding {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String?
+  partner1Name  String?
+  partner2Name  String?
+  budget        Decimal   @default(0)
+  currency      String    @default("USD")
+  createdAt     DateTime  @default(now()) @db.Timestamptz()
+
+  clients       Client[]
+}
