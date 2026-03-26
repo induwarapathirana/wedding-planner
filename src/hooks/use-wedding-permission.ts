@@ -1,49 +1,55 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
+import { prisma } from "@/lib/prisma";
 
 export type WeddingRole = 'owner' | 'editor' | 'viewer' | null;
+
+// Server action to check permission
+async function checkWeddingPermission(weddingId: string): Promise<WeddingRole> {
+    "use server";
+    const { auth } = await import("@/auth");
+    const session = await auth();
+    if (!session?.user?.id) return null;
+
+    const { prisma: db } = await import("@/lib/prisma");
+    const collab = await db.collaborator.findUnique({
+        where: {
+            weddingId_userId: {
+                weddingId,
+                userId: session.user.id,
+            },
+        },
+        select: { role: true },
+    });
+
+    return (collab?.role as WeddingRole) || null;
+}
 
 export function useWeddingPermission(weddingId: string | null) {
     const [role, setRole] = useState<WeddingRole>(null);
     const [loading, setLoading] = useState(true);
+    const { data: session } = useSession();
 
     useEffect(() => {
-        if (!weddingId) {
+        if (!weddingId || !session?.user) {
             setLoading(false);
             return;
         }
 
-        checkPermission();
-    }, [weddingId]);
-
-    async function checkPermission() {
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
+        async function check() {
+            try {
+                const result = await checkWeddingPermission(weddingId!);
+                setRole(result);
+            } catch (err) {
+                console.error("Error checking permission:", err);
                 setRole(null);
-                return;
+            } finally {
+                setLoading(false);
             }
-
-            // check collaborators table
-            const { data, error } = await supabase
-                .from('collaborators')
-                .select('role')
-                .eq('wedding_id', weddingId)
-                .eq('user_id', user.id)
-                .single();
-
-            if (data) {
-                setRole(data.role as WeddingRole);
-            } else {
-                setRole(null);
-            }
-        } catch (err) {
-            console.error("Error checking permission:", err);
-            setRole(null);
-        } finally {
-            setLoading(false);
         }
-    }
+
+        check();
+    }, [weddingId, session]);
 
     return {
         role,

@@ -2,48 +2,61 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { ChevronDown, Plus } from "lucide-react";
+import { acceptInvitation } from "@/app/actions/data";
 
 type Wedding = {
     id: string;
-    couple_name_1: string;
-    couple_name_2: string;
-    wedding_date: string;
+    coupleName1: string;
+    coupleName2: string;
+    weddingDate: string;
 };
+
+// Server action to get user's weddings
+async function getUserWeddings(): Promise<Wedding[]> {
+    "use server";
+    const { auth } = await import("@/auth");
+    const session = await auth();
+    if (!session?.user?.id) return [];
+
+    const { prisma } = await import("@/lib/prisma");
+    const collabs = await prisma.collaborator.findMany({
+        where: { userId: session.user.id },
+        include: { wedding: true },
+    });
+
+    return collabs.map((c) => ({
+        id: c.wedding.id,
+        coupleName1: c.wedding.coupleName1,
+        coupleName2: c.wedding.coupleName2,
+        weddingDate: c.wedding.weddingDate?.toISOString() || '',
+    }));
+}
 
 export default function WeddingSelector() {
     const [weddings, setWeddings] = useState<Wedding[]>([]);
     const [currentWedding, setCurrentWedding] = useState<Wedding | null>(null);
     const [isOpen, setIsOpen] = useState(false);
+    const { data: session } = useSession();
 
     useEffect(() => {
-        fetchWeddings();
-    }, []);
+        if (session?.user) {
+            fetchWeddings();
+        }
+    }, [session]);
 
     async function fetchWeddings() {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        const weddingList = await getUserWeddings();
+        setWeddings(weddingList);
 
-        // Get all weddings user collaborates on
-        const { data: collaborations } = await supabase
-            .from('collaborators')
-            .select('wedding_id, weddings(*)')
-            .eq('user_id', user.id);
+        const savedWeddingId = localStorage.getItem("current_wedding_id");
+        const selected = weddingList.find((w: Wedding) => w.id === savedWeddingId) || weddingList[0];
 
-        if (collaborations) {
-            const weddingList = collaborations.map((c: any) => c.weddings);
-            setWeddings(weddingList);
-
-            // Check localStorage for selected wedding
-            const savedWeddingId = localStorage.getItem("current_wedding_id");
-            const selected = weddingList.find((w: Wedding) => w.id === savedWeddingId) || weddingList[0];
-
-            if (selected) {
-                setCurrentWedding(selected);
-                localStorage.setItem("current_wedding_id", selected.id);
-            }
+        if (selected) {
+            setCurrentWedding(selected);
+            localStorage.setItem("current_wedding_id", selected.id);
         }
     }
 
@@ -51,7 +64,6 @@ export default function WeddingSelector() {
         setCurrentWedding(wedding);
         localStorage.setItem("current_wedding_id", wedding.id);
         setIsOpen(false);
-        // Reload page to refresh all data
         window.location.reload();
     }
 
@@ -63,15 +75,14 @@ export default function WeddingSelector() {
         e.preventDefault();
         setJoining(true);
 
-        const { data, error } = await supabase.rpc('accept_invitation', { lookup_token: inviteCode });
-
-        if (error || (data && data.error)) {
-            alert(error?.message || "Invalid or expired invitation code.");
-            setJoining(false);
-        } else {
+        try {
+            await acceptInvitation(inviteCode);
             alert("Successfully joined wedding!");
             setIsOpen(false);
             window.location.reload();
+        } catch (error: any) {
+            alert(error?.message || "Invalid or expired invitation code.");
+            setJoining(false);
         }
     }
 
@@ -95,7 +106,7 @@ export default function WeddingSelector() {
             >
                 {currentWedding ? (
                     <span className="text-sm font-medium truncate">
-                        {currentWedding.couple_name_1} & {currentWedding.couple_name_2}
+                        {currentWedding.coupleName1} & {currentWedding.coupleName2}
                     </span>
                 ) : (
                     <span className="text-sm text-gray-500">Select Wedding</span>
@@ -113,10 +124,10 @@ export default function WeddingSelector() {
                                 }`}
                         >
                             <div className="text-sm font-medium">
-                                {wedding.couple_name_1} & {wedding.couple_name_2}
+                                {wedding.coupleName1} & {wedding.coupleName2}
                             </div>
                             <div className="text-xs text-gray-500 mt-1">
-                                {new Date(wedding.wedding_date).toLocaleDateString()}
+                                {wedding.weddingDate ? new Date(wedding.weddingDate).toLocaleDateString() : 'No date set'}
                             </div>
                         </button>
                     ))}
