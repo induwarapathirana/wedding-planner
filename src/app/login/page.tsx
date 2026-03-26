@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
 import Link from "next/link";
+import { signIn } from "next-auth/react";
+import { Heart, BookUser } from "lucide-react";
 
 const GoogleIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24">
@@ -13,20 +14,13 @@ const GoogleIcon = () => (
     </svg>
 );
 
-import { Lock, Heart, BookUser } from "lucide-react";
-
 export default function LoginPage() {
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [isSignUp, setIsSignUp] = useState(false);
-    const [redirecting, setRedirecting] = useState(false);
     const [agreedToPolicy, setAgreedToPolicy] = useState(false);
     const [role, setRole] = useState<'couple' | 'planner'>('couple');
 
-    // Handle OAuth hash tokens (implicit flow)
     useEffect(() => {
-        // Check for invite token in URL (from link click)
         const params = new URLSearchParams(window.location.search);
         const inviteToken = params.get('invite_token');
         if (inviteToken) {
@@ -35,48 +29,8 @@ export default function LoginPage() {
         if (params.get('signup') === 'true') {
             setIsSignUp(true);
         }
-
-        const hash = window.location.hash;
-        if (hash && hash.includes('access_token')) {
-            console.log('📍 OAuth tokens detected in hash');
-            setRedirecting(true);
-
-            const hashParams = new URLSearchParams(hash.substring(1));
-            const access_token = hashParams.get('access_token');
-            const refresh_token = hashParams.get('refresh_token');
-
-            if (access_token) {
-                supabase.auth.setSession({
-                    access_token,
-                    refresh_token: refresh_token || '',
-                }).then(async ({ error, data }) => {
-                    if (!error && data.session) {
-                        console.log('✅ Session set - checking weddings');
-                        // Check if user has any weddings
-
-                        // We use a separate query or just try to list one
-                        const { data: collaboration } = await supabase
-                            .from('collaborators')
-                            .select('wedding_id')
-                            .eq('user_id', data.session.user.id)
-                            .maybeSingle();
-
-                        if (collaboration) {
-                            window.location.replace('/dashboard');
-                        } else {
-                            window.location.replace('/dashboard');
-                        }
-                    } else {
-                        console.error('❌ Session error:', error);
-                        setRedirecting(false);
-                        if (error) alert(error.message);
-                    }
-                });
-            }
-        }
     }, []);
 
-    //Google OAuth
     const handleGoogleSignIn = async () => {
         if (isSignUp && !agreedToPolicy) {
             alert("Please agree to the Privacy Policy to create an account.");
@@ -84,141 +38,12 @@ export default function LoginPage() {
         }
         setLoading(true);
 
-        const params = new URLSearchParams(window.location.search);
-        const inviteToken = params.get('invite_token') || localStorage.getItem('pending_invite_token');
-
-        let redirectUrl = `${window.location.origin}/auth/callback`;
-        if (inviteToken) {
-            redirectUrl += `?invite_token=${inviteToken}`;
-        }
-
-        // Append role to redirect URL so we can capture it in the callback
-        const redirectUrlWithRole = new URL(redirectUrl);
-        redirectUrlWithRole.searchParams.set('role', role);
-
-        const { error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: redirectUrlWithRole.toString(),
-                queryParams: {
-                    access_type: 'offline',
-                    prompt: 'consent select_account',
-                },
-            },
+        // NextAuth handles the full OAuth flow.
+        // The Google consent screen will now show YOUR domain, not supabase.
+        await signIn("google", {
+            callbackUrl: "/dashboard",
         });
-
-        if (error) {
-            console.error("Google Auth Error:", error);
-            alert(error.message);
-            setLoading(false);
-        }
     };
-
-    // Email/Password
-    const handleEmailAuth = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-
-        // Check for invite token to carry over
-        const params = new URLSearchParams(window.location.search);
-        const inviteToken = params.get('invite_token') || localStorage.getItem('pending_invite_token');
-
-        if (isSignUp) {
-            if (!agreedToPolicy) {
-                alert("Please agree to the Privacy Policy to create an account.");
-                setLoading(false);
-                return;
-            }
-
-            const options: any = {
-                emailRedirectTo: `${window.location.origin}/auth/callback`,
-            };
-
-            if (inviteToken) {
-                options.emailRedirectTo = `${window.location.origin}/auth/callback?invite_token=${inviteToken}`;
-            }
-
-            const nameFromEmail = email.split('@')[0];
-            // Ensure name meets minimum length requirements (fallback for DB constraints)
-            const fullName = nameFromEmail.length < 3 ? `${nameFromEmail} User` : nameFromEmail;
-
-            const { error } = await supabase.auth.signUp({
-                email,
-                password,
-                options: {
-                    ...options,
-                    data: {
-                        role: role,
-                        full_name: fullName
-                    }
-                }
-            });
-
-            if (error) {
-                alert(error.message);
-                setLoading(false);
-            } else {
-                alert("Success! Check your email for confirmation.");
-                setIsSignUp(false);
-                setLoading(false);
-            }
-        } else {
-            const { error, data } = await supabase.auth.signInWithPassword({ email, password });
-            if (error) {
-                alert(error.message);
-                setLoading(false);
-            } else {
-                console.log('✅ Sign-in successful - checking weddings');
-                setRedirecting(true);
-
-                if (data.user) {
-                    try {
-                        const { data: collaboration, error: collabError } = await supabase
-                            .from('collaborators')
-                            .select('wedding_id')
-                            .eq('user_id', data.user.id)
-                            .maybeSingle();
-
-                        // Ignore error, just redirect
-                        if (collabError) console.error("Collab check fetch error:", collabError);
-                        window.location.replace('/dashboard');
-                    } catch (err) {
-                        console.error("Redirect logic error:", err);
-                        window.location.replace('/dashboard');
-                    }
-                } else {
-                    window.location.replace('/dashboard');
-                }
-            }
-        }
-    };
-
-    // Safety timeout for redirect
-    useEffect(() => {
-        if (redirecting) {
-            const timer = setTimeout(() => {
-                console.warn("Redirect timeout - forcing dashboard");
-                window.location.replace('/dashboard');
-            }, 5000); // 5s timeout
-            return () => clearTimeout(timer);
-        }
-    }, [redirecting]);
-
-    // Show redirecting state
-    if (redirecting) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-rose-50 via-white to-violet-50">
-                <div className="text-center p-8 bg-white rounded-2xl shadow-xl">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary mx-auto mb-4"></div>
-                    <h2 className="text-xl font-semibold mb-2">Redirecting to dashboard...</h2>
-                    <p className="text-muted-foreground mb-4">If you're not redirected automatically,</p>
-                    <Link href="/dashboard" className="text-primary hover:underline font-medium">
-                        click here to continue
-                    </Link>
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-rose-50 via-white to-violet-50 px-4">
@@ -230,8 +55,6 @@ export default function LoginPage() {
                     <h1 className="mb-2 font-serif text-4xl font-bold text-foreground">Welcome Back</h1>
                     <p className="text-muted-foreground">Sign in to continue planning.</p>
                 </div>
-
-
 
                 <div className="rounded-2xl bg-white p-8 shadow-xl">
                     {isSignUp && (
@@ -285,51 +108,8 @@ export default function LoginPage() {
                         className="mb-6 flex w-full items-center justify-center gap-3 rounded-xl border-2 border-border bg-white px-4 py-3 text-sm font-medium text-foreground shadow-sm hover:bg-muted focus:outline-none disabled:opacity-50 transition-all"
                     >
                         <GoogleIcon />
-                        Continue with Google
+                        {loading ? "Redirecting..." : "Continue with Google"}
                     </button>
-
-                    <div className="relative mb-6">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-border"></div>
-                        </div>
-                        <div className="relative flex justify-center text-sm">
-                            <span className="bg-white px-4 text-muted-foreground">Or continue with email</span>
-                        </div>
-                    </div>
-
-                    <form onSubmit={handleEmailAuth} className="space-y-4">
-                        <div>
-                            <label className="mb-2 block text-sm font-medium text-foreground">Email address</label>
-                            <input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="you@example.com"
-                                className="w-full rounded-xl border-2 border-border bg-background px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                required
-                            />
-                        </div>
-
-                        <div>
-                            <label className="mb-2 block text-sm font-medium text-foreground">Password</label>
-                            <input
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="••••••••"
-                                className="w-full rounded-xl border-2 border-border bg-background px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                required
-                            />
-                        </div>
-
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full rounded-xl bg-primary px-4 py-3 font-medium text-white shadow-lg hover:bg-primary/90 focus:outline-none disabled:opacity-50 transition-all"
-                        >
-                            {loading ? "Loading..." : isSignUp ? "Sign Up" : "Sign In"}
-                        </button>
-                    </form>
 
                     <div className="mt-6 text-center text-sm">
                         <button

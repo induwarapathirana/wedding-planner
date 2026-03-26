@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
+import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import {
     LayoutDashboard,
@@ -23,7 +24,7 @@ import {
     ArrowLeft
 } from "lucide-react";
 import WeddingSelector from "./WeddingSelector";
-import { supabase } from "@/lib/supabase";
+import { getUserProfile, getUserWeddingId } from "@/app/actions/data";
 
 const navItems = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -40,54 +41,38 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
     const router = useRouter();
     const searchParams = useSearchParams();
     const weddingId = searchParams.get('weddingId');
+    const { data: session } = useSession();
 
     const [hasWeddings, setHasWeddings] = useState(false);
     const [role, setRole] = useState<'couple' | 'planner' | 'vendor' | null>(null);
 
     useEffect(() => {
-        checkUserRole();
-    }, []);
+        if (session?.user) {
+            checkUserRole();
+        }
+    }, [session]);
 
     async function checkUserRole() {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .single();
-
+        const profile = await getUserProfile();
         if (profile) {
-            setRole(profile.role);
+            setRole(profile.role as any);
             if (profile.role === 'couple') {
                 checkWeddings();
             } else {
-                // Planners always have "weddings" (access to dashboard), but conceptually different
                 setHasWeddings(true);
             }
         }
     }
 
     async function checkWeddings() {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data } = await supabase
-            .from('collaborators')
-            .select('wedding_id')
-            .eq('user_id', user.id)
-            .limit(1)
-            .maybeSingle();
-
-        if (data) {
+        const wId = await getUserWeddingId();
+        if (wId) {
             setHasWeddings(true);
         }
     }
 
     async function handleSignOut() {
-        await supabase.auth.signOut();
-        router.push("/login");
+        await signOut({ callbackUrl: "/login" });
     }
 
     const currentNavItems = (() => {

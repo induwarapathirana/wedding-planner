@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Calendar, Users, PartyPopper } from "lucide-react";
+import { Calendar, PartyPopper } from "lucide-react";
+import { createWedding } from "@/app/actions/data";
 
 export default function OnboardingPage() {
     const [partnerOne, setPartnerOne] = useState("");
@@ -11,80 +12,40 @@ export default function OnboardingPage() {
     const [date, setDate] = useState("");
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+    const { data: session } = useSession();
 
     const handleCreateWedding = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
 
-        const { data: { user } } = await supabase.auth.getUser();
-
-        if (!user) {
+        if (!session?.user) {
             alert("You must be logged in!");
             router.push("/login");
             return;
         }
 
-        // 1. Check/Create Profile
-        // We only likely need to create this if it's the very first time (and trigger didn't catch it)
-        // OR if we want to ensure their name is set.
-        // BUT we must NOT overwrite an existing name if they are a planner creating multiple weddings.
-
-        // Note: With the new role-based system, profiles should exist from signup.
-        const { data: existingProfile } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', user.id)
-            .maybeSingle();
-
-        if (!existingProfile) {
-            // New user (or missing profile) - Set name to input
-            await supabase.from('profiles').insert({
-                id: user.id,
-                email: user.email,
-                full_name: partnerOne,
-                created_at: new Date().toISOString(),
+        try {
+            const wedding = await createWedding({
+                coupleName1: partnerOne,
+                coupleName2: partnerTwo,
+                weddingDate: date,
+                styleTheme: "Elegant",
             });
-        }
-        // If profile exists, we leave it alone. The user's "global identity" is stable.
 
-        // 2. Create Wedding with Premium Trial
-        const trialEndsAt = new Date();
-        trialEndsAt.setDate(trialEndsAt.getDate() + 14); // 2 weeks from now
+            // Save to local storage for our minimal context
+            localStorage.setItem("current_wedding_id", wedding.id);
+            window.location.href = "/dashboard/settings?welcome=true";
+        } catch (error: any) {
+            let errorMessage = "Error creating wedding: " + (error?.message || "Unknown error");
 
-        const { data: wedding, error } = await supabase.from('weddings').insert({
-            created_by: user.id,
-            couple_name_1: partnerOne,
-            couple_name_2: partnerTwo,
-            wedding_date: date,
-            style_theme: 'Elegant', // default
-            tier: 'free', // Start with free tier, effective tier will be premium during trial
-            premium_trial_ends_at: trialEndsAt.toISOString()
-        }).select().single();
-
-        if (error) {
-            // User-friendly error messages for testing limits
-            let errorMessage = "Error creating wedding: " + error.message;
-
-            if (error.message.includes('LIMIT_PER_USER')) {
+            if (error?.message?.includes('LIMIT_PER_USER')) {
                 errorMessage = "🚫 Current Package Limitation\n\nYou can only create 1 wedding with current package. If you need additional weddings, please contact support via 077 302 7782.";
-            } else if (error.message.includes('LIMIT_GLOBAL')) {
+            } else if (error?.message?.includes('LIMIT_GLOBAL')) {
                 errorMessage = "🚫 Capacity Reached for Promotional Offerings\n\nWe've reached our Promotional offerings capacity. Please try again later or contact support via 077 302 7782.";
             }
 
             alert(errorMessage);
             setLoading(false);
-        } else {
-            // 3. Add user as collaborator owner
-            await supabase.from('collaborators').insert({
-                wedding_id: wedding.id,
-                user_id: user.id,
-                role: 'owner'
-            });
-
-            // 4. Save to local storage for our minimal context
-            localStorage.setItem("current_wedding_id", wedding.id);
-
-            window.location.href = "/dashboard/settings?welcome=true";
         }
     };
 
