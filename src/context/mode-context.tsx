@@ -16,7 +16,6 @@ export function ModeProvider({ children }: { children: React.ReactNode }) {
     const [mode, setModeState] = useState<PlannerMode>("advanced");
 
     // Persist preference (conceptual - implementation simplified for MVP)
-    // In a real app, this might sync with User Profile in Supabase
     useEffect(() => {
         const savedMode = localStorage.getItem("planner-mode") as PlannerMode;
         if (savedMode) setModeState(savedMode);

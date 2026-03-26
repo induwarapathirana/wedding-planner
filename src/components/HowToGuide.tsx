@@ -29,7 +29,7 @@ const guideItems: GuideItem[] = [
     title: "Login",
     route: "/login",
     description:
-      "Sign in to save weddings, keep collaborator access aligned, and secure your planning data with Supabase authentication.",
+      "Sign in to save weddings, keep collaborator access aligned, and secure your planning data.",
     keyActions: [
       "Sign up with email or Google to create your profile.",
       "Carry invite tokens automatically so collaborator links work the moment you land in dashboard.",

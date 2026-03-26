@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { X, Star, MessageSquare, LifeBuoy } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { submitFeedback } from "@/app/actions/data";
 
 interface FeedbackModalProps {
     isOpen: boolean;
@@ -23,22 +23,10 @@ export function FeedbackModal({ isOpen, onClose, weddingId }: FeedbackModalProps
         setSubmitting(true);
 
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error("Not authenticated");
-
-            const { error } = await supabase.from('feedback').insert({
-                user_id: user.id,
-                wedding_id: weddingId,
-                rating,
-                message,
-                type
-            });
-
-            if (error) throw error;
+            await submitFeedback(message, rating);
 
             alert("Thank you for your feedback! We truly appreciate it. ❤️");
             onClose();
-            // Reset form
             setRating(0);
             setMessage("");
             setType('feedback');
