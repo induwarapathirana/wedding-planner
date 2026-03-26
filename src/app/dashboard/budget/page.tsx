@@ -5,7 +5,7 @@ import { DollarSign, PieChart, TrendingUp, Plus, Edit2, Wallet, Trash2, CheckSqu
 import { ModeToggle } from "@/components/dashboard/mode-toggle";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getBudgetItems, createBudgetItem, updateBudgetItem, deleteBudgetItem, deleteBudgetItems, getWeddingById } from "@/app/actions/data";
 import { BudgetDialog } from "@/components/dashboard/budget-dialog";
 import { CURRENCIES } from "@/lib/constants";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
@@ -90,9 +90,9 @@ export default function BudgetPage() {
             if (wId) {
                 setWeddingId(wId);
                 // Fetch Settings (Currency & Tier)
-                const { data: wedding } = await supabase.from('weddings').select('currency').eq('id', wId).single();
-                if (wedding) {
-                    if (wedding.currency) setCurrency(wedding.currency);
+                const weddingData = await getWeddingById(wId);
+                if (weddingData) {
+                    if (weddingData.currency) setCurrency(weddingData.currency);
                 }
                 // Use getEffectiveTier for proper trial/payment validation
                 const trialInfo = await getEffectiveTier(wId);
@@ -106,13 +106,18 @@ export default function BudgetPage() {
     }, []);
 
     async function fetchBudget(wId: string) {
-        const { data } = await supabase.from('budget_items').select('*').eq('wedding_id', wId).order('due_date', { ascending: true });
+        const data = await getBudgetItems(wId);
         if (data) {
-            // Map DB columns to UI state
             const mappedItems = data.map((item: any) => ({
                 ...item,
                 item_name: item.name,
-                is_paid: !!item.paid_at
+                estimated_cost: Number(item.estimatedCost),
+                actual_cost: Number(item.actualCost),
+                paid_amount: Number(item.paidAmount),
+                due_date: item.dueDate,
+                is_paid: !!item.paidAt,
+                unit_price: item.unitPrice ? Number(item.unitPrice) : undefined,
+                units: item.units,
             }));
             setBudgetItems(mappedItems as BudgetItem[]);
         }
@@ -155,28 +160,23 @@ export default function BudgetPage() {
     };
 
     const executeDelete = async () => {
-        if (confirmState.type === 'single' && confirmState.id) {
-            const { error } = await supabase.from('budget_items').delete().eq('id', confirmState.id);
-            if (error) {
-                alert("Error deleting: " + error.message);
-            } else {
+        try {
+            if (confirmState.type === 'single' && confirmState.id) {
+                await deleteBudgetItem(confirmState.id);
                 if (weddingId) fetchBudget(weddingId);
                 setSelectedIds(prev => {
                     const next = new Set(prev);
                     next.delete(confirmState.id!);
                     return next;
                 });
-            }
-        } else if (confirmState.type === 'bulk') {
-            const ids = Array.from(selectedIds);
-            const { error } = await supabase.from('budget_items').delete().in('id', ids);
-
-            if (error) {
-                alert("Error deleting: " + error.message);
-            } else {
+            } else if (confirmState.type === 'bulk') {
+                const ids = Array.from(selectedIds);
+                await deleteBudgetItems(ids);
                 if (weddingId) fetchBudget(weddingId);
                 setSelectedIds(new Set());
             }
+        } catch (error: any) {
+            alert("Error deleting: " + error.message);
         }
         setConfirmState({ ...confirmState, isOpen: false });
     };
@@ -201,22 +201,27 @@ export default function BudgetPage() {
     const handleSaveItem = async (itemData: Partial<BudgetItem>) => {
         if (!weddingId || !canEdit) return;
 
-        // Map UI fields to DB columns
         const { item_name, is_paid, id, ...rest } = itemData;
 
-        const payload = {
-            ...rest,
-            name: item_name, // Map item_name -> name
-            paid_at: is_paid ? new Date().toISOString() : null, // Map is_paid -> paid_at
-            wedding_id: weddingId
+        const payload: any = {
+            name: item_name,
+            category: rest.category,
+            estimatedCost: rest.estimated_cost,
+            actualCost: rest.actual_cost,
+            paidAmount: rest.paid_amount,
+            dueDate: rest.due_date ? new Date(rest.due_date) : null,
+            paidAt: is_paid ? new Date() : null,
+            notes: rest.notes,
         };
 
-        if (editingItem) {
-            const { error } = await supabase.from('budget_items').update(payload).eq('id', editingItem.id);
-            if (error) alert("Error: " + error.message);
-        } else {
-            const { error } = await supabase.from('budget_items').insert(payload);
-            if (error) alert("Error: " + error.message);
+        try {
+            if (editingItem) {
+                await updateBudgetItem(editingItem.id, payload);
+            } else {
+                await createBudgetItem(weddingId, payload);
+            }
+        } catch (error: any) {
+            alert("Error: " + error.message);
         }
         setIsDialogOpen(false);
         fetchBudget(weddingId);

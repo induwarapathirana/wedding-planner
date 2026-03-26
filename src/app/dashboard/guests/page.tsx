@@ -4,7 +4,7 @@ import { useMode } from "@/context/mode-context";
 import { Users, UserPlus, Check, X, HelpCircle, Utensils, Armchair, Edit2, Trash2, CheckSquare, Square, LayoutGrid, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getGuests, createGuest, updateGuest, deleteGuest, deleteGuests, getWeddingById, getUserWeddingId } from "@/app/actions/data";
 import { GuestDialog } from "@/components/dashboard/guest-dialog";
 import { GroupSummaryModal } from "@/components/dashboard/group-summary-modal";
 import { BulkSeatingDialog } from "@/components/dashboard/bulk-seating-dialog";
@@ -74,9 +74,9 @@ export default function GuestPage() {
             setWeddingId(wId);
 
             // Fetch wedding target
-            const { data: weddingData } = await supabase.from('weddings').select('target_guest_count').eq('id', wId).single();
+            const weddingData = await getWeddingById(wId);
             if (weddingData) {
-                setTargetCount(weddingData.target_guest_count || 0);
+                setTargetCount(weddingData.targetGuestCount || 0);
             }
 
             // Fetch Effective Tier (checking trial status)
@@ -96,9 +96,21 @@ export default function GuestPage() {
     }, [loading, isOverLimit]);
 
     async function fetchGuests(wId: string) {
-        const { data } = await supabase.from('guests').select('*').eq('wedding_id', wId);
+        const data = await getGuests(wId);
         if (data) {
-            setGuests(data as unknown as Guest[]);
+            // Map Prisma camelCase to component snake_case expectations
+            const mapped = data.map((g: any) => ({
+                ...g,
+                group_category: g.groupCategory,
+                rsvp_status: g.rsvpStatus,
+                meal_preference: g.mealPreference,
+                table_assignment: g.tableAssignment,
+                plus_one: g.plusOne,
+                companion_guest_count: g.companionGuestCount,
+                companion_names: g.companionNames ? JSON.parse(g.companionNames) : [],
+                selected_companions: g.selectedCompanions ? JSON.parse(g.selectedCompanions) : [],
+            }));
+            setGuests(mapped as Guest[]);
         }
         setLoading(false);
     }
@@ -126,18 +138,27 @@ export default function GuestPage() {
             return;
         }
 
-        const payload = {
-            ...guestData,
-            priority: guestData.priority || 'B',
-            wedding_id: weddingId
+        // Map snake_case to Prisma camelCase
+        const payload: any = {
+            name: guestData.name,
+            groupCategory: guestData.group_category,
+            rsvpStatus: guestData.rsvp_status,
+            mealPreference: guestData.meal_preference,
+            tableAssignment: guestData.table_assignment,
+            plusOne: guestData.plus_one,
+            companionGuestCount: guestData.companion_guest_count,
+            companionNames: guestData.companion_names ? JSON.stringify(guestData.companion_names) : null,
+            selectedCompanions: guestData.selected_companions ? JSON.stringify(guestData.selected_companions) : null,
         };
 
-        if (editingGuest) {
-            const { error } = await supabase.from('guests').update(payload).eq('id', editingGuest.id);
-            if (error) alert("Failed to update: " + error.message);
-        } else {
-            const { error } = await supabase.from('guests').insert(payload);
-            if (error) alert("Failed to add: " + error.message);
+        try {
+            if (editingGuest) {
+                await updateGuest(editingGuest.id, payload);
+            } else {
+                await createGuest(weddingId, payload);
+            }
+        } catch (error: any) {
+            alert("Failed: " + error.message);
         }
 
         setIsDialogOpen(false);
@@ -183,10 +204,7 @@ export default function GuestPage() {
         ));
 
         // Update database
-        await supabase
-            .from('guests')
-            .update({ selected_companions: newSelected })
-            .eq('id', guestId);
+        await updateGuest(guestId, { selectedCompanions: JSON.stringify(newSelected) });
     };
 
     const toggleAllCompanions = async (guestId: string, selectAll: boolean) => {
@@ -202,10 +220,7 @@ export default function GuestPage() {
         ));
 
         // Update database
-        await supabase
-            .from('guests')
-            .update({ selected_companions: newSelected })
-            .eq('id', guestId);
+        await updateGuest(guestId, { selectedCompanions: JSON.stringify(newSelected) });
     };
 
     // Delete Logic
@@ -221,28 +236,23 @@ export default function GuestPage() {
 
     const executeDelete = async () => {
         if (!canEdit) return;
-        if (confirmState.type === 'single' && confirmState.id) {
-            const { error } = await supabase.from('guests').delete().eq('id', confirmState.id);
-            if (error) {
-                alert("Error deleting: " + error.message);
-            } else {
+        try {
+            if (confirmState.type === 'single' && confirmState.id) {
+                await deleteGuest(confirmState.id);
                 if (weddingId) fetchGuests(weddingId);
                 setSelectedIds(prev => {
                     const next = new Set(prev);
                     next.delete(confirmState.id!);
                     return next;
                 });
-            }
-        } else if (confirmState.type === 'bulk') {
-            const ids = Array.from(selectedIds);
-            const { error } = await supabase.from('guests').delete().in('id', ids);
-
-            if (error) {
-                alert("Error deleting: " + error.message);
-            } else {
+            } else if (confirmState.type === 'bulk') {
+                const ids = Array.from(selectedIds);
+                await deleteGuests(ids);
                 if (weddingId) fetchGuests(weddingId);
                 setSelectedIds(new Set());
             }
+        } catch (error: any) {
+            alert("Error deleting: " + error.message);
         }
         setConfirmState({ ...confirmState, isOpen: false });
     };
@@ -252,16 +262,14 @@ export default function GuestPage() {
         const ids = Array.from(selectedIds);
         if (ids.length === 0) return;
 
-        const { error } = await supabase
-            .from('guests')
-            .update({ table_assignment: tableNo })
-            .in('id', ids);
-
-        if (error) {
-            alert("Error updating seating: " + error.message);
-        } else {
+        try {
+            for (const id of ids) {
+                await updateGuest(id, { tableAssignment: tableNo });
+            }
             if (weddingId) fetchGuests(weddingId);
             setSelectedIds(new Set());
+        } catch (error: any) {
+            alert("Error updating seating: " + error.message);
         }
     };
 
@@ -270,16 +278,14 @@ export default function GuestPage() {
         const ids = Array.from(selectedIds);
         if (ids.length === 0) return;
 
-        const { error } = await supabase
-            .from('guests')
-            .update({ table_assignment: null })
-            .in('id', ids);
-
-        if (error) {
-            alert("Error unassigning seating: " + error.message);
-        } else {
+        try {
+            for (const id of ids) {
+                await updateGuest(id, { tableAssignment: null });
+            }
             if (weddingId) fetchGuests(weddingId);
             setSelectedIds(new Set());
+        } catch (error: any) {
+            alert("Error unassigning seating: " + error.message);
         }
     };
 

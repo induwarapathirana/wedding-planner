@@ -4,7 +4,7 @@ import { useMode } from "@/context/mode-context";
 import { CheckCircle2, Circle, Plus, Edit2, CalendarDays, Trash2, CheckSquare, Square, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState, Suspense } from "react";
-import { supabase } from "@/lib/supabase";
+import { getChecklistItems, createChecklistItem, updateChecklistItem, deleteChecklistItem, deleteChecklistItems, getUserWeddingId } from "@/app/actions/data";
 import { ChecklistDialog } from "@/components/dashboard/checklist-dialog";
 import { useSearchParams } from "next/navigation";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
@@ -59,16 +59,13 @@ function ChecklistContent() {
                 setTier(trialInfo.effectiveTier);
                 await fetchItems(wId);
             } else {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (user) {
-                    const { data: collab } = await supabase.from('collaborators').select('wedding_id').eq('user_id', user.id).single();
-                    if (collab) {
-                        localStorage.setItem("current_wedding_id", collab.wedding_id);
-                        setWeddingId(collab.wedding_id);
-                        const trialInfo = await getEffectiveTier(collab.wedding_id);
-                        setTier(trialInfo.effectiveTier);
-                        await fetchItems(collab.wedding_id);
-                    }
+                const foundId = await getUserWeddingId();
+                if (foundId) {
+                    localStorage.setItem("current_wedding_id", foundId);
+                    setWeddingId(foundId);
+                    const trialInfo = await getEffectiveTier(foundId);
+                    setTier(trialInfo.effectiveTier);
+                    await fetchItems(foundId);
                 }
                 setLoading(false);
             }
@@ -81,9 +78,14 @@ function ChecklistContent() {
     }, [searchParams]);
 
     async function fetchItems(wId: string) {
-        const { data } = await supabase.from('checklist_items').select('*').eq('wedding_id', wId).order('due_date', { ascending: true });
+        const data = await getChecklistItems(wId);
         if (data) {
-            setItems(data as unknown as ChecklistItem[]);
+            const mapped = data.map((item: any) => ({
+                ...item,
+                due_date: item.dueDate,
+                is_completed: item.isCompleted,
+            }));
+            setItems(mapped as ChecklistItem[]);
         }
         setLoading(false);
     }
@@ -107,17 +109,22 @@ function ChecklistContent() {
     const handleSaveItem = async (itemData: Partial<ChecklistItem>) => {
         if (!weddingId || !canEdit) return;
 
-        const payload = {
-            ...itemData,
-            wedding_id: weddingId
+        const payload: any = {
+            title: itemData.title,
+            category: itemData.category,
+            dueDate: itemData.due_date ? new Date(itemData.due_date) : null,
+            isCompleted: itemData.is_completed || false,
+            notes: itemData.notes,
         };
 
-        if (editingItem) {
-            const { error } = await supabase.from('checklist_items').update(payload).eq('id', editingItem.id);
-            if (error) alert("Error: " + error.message);
-        } else {
-            const { error } = await supabase.from('checklist_items').insert(payload);
-            if (error) alert("Error: " + error.message);
+        try {
+            if (editingItem) {
+                await updateChecklistItem(editingItem.id, payload);
+            } else {
+                await createChecklistItem(weddingId, payload);
+            }
+        } catch (error: any) {
+            alert("Error: " + error.message);
         }
         setIsDialogOpen(false);
         fetchItems(weddingId);
@@ -128,8 +135,9 @@ function ChecklistContent() {
         const newStatus = !item.is_completed;
         setItems(items.map(i => i.id === item.id ? { ...i, is_completed: newStatus } : i));
 
-        const { error } = await supabase.from('checklist_items').update({ is_completed: newStatus }).eq('id', item.id);
-        if (error) {
+        try {
+            await updateChecklistItem(item.id, { isCompleted: newStatus });
+        } catch {
             setItems(items.map(i => i.id === item.id ? { ...i, is_completed: !newStatus } : i));
             alert("Failed to update status");
         }
@@ -166,28 +174,23 @@ function ChecklistContent() {
     };
 
     const executeDelete = async () => {
-        if (confirmState.type === 'single' && confirmState.id) {
-            const { error } = await supabase.from('checklist_items').delete().eq('id', confirmState.id);
-            if (error) {
-                alert("Error deleting: " + error.message);
-            } else {
+        try {
+            if (confirmState.type === 'single' && confirmState.id) {
+                await deleteChecklistItem(confirmState.id);
                 if (weddingId) fetchItems(weddingId);
                 setSelectedIds(prev => {
                     const next = new Set(prev);
                     next.delete(confirmState.id!);
                     return next;
                 });
-            }
-        } else if (confirmState.type === 'bulk') {
-            const ids = Array.from(selectedIds);
-            const { error } = await supabase.from('checklist_items').delete().in('id', ids);
-
-            if (error) {
-                alert("Error deleting: " + error.message);
-            } else {
+            } else if (confirmState.type === 'bulk') {
+                const ids = Array.from(selectedIds);
+                await deleteChecklistItems(ids);
                 if (weddingId) fetchItems(weddingId);
                 setSelectedIds(new Set());
             }
+        } catch (error: any) {
+            alert("Error deleting: " + error.message);
         }
         setConfirmState({ ...confirmState, isOpen: false });
     };
