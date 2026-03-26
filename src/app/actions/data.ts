@@ -484,6 +484,61 @@ export async function createClient(data: any) {
   return client
 }
 
+export async function updateClient(id: string, data: any) {
+  const client = await prisma.client.update({
+    where: { id },
+    data,
+  })
+  revalidatePath("/dashboard/clients")
+  return client
+}
+
+export async function updateWedding(id: string, data: any) {
+  const wedding = await prisma.wedding.update({
+    where: { id },
+    data,
+  })
+  revalidatePath("/dashboard/settings")
+  revalidatePath("/dashboard")
+  return wedding
+}
+
+export async function createClientWedding(clientData: {
+  name: string
+  weddingDate?: string | null
+  budget?: number
+}) {
+  const session = await auth()
+  if (!session?.user?.id) throw new Error("Unauthorized")
+
+  const nameParts = clientData.name.split(/ and | & /)
+  const coupleName1 = nameParts[0]?.trim() || clientData.name
+  const coupleName2 = nameParts[1]?.trim() || ''
+
+  const wedding = await prisma.wedding.create({
+    data: {
+      createdById: session.user.id,
+      coupleName1,
+      coupleName2,
+      weddingDate: clientData.weddingDate ? new Date(clientData.weddingDate) : null,
+      estimatedBudget: clientData.budget || 0,
+      currency: 'USD',
+      tier: 'free',
+    },
+  })
+
+  // Add planner as owner collaborator
+  await prisma.collaborator.create({
+    data: {
+      weddingId: wedding.id,
+      userId: session.user.id,
+      role: 'owner',
+    },
+  })
+
+  return wedding
+}
+
 // ============================================
 // DASHBOARD STATS
 // ============================================

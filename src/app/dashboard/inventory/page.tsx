@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getInventoryItems, deleteInventoryItem, updateInventoryItem, getWeddingById } from "@/app/actions/data";
 import { Plus, Package, Search, Pencil, Trash2 } from "lucide-react";
 import { InventoryItem, ItemStatus } from "@/types/inventory";
 import InventoryItemRow from "@/components/dashboard/inventory/InventoryItem";
@@ -36,17 +36,10 @@ export default function InventoryPage() {
         const wId = localStorage.getItem("current_wedding_id");
         if (wId) {
             setWeddingId(wId);
-            // Fetch currency
-            const { data: wedding } = await supabase
-                .from('weddings')
-                .select('currency')
-                .eq('id', wId)
-                .single();
-
-            if (wedding) {
-                setCurrency(wedding.currency || 'USD');
+            const weddingData = await getWeddingById(wId);
+            if (weddingData) {
+                setCurrency(weddingData.currency || 'USD');
             }
-            // Get effective tier (validates trial & payment)
             const trialInfo = await getEffectiveTier(wId);
             setTier(trialInfo.effectiveTier);
             fetchItems(wId);
@@ -55,14 +48,9 @@ export default function InventoryPage() {
     };
 
     const fetchItems = async (wId: string) => {
-        const { data, error } = await supabase
-            .from('inventory_items')
-            .select('*')
-            .eq('wedding_id', wId)
-            .order('created_at', { ascending: false });
-
-        if (!error && data) {
-            setItems(data as InventoryItem[]);
+        const data = await getInventoryItems(wId);
+        if (data) {
+            setItems(data as any as InventoryItem[]);
         }
     };
 
@@ -72,9 +60,11 @@ export default function InventoryPage() {
 
     const executeDelete = async () => {
         if (!confirmState.id) return;
-        const { error } = await supabase.from('inventory_items').delete().eq('id', confirmState.id);
-        if (!error && weddingId) {
-            fetchItems(weddingId);
+        try {
+            await deleteInventoryItem(confirmState.id);
+            if (weddingId) fetchItems(weddingId);
+        } catch (error: any) {
+            alert("Error deleting: " + error.message);
         }
         setConfirmState({ isOpen: false });
     };
@@ -89,13 +79,11 @@ export default function InventoryPage() {
         const currentIndex = statuses.indexOf(item.status);
         const nextStatus = statuses[(currentIndex + 1) % statuses.length];
 
-        const { error } = await supabase
-            .from('inventory_items')
-            .update({ status: nextStatus })
-            .eq('id', item.id);
-
-        if (!error && weddingId) {
-            fetchItems(weddingId);
+        try {
+            await updateInventoryItem(item.id, { status: nextStatus });
+            if (weddingId) fetchItems(weddingId);
+        } catch (error: any) {
+            alert("Error updating status: " + error.message);
         }
     };
 

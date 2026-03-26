@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getClients, createClientWedding, updateClient } from "@/app/actions/data";
 import { Plus, Search, Calendar, Mail, Phone, MoreHorizontal, Users } from "lucide-react";
 import { Check, Loader2, Sparkles, FolderOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -35,17 +35,8 @@ export default function ClientsPage() {
 
     async function fetchClients() {
         setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
-
-        if (user) {
-            const { data, error } = await supabase
-                .from('clients')
-                .select('*')
-                .eq('planner_id', user.id)
-                .order('created_at', { ascending: false });
-
-            if (data) setClients(data as Client[]);
-        }
+        const data = await getClients();
+        if (data) setClients(data as any as Client[]);
         setLoading(false);
     }
 
@@ -53,63 +44,34 @@ export default function ClientsPage() {
         if (!confirm(`Create a new wedding workspace for ${client.name}?`)) return;
 
         setCreatingWeddingFor(client.id);
-        const { data: { user } } = await supabase.auth.getUser();
 
-        if (!user) return;
+        try {
+            const wedding = await createClientWedding({
+                name: client.name,
+                weddingDate: client.wedding_date || null,
+                budget: client.budget || 0,
+            });
 
-        // 1. Create the Wedding
-        const { data: wedding, error: weddingError } = await supabase
-            .from('weddings')
-            .insert({
-                created_by: user.id,
-                // name: `${client.name}'s Wedding`, // Optional: requires 'name' column
-                couple_name_1: client.name.split(' and ')[0] || client.name.split(' & ')[0] || client.name,
-                couple_name_2: client.name.split(' and ')[1] || client.name.split(' & ')[1] || '',
-                wedding_date: client.wedding_date || null,
-                estimated_budget: client.budget || 0,
-                currency: 'USD'
-            })
-            .select()
-            .single();
+            await updateClient(client.id, {
+                weddingId: wedding.id,
+                status: 'active',
+            });
 
-        if (weddingError) {
-            alert("Error creating wedding: " + weddingError.message);
-            setCreatingWeddingFor(null);
-            return;
-        }
-
-        // 2. Link Client to Wedding
-        const { error: linkError } = await supabase
-            .from('clients')
-            .update({
-                wedding_id: wedding.id,
-                status: 'active' // Auto-promote to active
-            })
-            .eq('id', client.id);
-
-        if (linkError) {
-            alert("Warning: Wedding created but link failed: " + linkError.message);
-        } else {
-            // Success! Refresh logic
             fetchClients();
-            // Option: Redirect to that wedding immediately?
-            // router.push(`/dashboard?weddingId=${wedding.id}`);
+        } catch (error: any) {
+            alert("Error creating wedding: " + error.message);
         }
         setCreatingWeddingFor(null);
     }
 
     async function updateStatus(clientId: string, newStatus: Client['status']) {
-        // Optimistic update
         setClients(clients.map(c => c.id === clientId ? { ...c, status: newStatus } : c));
 
-        const { error } = await supabase
-            .from('clients')
-            .update({ status: newStatus })
-            .eq('id', clientId);
-
-        if (error) {
+        try {
+            await updateClient(clientId, { status: newStatus });
+        } catch (error: any) {
             alert("Error updating status: " + error.message);
-            fetchClients(); // Revert
+            fetchClients();
         }
     }
 

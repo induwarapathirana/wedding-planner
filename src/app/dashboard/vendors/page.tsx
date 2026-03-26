@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getVendors, getDirectoryVendors, getWeddingById, updateVendor, deleteVendor, deleteVendors, deleteDirectoryVendor, createDirectoryVendor, updateDirectoryVendor, getUserWeddingId } from "@/app/actions/data";
 import { Plus, Search, Filter, Trash2, CheckSquare, Square, BookUser, Globe, Phone, Mail, Edit2, LayoutGrid, List } from "lucide-react";
 import { Vendor } from "@/types/vendors";
 import { DirectoryVendor, NewDirectoryVendor } from "@/types/directory";
@@ -57,23 +57,17 @@ export default function VendorsPage() {
     useEffect(() => {
         const fetchUser = async () => {
             try {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) return; // Handle auth redirect matching your app flow
-
-                // Check collaborator
-                const { data: collab } = await supabase.from('collaborators').select('wedding_id').eq('user_id', user.id).single();
-                if (collab) {
-                    setWeddingId(collab.wedding_id);
-                    // Fetch wedding details (tier/currency) and vendors
-                    await fetchWeddingDetails(collab.wedding_id);
-                    await fetchVendors(collab.wedding_id);
+                const wId = localStorage.getItem("current_wedding_id");
+                if (wId) {
+                    setWeddingId(wId);
+                    await fetchWeddingDetails(wId);
+                    await fetchVendors(wId);
                 } else {
-                    // Try to find wedding if owner (legacy/direct)
-                    const { data: wedding } = await supabase.from('weddings').select('id').eq('owner_id', user.id).single();
-                    if (wedding) {
-                        setWeddingId(wedding.id);
-                        await fetchWeddingDetails(wedding.id);
-                        await fetchVendors(wedding.id);
+                    const foundId = await getUserWeddingId();
+                    if (foundId) {
+                        setWeddingId(foundId);
+                        await fetchWeddingDetails(foundId);
+                        await fetchVendors(foundId);
                     }
                 }
             } catch (error) {
@@ -86,37 +80,31 @@ export default function VendorsPage() {
     }, []);
 
     const fetchWeddingDetails = async (wId: string) => {
-        const { data } = await supabase.from('weddings').select('currency').eq('id', wId).single();
-        if (data) {
-            setCurrency(data.currency || 'USD');
+        const weddingData = await getWeddingById(wId);
+        if (weddingData) {
+            setCurrency(weddingData.currency || 'USD');
         }
-        // Use getEffectiveTier for proper trial/payment validation
         const trialInfo = await getEffectiveTier(wId);
         setTier(trialInfo.effectiveTier);
     };
 
     const fetchVendors = async (wId: string) => {
         setLoading(true);
-        // Fetch Wedding Vendors
-        const { data: vData } = await supabase.from('vendors').select('*').eq('wedding_id', wId).order('created_at', { ascending: false });
-        if (vData) setVendors(vData as Vendor[]);
+        const vData = await getVendors(wId);
+        if (vData) setVendors(vData as any as Vendor[]);
 
-        // Fetch Directory Vendors
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            const { data: dData } = await supabase.from('directory_vendors').select('*').eq('user_id', user.id).order('company_name', { ascending: true });
-            if (dData) setDirectoryVendors(dData as DirectoryVendor[]);
-        }
+        const dData = await getDirectoryVendors();
+        if (dData) setDirectoryVendors(dData as any as DirectoryVendor[]);
         setLoading(false);
     };
 
     const handleStatusUpdate = async (id: string, status: 'researching' | 'contacted' | 'hired' | 'declined') => {
-        const { error } = await supabase.from('vendors').update({ status }).eq('id', id);
-        if (error) {
+        try {
+            await updateVendor(id, { status });
+            setVendors(vendors.map(v => v.id === id ? { ...v, status } : v));
+        } catch (error: any) {
             console.error("Error updating status:", error);
             alert("Failed to update status");
-        } else {
-            setVendors(vendors.map(v => v.id === id ? { ...v, status } : v));
         }
     };
 
@@ -133,24 +121,22 @@ export default function VendorsPage() {
     };
 
     const executeDelete = async () => {
-        if (confirmState.type === 'single' && confirmState.id) {
-            const { error } = await supabase.from('vendors').delete().eq('id', confirmState.id);
-            if (!error) {
+        try {
+            if (confirmState.type === 'single' && confirmState.id) {
+                await deleteVendor(confirmState.id);
                 setVendors(vendors.filter(v => v.id !== confirmState.id));
                 setSelectedIds(prev => { const next = new Set(prev); next.delete(confirmState.id!); return next; });
-            }
-        } else if (confirmState.type === 'directory_single' && confirmState.id) {
-            const { error } = await supabase.from('directory_vendors').delete().eq('id', confirmState.id);
-            if (!error) {
+            } else if (confirmState.type === 'directory_single' && confirmState.id) {
+                await deleteDirectoryVendor(confirmState.id);
                 setDirectoryVendors(directoryVendors.filter(v => v.id !== confirmState.id));
-            }
-        } else if (confirmState.type === 'bulk') {
-            const ids = Array.from(selectedIds);
-            const { error } = await supabase.from('vendors').delete().in('id', ids);
-            if (!error) {
+            } else if (confirmState.type === 'bulk') {
+                const ids = Array.from(selectedIds);
+                await deleteVendors(ids);
                 setVendors(vendors.filter(v => !selectedIds.has(v.id)));
                 setSelectedIds(new Set());
             }
+        } catch (error: any) {
+            alert("Error deleting: " + error.message);
         }
         setConfirmState({ ...confirmState, isOpen: false });
     };
@@ -181,20 +167,28 @@ export default function VendorsPage() {
 
     const handleDirectorySubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
 
-        const payload = {
-            ...dirFormData,
-            user_id: user.id
-        } as any; // Casting to avoid strict type checks for missing optional fields if any
+        const payload: any = {
+            companyName: dirFormData.company_name,
+            category: dirFormData.category,
+            contactName: dirFormData.contact_name,
+            email: dirFormData.email,
+            phone: dirFormData.phone,
+            website: dirFormData.website,
+            priceEstimate: dirFormData.price_estimate,
+            pricingType: dirFormData.pricing_type,
+            pricingUnit: dirFormData.pricing_unit,
+            notes: dirFormData.notes,
+        };
 
-        if (editingDirectoryVendor) {
-            const { error } = await supabase.from('directory_vendors').update(payload).eq('id', editingDirectoryVendor.id);
-            if (error) alert(error.message);
-        } else {
-            const { error } = await supabase.from('directory_vendors').insert(payload);
-            if (error) alert(error.message);
+        try {
+            if (editingDirectoryVendor) {
+                await updateDirectoryVendor(editingDirectoryVendor.id, payload);
+            } else {
+                await createDirectoryVendor(payload);
+            }
+        } catch (error: any) {
+            alert(error.message);
         }
         setShowDirectoryForm(false);
         if (weddingId) fetchVendors(weddingId);
