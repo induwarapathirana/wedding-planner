@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { createEvent, updateEvent } from "@/app/actions/data";
 import { X, Loader2, Calendar as CalendarIcon, Clock, MapPin } from "lucide-react";
 import { Event } from "@/types/itinerary";
 import { format } from "date-fns";
@@ -35,8 +35,8 @@ export default function EventForm({ weddingId, weddingDate, onClose, onSuccess, 
 
     const [formData, setFormData] = useState({
         title: initialData?.title || "",
-        start_time: toInputFormat(initialData?.start_time),
-        end_time: initialData?.end_time ? toInputFormat(initialData?.end_time) : "",
+        startTime: toInputFormat(initialData?.startTime),
+        endTime: initialData?.endTime ? toInputFormat(initialData?.endTime) : "",
         location: initialData?.location || "",
         description: initialData?.description || "",
         category: initialData?.category || "Ceremony",
@@ -47,24 +47,19 @@ export default function EventForm({ weddingId, weddingDate, onClose, onSuccess, 
         setLoading(true);
 
         try {
-            // Convert back to ISO for storage
-            const payload = {
-                ...formData,
-                start_time: new Date(formData.start_time).toISOString(),
-                end_time: formData.end_time ? new Date(formData.end_time).toISOString() : null,
+            const data = {
+                title: formData.title,
+                startTime: new Date(formData.startTime),
+                endTime: formData.endTime ? new Date(formData.endTime) : null,
+                location: formData.location,
+                description: formData.description,
+                category: formData.category,
             };
 
             if (initialData?.id) {
-                const { error } = await supabase
-                    .from('events')
-                    .update(payload)
-                    .eq('id', initialData.id);
-                if (error) throw error;
+                await updateEvent(initialData.id, data);
             } else {
-                const { error } = await supabase
-                    .from('events')
-                    .insert([{ ...payload, wedding_id: weddingId }]);
-                if (error) throw error;
+                await createEvent(weddingId, data);
             }
             onSuccess();
             onClose();
@@ -105,8 +100,8 @@ export default function EventForm({ weddingId, weddingDate, onClose, onSuccess, 
                             <input
                                 type="datetime-local"
                                 required
-                                value={formData.start_time}
-                                onChange={e => setFormData({ ...formData, start_time: e.target.value })}
+                                value={formData.startTime}
+                                onChange={e => setFormData({ ...formData, startTime: e.target.value })}
                                 className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
                             />
                         </div>
@@ -114,8 +109,8 @@ export default function EventForm({ weddingId, weddingDate, onClose, onSuccess, 
                             <label className="block text-sm font-medium mb-1">End Time</label>
                             <input
                                 type="datetime-local"
-                                value={formData.end_time}
-                                onChange={e => setFormData({ ...formData, end_time: e.target.value })}
+                                value={formData.endTime}
+                                onChange={e => setFormData({ ...formData, endTime: e.target.value })}
                                 className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
                             />
                         </div>

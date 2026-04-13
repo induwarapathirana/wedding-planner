@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { ChevronDown, Plus } from "lucide-react";
-import { acceptInvitation } from "@/app/actions/data";
+import { acceptInvitation, getUserWeddings } from "@/app/actions/data";
 
 type Wedding = {
     id: string;
@@ -13,27 +13,6 @@ type Wedding = {
     coupleName2: string;
     weddingDate: string;
 };
-
-// Server action to get user's weddings
-async function getUserWeddings(): Promise<Wedding[]> {
-    "use server";
-    const { auth } = await import("@/auth");
-    const session = await auth();
-    if (!session?.user?.id) return [];
-
-    const { prisma } = await import("@/lib/prisma");
-    const collabs = await prisma.collaborator.findMany({
-        where: { userId: session.user.id },
-        include: { wedding: true },
-    });
-
-    return collabs.map((c) => ({
-        id: c.wedding.id,
-        coupleName1: c.wedding.coupleName1,
-        coupleName2: c.wedding.coupleName2,
-        weddingDate: c.wedding.weddingDate?.toISOString() || '',
-    }));
-}
 
 export default function WeddingSelector() {
     const [weddings, setWeddings] = useState<Wedding[]>([]);

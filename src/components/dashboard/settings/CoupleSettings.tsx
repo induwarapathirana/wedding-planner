@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { supabase } from "@/lib/supabase";
+import { getWeddingById, getUserWeddingId, updateWedding, deleteWeddingCascade, getUserIdFromSession, getCollaborators, getInvitations, createInvitation, deleteInvitation, deleteCollaborator } from "@/app/actions/data";
 import { useRouter } from "next/navigation";
 import { Save, ArrowLeft, Trash2, UserPlus, X, Bell, BellOff, Settings, MessageSquare, LifeBuoy } from "lucide-react";
 import Link from "next/link";
@@ -48,21 +48,11 @@ export function CoupleSettings({ weddingIdProp }: { weddingIdProp?: string }) {
         if (!wedding?.id) return;
         setIsDeleting(true);
         try {
-            const { error } = await supabase.rpc('delete_wedding_cascade', {
-                target_wedding_id: wedding.id
-            });
-
-            if (error) {
-                console.error("Delete failed:", error);
-                alert("Failed to delete wedding: " + error.message);
-                return;
-            }
-
-            // Success - Redirect to home or dashboard
+            await deleteWeddingCascade(wedding.id);
             window.location.href = '/dashboard';
-        } catch (err) {
-            console.error("Unexpected error:", err);
-            alert("An unexpected error occurred.");
+        } catch (err: any) {
+            console.error("Delete failed:", err);
+            alert("Failed to delete wedding: " + err.message);
         } finally {
             setIsDeleting(false);
             setConfirmState({ isOpen: false, action: null });
@@ -70,48 +60,38 @@ export function CoupleSettings({ weddingIdProp }: { weddingIdProp?: string }) {
     };
 
     async function fetchWedding() {
-        // Use prop if available (Planner View), otherwise localStorage (Couple View)
         const weddingId = weddingIdProp || localStorage.getItem("current_wedding_id");
 
         if (!weddingId) {
-            // Try to find one? Or just return
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                const { data } = await supabase
-                    .from('collaborators')
-                    .select('wedding_id')
-                    .eq('user_id', user.id)
-                    .maybeSingle();
-
-                if (data) {
-                    localStorage.setItem("current_wedding_id", data.wedding_id);
-                    fetchWedding(); // Retry
-                    return;
-                }
+            const foundId = await getUserWeddingId();
+            if (foundId) {
+                localStorage.setItem("current_wedding_id", foundId);
+                fetchWedding();
+                return;
             }
-            // router.push("/dashboard");
             return;
         }
 
-        const { data, error } = await supabase
-            .from('weddings')
-            .select('*')
-            .eq('id', weddingId)
-            .single();
+        const data = await getWeddingById(weddingId);
 
-        if (error) {
-            console.error('Error fetching wedding:', error);
-            // If fetching failed (e.g. invalid ID, no access), clear stale ID and redirect
+        if (!data) {
             if (!weddingIdProp) localStorage.removeItem("current_wedding_id");
             router.push("/dashboard");
             return;
-
-
         }
 
-        setWedding(data as WeddingData); // Cast including tier
+        setWedding({
+            id: data.id,
+            couple_name_1: data.coupleName1 || '',
+            couple_name_2: data.coupleName2 || '',
+            wedding_date: data.weddingDate ? new Date(data.weddingDate).toISOString().split('T')[0] : '',
+            location: data.location || '',
+            currency: data.currency || 'USD',
+            target_guest_count: data.targetGuestCount || 0,
+            estimated_budget: Number(data.estimatedBudget) || 0,
+            tier: (data.tier as 'free' | 'premium') || 'free',
+        });
 
-        // Get effective tier (validates trial & payment)
         const trialInfo = await getEffectiveTier(weddingId);
         setEffectiveTier(trialInfo.effectiveTier);
 
@@ -133,30 +113,24 @@ export function CoupleSettings({ weddingIdProp }: { weddingIdProp?: string }) {
         if (!wedding) return;
 
         setSaving(true);
-        // ... (existing save logic remains the same, assuming it's correct in previous context)
 
-
-        const { error } = await supabase
-            .from('weddings')
-            .update({
-                couple_name_1: wedding.couple_name_1,
-                couple_name_2: wedding.couple_name_2,
-                wedding_date: wedding.wedding_date,
+        try {
+            await updateWedding(wedding.id, {
+                coupleName1: wedding.couple_name_1,
+                coupleName2: wedding.couple_name_2,
+                weddingDate: wedding.wedding_date ? new Date(wedding.wedding_date) : null,
                 location: wedding.location,
                 currency: wedding.currency,
-                target_guest_count: wedding.target_guest_count,
-                estimated_budget: wedding.estimated_budget, // Added
-            })
-            .eq('id', wedding.id);
-
-        setSaving(false);
-
-        if (error) {
-            console.error('Error updating wedding:', error);
-            alert('Error saving changes');
-        } else {
+                targetGuestCount: wedding.target_guest_count,
+                estimatedBudget: wedding.estimated_budget,
+            });
             alert('Wedding details updated successfully!');
             router.push('/dashboard');
+        } catch (error: any) {
+            console.error('Error updating wedding:', error);
+            alert('Error saving changes');
+        } finally {
+            setSaving(false);
         }
     }
 
@@ -423,8 +397,8 @@ function NotificationSettings({ weddingId }: { weddingId: string }) {
             );
 
             // Get user ID
-            supabase.auth.getUser().then(({ data: { user } }) => {
-                if (user) setUserId(user.id);
+            getUserIdFromSession().then((id) => {
+                if (id) setUserId(id);
             });
         }
     }, []);
@@ -550,20 +524,15 @@ function TeamMembers({ weddingId, tier }: { weddingId: string, tier: string }) {
 
     const executeTeamAction = async () => {
         if (teamConfirm.type === 'revoke' && teamConfirm.id) {
-            await supabase.from('invitations').delete().eq('id', teamConfirm.id);
+            await deleteInvitation(teamConfirm.id);
             fetchData();
         } else if (teamConfirm.type === 'remove_member' && teamConfirm.id) {
-            const { error } = await supabase
-                .from('collaborators')
-                .delete()
-                .eq('wedding_id', weddingId)
-                .eq('user_id', teamConfirm.id);
-
-            if (error) {
+            try {
+                await deleteCollaborator(weddingId, teamConfirm.id);
+                fetchData();
+            } catch (error: any) {
                 console.error(error);
                 alert("Failed to remove member. Ensure you are an owner.");
-            } else {
-                fetchData();
             }
         }
         setTeamConfirm({ isOpen: false, type: null, id: undefined });
@@ -572,29 +541,26 @@ function TeamMembers({ weddingId, tier }: { weddingId: string, tier: string }) {
         setLoading(true);
 
         // Get current user
-        const { data: { user } } = await supabase.auth.getUser();
-        setCurrentUserId(user?.id || null);
+        const userId = await getUserIdFromSession();
+        setCurrentUserId(userId || null);
 
         // Fetch Collaborators
-        const { data: collaData } = await supabase
-            .from('collaborators')
-            .select(`
-                user_id,
-                role,
-                profiles (email, full_name, avatar_url)
-            `)
-            .eq('wedding_id', weddingId);
-
-        if (collaData) setCollaborators(collaData);
+        const collaData = await getCollaborators(weddingId);
+        if (collaData) {
+            setCollaborators(collaData.map((c: any) => ({
+                user_id: c.user.id,
+                role: c.role,
+                profiles: {
+                    email: c.user.email,
+                    full_name: c.user.name,
+                    avatar_url: c.user.image,
+                },
+            })));
+        }
 
         // Fetch Invitations
-        const { data: inviteData } = await supabase
-            .from('invitations')
-            .select('*')
-            .eq('wedding_id', weddingId)
-            .eq('status', 'pending');
-
-        if (inviteData) setInvitations(inviteData);
+        const inviteData = await getInvitations(weddingId);
+        if (inviteData) setInvitations(inviteData as any[]);
         setLoading(false);
     };
 
@@ -602,12 +568,6 @@ function TeamMembers({ weddingId, tier }: { weddingId: string, tier: string }) {
 
     const handleInvite = async (e: React.FormEvent) => {
         e.preventDefault();
-        // Limit Check
-        // Planner typically has premium, but verify tier
-        // if (tier === 'free') {
-        //     alert("Free plan does not support adding collaborators. Please upgrade to Premium.");
-        //     return;
-        // }
 
         setSending(true);
         setGeneratedLink(null);
@@ -615,21 +575,17 @@ function TeamMembers({ weddingId, tier }: { weddingId: string, tier: string }) {
         // Generate simple random token
         const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
-        const { error } = await supabase
-            .from('invitations')
-            .insert({
-                wedding_id: weddingId,
+        try {
+            await createInvitation(weddingId, {
                 email: inviteEmail,
                 token: token,
-                role: inviteRole // Use selected role
+                role: inviteRole,
             });
-
-        if (error) {
-            alert(error.message);
-        } else {
             setGeneratedLink(`${window.location.origin}/invite/${token}`);
             setInviteEmail("");
-            fetchData(); // Refresh to show in pending if needed
+            fetchData();
+        } catch (error: any) {
+            alert(error.message);
         }
         setSending(false);
     };

@@ -7,7 +7,6 @@ import {
     subscribeToPush,
     requestNotificationPermission,
 } from "@/lib/registerServiceWorker";
-import { supabase } from "@/lib/supabase";
 
 interface NotificationPromptProps {
     userId: string;

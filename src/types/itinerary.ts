@@ -1,22 +1,22 @@
 export interface Event {
     id: string;
-    wedding_id: string;
+    weddingId: string;
     title: string;
-    start_time: string; // ISO String
-    end_time?: string; // ISO String
-    location?: string;
-    description?: string;
-    category?: string;
-    created_at: string;
+    startTime: string; // ISO String
+    endTime?: string | null; // ISO String
+    location?: string | null;
+    description?: string | null;
+    category?: string | null;
+    createdAt: string;
 }
 
 export type EventType = "ceremony" | "reception" | "meal" | "photo" | "transport" | "prep" | "other";
 
 export interface NewEvent {
     title: string;
-    start_time: string;
-    end_time?: string;
-    location?: string;
-    description?: string;
-    category?: string;
+    startTime: string;
+    endTime?: string | null;
+    location?: string | null;
+    description?: string | null;
+    category?: string | null;
 }

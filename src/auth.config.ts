@@ -22,13 +22,13 @@ export const authConfig = {
     },
     session({ session, token }) {
       if (session.user && token.sub) {
-        session.user.id = token.sub;
+        session.user.id = token.sub; // Ensure UUID is mapped correctly
       }
       return session;
     },
-    jwt({ token, user }) {
+    jwt({ token, user, account, profile }) {
       if (user) {
-        token.sub = user.id;
+        token.sub = user.id; // Map UUID to NextAuth's internal subject
       }
       return token;
     }

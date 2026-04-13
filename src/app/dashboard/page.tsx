@@ -12,6 +12,7 @@ import { CoupleDashboard } from "@/components/dashboard/CoupleDashboard";
 import {
     getUserProfile,
     getUserWeddingId,
+    getUserWeddings,
     getWeddingById,
     getDashboardStats,
     updateUserRole,
@@ -76,6 +77,9 @@ export default function DashboardPage() {
             const profile = await getUserProfile();
             if (profile) setRole(profile.role as any);
 
+            // Get the user's actual weddings to validate ownership
+            const myWeddings = await getUserWeddings();
+
             // Priority 1: Check URL params for weddingId
             let weddingId: string | null = null;
             if (typeof window !== 'undefined') {
@@ -89,6 +93,16 @@ export default function DashboardPage() {
             // Priority 2: Fall back to localStorage
             if (!weddingId) {
                 weddingId = localStorage.getItem("current_wedding_id");
+            }
+
+            // CRITICAL: Validate that the cached wedding ID belongs to the current user
+            if (weddingId && myWeddings.length > 0) {
+                const ownsWedding = myWeddings.some((w: any) => w.id === weddingId);
+                if (!ownsWedding) {
+                    // Cached ID is from a different user session — clear it
+                    localStorage.removeItem("current_wedding_id");
+                    weddingId = null;
+                }
             }
 
             if (!weddingId) {
@@ -284,6 +298,21 @@ export default function DashboardPage() {
     }
 
     const daysToGo = differenceInDays(parseISO(wedding.weddingDate), new Date());
+
+    // Role-based dashboard rendering
+    if (role === 'planner') {
+        return (
+            <div className="space-y-6 md:space-y-8 pb-6">
+                <PlannerWorkspace
+                    wedding={wedding}
+                    stats={stats}
+                    upcomingTasks={upcomingTasks}
+                    pendingPayments={pendingPayments}
+                    pendingGuests={pendingGuests}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 md:space-y-8 pb-6">

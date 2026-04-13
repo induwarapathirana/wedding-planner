@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getUserProfile, updateUserProfile } from "@/app/actions/data";
 import { Loader2, Upload, Building2, Globe, PenTool } from "lucide-react";
 
 export function PlannerSettings() {
@@ -20,22 +20,15 @@ export function PlannerSettings() {
     }, []);
 
     async function fetchProfile() {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single();
+        const data = await getUserProfile();
 
         if (data) {
             setFormData({
-                company_name: data.company_name || "",
-                website: data.website || "",
-                logo_url: data.logo_url || "",
-                signature_url: data.signature_url || "",
-                branding_color: data.branding_color || "#000000"
+                company_name: (data as any).companyName || "",
+                website: (data as any).website || "",
+                logo_url: (data as any).logoUrl || "",
+                signature_url: (data as any).signatureUrl || "",
+                branding_color: (data as any).brandingColor || "#000000"
             });
         }
         setLoading(false);
@@ -44,19 +37,20 @@ export function PlannerSettings() {
     async function handleSave(e: React.FormEvent) {
         e.preventDefault();
         setSaving(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
 
-        const { error } = await supabase
-            .from('profiles')
-            .update(formData)
-            .eq('id', user.id);
-
-        setSaving(false);
-        if (error) {
-            alert("Error saving settings: " + error.message);
-        } else {
+        try {
+            await updateUserProfile({
+                companyName: formData.company_name,
+                website: formData.website,
+                logoUrl: formData.logo_url,
+                signatureUrl: formData.signature_url,
+                brandingColor: formData.branding_color,
+            });
             alert("Settings saved successfully!");
+        } catch (error: any) {
+            alert("Error saving settings: " + error.message);
+        } finally {
+            setSaving(false);
         }
     }
 

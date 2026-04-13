@@ -8,6 +8,17 @@ import { revalidatePath } from "next/cache"
 // AUTH HELPERS
 // ============================================
 
+function serializeDecimals<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof (obj as any).toNumber === 'function') return (obj as any).toNumber();
+  if (obj instanceof Date) return obj as any;
+  if (Array.isArray(obj)) return obj.map(serializeDecimals) as unknown as T;
+  if (typeof obj === 'object') {
+    return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, serializeDecimals(v)])) as unknown as T;
+  }
+  return obj;
+}
+
 export async function getCurrentUser() {
   const session = await auth()
   if (!session?.user?.id) return null
@@ -51,7 +62,8 @@ export async function getUserWeddingId() {
 }
 
 export async function getWeddingById(id: string) {
-  return prisma.wedding.findUnique({ where: { id } })
+  const w = await prisma.wedding.findUnique({ where: { id } })
+  return serializeDecimals(w);
 }
 
 export async function createWedding(data: {
@@ -133,10 +145,11 @@ export async function deleteGuests(ids: string[]) {
 // ============================================
 
 export async function getBudgetItems(weddingId: string) {
-  return prisma.budgetItem.findMany({
+  const items = await prisma.budgetItem.findMany({
     where: { weddingId },
-    orderBy: { dueDate: "asc" },
+    orderBy: { category: "asc" },
   })
+  return serializeDecimals(items);
 }
 
 export async function createBudgetItem(weddingId: string, data: any) {
@@ -144,7 +157,7 @@ export async function createBudgetItem(weddingId: string, data: any) {
     data: { weddingId, ...data },
   })
   revalidatePath("/dashboard/budget")
-  return item
+  return serializeDecimals(item)
 }
 
 export async function updateBudgetItem(id: string, data: any) {
@@ -153,7 +166,7 @@ export async function updateBudgetItem(id: string, data: any) {
     data,
   })
   revalidatePath("/dashboard/budget")
-  return item
+  return serializeDecimals(item)
 }
 
 export async function deleteBudgetItem(id: string) {
@@ -209,10 +222,11 @@ export async function deleteChecklistItems(ids: string[]) {
 // ============================================
 
 export async function getVendors(weddingId: string) {
-  return prisma.vendor.findMany({
+  const vendors = await prisma.vendor.findMany({
     where: { weddingId },
-    orderBy: { createdAt: "desc" },
+    orderBy: { category: "asc" },
   })
+  return serializeDecimals(vendors);
 }
 
 export async function createVendor(weddingId: string, data: any) {
@@ -220,7 +234,7 @@ export async function createVendor(weddingId: string, data: any) {
     data: { weddingId, ...data },
   })
   revalidatePath("/dashboard/vendors")
-  return vendor
+  return serializeDecimals(vendor)
 }
 
 export async function updateVendor(id: string, data: any) {
@@ -229,7 +243,7 @@ export async function updateVendor(id: string, data: any) {
     data,
   })
   revalidatePath("/dashboard/vendors")
-  return vendor
+  return serializeDecimals(vendor)
 }
 
 export async function deleteVendor(id: string) {
@@ -257,10 +271,11 @@ export async function getDirectoryVendors() {
   const session = await auth()
   if (!session?.user?.id) return []
 
-  return prisma.directoryVendor.findMany({
+  const vendors = await prisma.directoryVendor.findMany({
     where: { userId: session.user.id },
     orderBy: { companyName: "asc" },
   })
+  return serializeDecimals(vendors)
 }
 
 export async function createDirectoryVendor(data: any) {
@@ -271,7 +286,7 @@ export async function createDirectoryVendor(data: any) {
     data: { userId: session.user.id, ...data },
   })
   revalidatePath("/dashboard/vendors")
-  return vendor
+  return serializeDecimals(vendor)
 }
 
 export async function updateDirectoryVendor(id: string, data: any) {
@@ -293,10 +308,11 @@ export async function deleteDirectoryVendor(id: string) {
 // ============================================
 
 export async function getInventoryItems(weddingId: string) {
-  return prisma.inventoryItem.findMany({
+  const items = await prisma.inventoryItem.findMany({
     where: { weddingId },
-    orderBy: { createdAt: "desc" },
+    orderBy: { category: "asc" },
   })
+  return serializeDecimals(items);
 }
 
 export async function createInventoryItem(weddingId: string, data: any) {
@@ -304,7 +320,7 @@ export async function createInventoryItem(weddingId: string, data: any) {
     data: { weddingId, ...data },
   })
   revalidatePath("/dashboard/inventory")
-  return item
+  return serializeDecimals(item)
 }
 
 export async function updateInventoryItem(id: string, data: any) {
@@ -313,7 +329,7 @@ export async function updateInventoryItem(id: string, data: any) {
     data,
   })
   revalidatePath("/dashboard/inventory")
-  return item
+  return serializeDecimals(item)
 }
 
 export async function deleteInventoryItem(id: string) {
@@ -467,10 +483,21 @@ export async function getClients() {
   const session = await auth()
   if (!session?.user?.id) return []
 
-  return prisma.client.findMany({
+  const clients = await prisma.client.findMany({
     where: { plannerId: session.user.id },
     orderBy: { createdAt: "desc" },
+    include: {
+      wedding: {
+        select: {
+          id: true,
+          coupleName1: true,
+          coupleName2: true,
+          weddingDate: true,
+        },
+      },
+    },
   })
+  return serializeDecimals(clients);
 }
 
 export async function createClient(data: any) {
@@ -481,7 +508,7 @@ export async function createClient(data: any) {
     data: { plannerId: session.user.id, ...data },
   })
   revalidatePath("/dashboard/clients")
-  return client
+  return serializeDecimals(client)
 }
 
 export async function updateClient(id: string, data: any) {
@@ -490,7 +517,7 @@ export async function updateClient(id: string, data: any) {
     data,
   })
   revalidatePath("/dashboard/clients")
-  return client
+  return serializeDecimals(client)
 }
 
 export async function updateWedding(id: string, data: any) {
@@ -500,7 +527,7 @@ export async function updateWedding(id: string, data: any) {
   })
   revalidatePath("/dashboard/settings")
   revalidatePath("/dashboard")
-  return wedding
+  return serializeDecimals(wedding)
 }
 
 export async function createClientWedding(clientData: {
@@ -536,7 +563,7 @@ export async function createClientWedding(clientData: {
     },
   })
 
-  return wedding
+  return serializeDecimals(wedding)
 }
 
 // ============================================
@@ -589,7 +616,7 @@ export async function getDashboardStats(weddingId: string) {
     0
   )
 
-  return {
+  return serializeDecimals({
     stats: {
       guestCount,
       confirmedGuest,
@@ -602,5 +629,140 @@ export async function getDashboardStats(weddingId: string) {
     upcomingTasks,
     pendingPayments,
     pendingGuests,
-  }
+  })
+}
+
+// ============================================
+// USER PROFILE OPERATIONS (for planner settings)
+// ============================================
+
+export async function updateUserProfile(data: any) {
+  const session = await auth()
+  if (!session?.user?.id) throw new Error("Unauthorized")
+
+  const user = await prisma.user.update({
+    where: { id: session.user.id },
+    data,
+  })
+  revalidatePath("/dashboard/settings")
+  return user
+}
+
+export async function getUserIdFromSession() {
+  const session = await auth()
+  return session?.user?.id ?? null
+}
+
+// ============================================
+// COLLABORATOR & TEAM OPERATIONS
+// ============================================
+
+export async function getCollaborators(weddingId: string) {
+  return prisma.collaborator.findMany({
+    where: { weddingId },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          image: true,
+        },
+      },
+    },
+  })
+}
+
+export async function deleteCollaborator(weddingId: string, userId: string) {
+  await prisma.collaborator.deleteMany({
+    where: { weddingId, userId },
+  })
+  revalidatePath("/dashboard/settings")
+}
+
+// ============================================
+// WEDDING DELETE CASCADE
+// ============================================
+
+export async function deleteWeddingCascade(weddingId: string) {
+  const session = await auth()
+  if (!session?.user?.id) throw new Error("Unauthorized")
+
+  // Verify the user is the owner
+  const collab = await prisma.collaborator.findFirst({
+    where: { weddingId, userId: session.user.id, role: "owner" },
+  })
+  if (!collab) throw new Error("Only the wedding owner can delete it")
+
+  // Delete all related data in correct order
+  await prisma.$transaction([
+    prisma.guest.deleteMany({ where: { weddingId } }),
+    prisma.budgetItem.deleteMany({ where: { weddingId } }),
+    prisma.checklistItem.deleteMany({ where: { weddingId } }),
+    prisma.vendor.deleteMany({ where: { weddingId } }),
+    prisma.event.deleteMany({ where: { weddingId } }),
+    prisma.inventoryItem.deleteMany({ where: { weddingId } }),
+    prisma.invitation.deleteMany({ where: { weddingId } }),
+    prisma.collaborator.deleteMany({ where: { weddingId } }),
+    prisma.wedding.delete({ where: { id: weddingId } }),
+  ])
+
+  revalidatePath("/dashboard")
+}
+
+// ============================================
+// VENDOR NAME LOOKUP (for directory import)
+// ============================================
+
+export async function getVendorNames(weddingId: string) {
+  const vendors = await prisma.vendor.findMany({
+    where: { weddingId },
+    select: { companyName: true },
+  })
+  return vendors.map((v) => v.companyName).filter(Boolean) as string[]
+}
+
+export type WeddingRole = 'owner' | 'editor' | 'viewer' | null;
+
+export async function checkWeddingPermission(weddingId: string): Promise<WeddingRole> {
+  const session = await auth();
+  if (!session?.user?.id) return null;
+
+  const collab = await prisma.collaborator.findUnique({
+    where: {
+      weddingId_userId: {
+        weddingId,
+        userId: session.user.id,
+      },
+    },
+    select: { role: true },
+  });
+
+  return (collab?.role as WeddingRole) || null;
+}
+
+type WeddingDetails = {
+  id: string;
+  coupleName1: string;
+  coupleName2: string;
+  weddingDate: string;
+};
+
+export async function getUserWeddings(): Promise<WeddingDetails[]> {
+  const session = await auth();
+  console.log("DEBUG getUserWeddings Session:", JSON.stringify(session?.user || {}));
+  if (!session?.user?.id) return [];
+
+  const collabs = await prisma.collaborator.findMany({
+    where: { userId: session.user.id },
+    include: { wedding: true },
+  });
+  console.log("DEBUG getUserWeddings Collabs:", collabs.length);
+
+  return collabs.map((c: any) => ({
+    id: c.wedding.id,
+    coupleName1: c.wedding.coupleName1,
+    coupleName2: c.wedding.coupleName2,
+    weddingDate: c.wedding.weddingDate ? c.wedding.weddingDate.toISOString() : '',
+  }));
 }

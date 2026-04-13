@@ -1,7 +1,7 @@
 "use strict";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getDirectoryVendors, getVendorNames, insertVendors } from "@/app/actions/data";
 import { Search, Plus, Check } from "lucide-react";
 import { DirectoryVendor } from "@/types/directory";
 import { VendorStatus } from "@/types/vendors";
@@ -31,29 +31,15 @@ export function DirectoryImportModal({ isOpen, onClose, weddingId, onImportSucce
     }, [isOpen]);
 
     const fetchExistingVendors = async () => {
-        const { data } = await supabase
-            .from('vendors')
-            .select('company_name')
-            .eq('wedding_id', weddingId);
-        
-        if (data) {
-            setExistingVendorNames(new Set(data.map(v => v.company_name.toLowerCase())));
-        }
+        const names = await getVendorNames(weddingId);
+        setExistingVendorNames(new Set(names.map((n: string) => n.toLowerCase())));
     };
 
     const fetchDirectory = async () => {
         setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data, error } = await supabase
-            .from('vendor_directory')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('company_name', { ascending: true });
-
-        if (!error && data) {
-            setVendors(data as DirectoryVendor[]);
+        const data = await getDirectoryVendors();
+        if (data) {
+            setVendors(data as any as DirectoryVendor[]);
         }
         setLoading(false);
     };
@@ -74,25 +60,23 @@ export function DirectoryImportModal({ isOpen, onClose, weddingId, onImportSucce
 
         const selectedVendors = vendors.filter(v => selectedIds.has(v.id));
         const toInsert = selectedVendors.map(v => ({
-            wedding_id: weddingId,
             category: v.category,
-            company_name: v.company_name,
-            contact_name: v.contact_name,
+            companyName: v.company_name,
+            contactName: v.contact_name,
             email: v.email,
             phone: v.phone,
             website: v.website,
-            price_estimate: v.price_estimate,
+            priceEstimate: v.price_estimate,
             notes: v.notes,
             status: 'researching' as VendorStatus
         }));
 
-        const { error } = await supabase.from('vendors').insert(toInsert);
-
-        if (error) {
-            alert("Error importing vendors: " + error.message);
-        } else {
+        try {
+            await insertVendors(weddingId, toInsert);
             onImportSuccess();
             onClose();
+        } catch (error: any) {
+            alert("Error importing vendors: " + error.message);
         }
         setImporting(false);
     };

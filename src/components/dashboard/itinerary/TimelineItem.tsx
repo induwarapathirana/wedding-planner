@@ -28,7 +28,7 @@ export default function TimelineItem({ event, isLast, onEdit, onDelete, isSelect
         other: "bg-gray-100 text-gray-700 border-gray-200",
     };
 
-    const startTime = new Date(event.start_time);
+    const startTime = new Date(event.startTime);
 
     return (
         <div className="relative pl-6 md:pl-8 pb-8 group">
@@ -61,9 +61,9 @@ export default function TimelineItem({ event, isLast, onEdit, onDelete, isSelect
                 {/* Time Column */}
                 <div className="w-16 md:w-20 pt-1 text-right flex-shrink-0">
                     <div className="font-bold text-gray-900">{format(startTime, "h:mm a")}</div>
-                    {event.end_time && (
+                    {event.endTime && (
                         <div className="text-xs text-gray-500 mt-1">
-                            to {format(new Date(event.end_time), "h:mm a")}
+                            to {format(new Date(event.endTime), "h:mm a")}
                         </div>
                     )}
                 </div>

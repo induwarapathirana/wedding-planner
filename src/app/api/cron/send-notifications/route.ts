@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sendDueDateNotifications } from '@/lib/notifications';
 
 // This endpoint should be called daily by a cron job
 // Example: Vercel Cron, GitHub Actions, or external service like Cron-job.org
@@ -18,6 +17,7 @@ export async function GET(request: NextRequest) {
         const type = searchParams.get('type') as 'today' | 'tomorrow' | 'three_days' | null;
 
         console.log(`[Cron] Running notification check for type: ${type || 'all'}...`);
+        const { sendDueDateNotifications } = await import('@/lib/notifications');
         const results = await sendDueDateNotifications(type || undefined);
 
         console.log('[Cron] Notification results:', results);

@@ -1,4 +1,6 @@
-import { supabase } from "./supabase";
+"use server";
+
+import { prisma } from "@/lib/prisma";
 
 export type PlanTier = 'free' | 'premium';
 
@@ -18,13 +20,15 @@ export interface TrialInfo {
  */
 export async function getEffectiveTier(weddingId: string): Promise<TrialInfo> {
     // Fetch wedding data
-    const { data: wedding, error } = await supabase
-        .from('weddings')
-        .select('tier, premium_trial_ends_at, payment_id')
-        .eq('id', weddingId)
-        .single();
+    const wedding = await prisma.wedding.findUnique({
+        where: { id: weddingId },
+        select: {
+            tier: true,
+            premiumTrialEndsAt: true
+        }
+    });
 
-    if (error || !wedding) {
+    if (!wedding) {
         // Default to free on error
         return {
             effectiveTier: 'free',
@@ -35,13 +39,8 @@ export async function getEffectiveTier(weddingId: string): Promise<TrialInfo> {
         };
     }
 
-    // STRICT CHECK:
-    // A user is 'premium' ONLY if:
-    // 1. They have a verified payment_id
-    // 2. OR their trial is still active
-    // We IGNORE the 'tier' column unless payment_id is present.
-    const isPaidPremium = !!wedding.payment_id;
-    const trialEndsAt = wedding.premium_trial_ends_at;
+    const isPaidPremium = wedding.tier === 'premium';
+    const trialEndsAt = wedding.premiumTrialEndsAt;
 
     // Check if trial is active
     const isInTrial = trialEndsAt
@@ -61,16 +60,16 @@ export async function getEffectiveTier(weddingId: string): Promise<TrialInfo> {
     // AUTO-SYNC DB: If trial has expired and user hasn't paid, update tier to 'free' in DB
     // This keeps the DB tier column in sync for admin visibility
     if (!isPaidPremium && !isInTrial && wedding.tier === 'premium') {
-        await supabase
-            .from('weddings')
-            .update({ tier: 'free' })
-            .eq('id', weddingId);
+        await prisma.wedding.update({
+            where: { id: weddingId },
+            data: { tier: 'free' }
+        });
     }
 
     return {
         effectiveTier,
         isInTrial,
-        trialEndsAt,
+        trialEndsAt: trialEndsAt ? trialEndsAt.toISOString() : null,
         daysRemaining,
         isPaidPremium
     };

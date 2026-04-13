@@ -51,6 +51,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
+        suppressHydrationWarning
         className={`${outfit.variable} ${cormorant.variable} antialiased`}
       >
         <Providers>

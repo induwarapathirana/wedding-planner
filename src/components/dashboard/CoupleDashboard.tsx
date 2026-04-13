@@ -11,12 +11,12 @@ import { useState } from "react";
 
 type WeddingData = {
     id: string;
-    couple_name_1: string;
-    couple_name_2: string;
-    wedding_date: string;
+    coupleName1: string;
+    coupleName2: string;
+    weddingDate: string;
     currency?: string;
-    target_guest_count?: number;
-    estimated_budget?: number;
+    targetGuestCount?: number;
+    estimatedBudget?: number;
     tier?: 'free' | 'premium';
 };
 
@@ -39,14 +39,14 @@ type CoupleDashboardProps = {
 export function CoupleDashboard({ wedding, stats, upcomingTasks, pendingPayments, pendingGuests }: CoupleDashboardProps) {
     const router = useRouter();
     const [showPlanModal, setShowPlanModal] = useState(false);
-    const daysToGo = differenceInDays(parseISO(wedding.wedding_date), new Date());
+    const daysToGo = differenceInDays(parseISO(wedding.weddingDate), new Date());
 
     return (
         <div className="space-y-6 md:space-y-8 pb-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div className="min-w-0">
                     <h2 className="font-serif text-2xl md:text-3xl font-bold text-foreground leading-tight">
-                        Welcome Back, {wedding.couple_name_1} & {wedding.couple_name_2}
+                        Welcome Back, {wedding.coupleName1} & {wedding.coupleName2}
                     </h2>
                     <p className="mt-1 text-sm md:text-base text-muted-foreground">Here is what is happening with your wedding.</p>
                 </div>
@@ -121,7 +121,7 @@ export function CoupleDashboard({ wedding, stats, upcomingTasks, pendingPayments
                                 {daysToGo > 0 ? daysToGo : "🎉"}
                             </p>
                             <p className="mt-2 text-xs md:text-sm text-muted-foreground font-medium">
-                                {daysToGo > 0 ? new Date(wedding.wedding_date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : "Today's the day!"}
+                                {daysToGo > 0 ? new Date(wedding.weddingDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : "Today's the day!"}
                             </p>
                         </div>
                     </div>
@@ -155,7 +155,7 @@ export function CoupleDashboard({ wedding, stats, upcomingTasks, pendingPayments
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{task.title}</p>
                                         <p className="text-xs text-muted-foreground mt-1 font-medium">
-                                            {task.due_date ? new Date(task.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'No date set'}
+                                            {task.dueDate ? new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'No date set'}
                                         </p>
                                     </div>
                                 </div>
@@ -186,8 +186,8 @@ export function CoupleDashboard({ wedding, stats, upcomingTasks, pendingPayments
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{payment.name}</p>
                                         <p className="text-xs text-muted-foreground mt-1 font-medium">
-                                            <span className="font-bold text-rose-600">{stats.currency}{formatLargeNumber(payment.estimated_cost)}</span>
-                                            {payment.due_date && <span> • {new Date(payment.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>}
+                                            <span className="font-bold text-rose-600">{stats.currency}{formatLargeNumber(payment.estimatedCost)}</span>
+                                            {payment.dueDate && <span> • {new Date(payment.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>}
                                         </p>
                                     </div>
                                 </div>

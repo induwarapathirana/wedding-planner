@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !supabaseServiceKey) {
-    console.error('CRITICAL: Missing Supabase environment variables in subscription API');
-}
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
     try {
@@ -19,52 +13,38 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        if (!supabaseUrl || !supabaseServiceKey) {
-            return NextResponse.json(
-                { error: 'Server configuration error: Missing Supabase keys. Please check Vercel environment variables.' },
-                { status: 500 }
-            );
-        }
-
-        // Create Supabase client with service role key
-        const supabase = createClient(supabaseUrl as string, supabaseServiceKey as string);
-
-        // Extract subscription details
         const { endpoint, keys } = subscription;
         const { p256dh, auth } = keys;
 
         // Upsert subscription (update if exists, insert if new)
-        const { data, error } = await supabase
-            .from('push_subscriptions')
-            .upsert(
-                {
-                    user_id: userId,
-                    wedding_id: weddingId,
-                    endpoint,
-                    p256dh_key: p256dh,
-                    auth_key: auth,
-                    updated_at: new Date().toISOString(),
+        try {
+            const { prisma } = await import('@/lib/prisma');
+            const result = await prisma.pushSubscription.upsert({
+                where: { endpoint },
+                update: {
+                    userId,
+                    p256dh,
+                    auth,
                 },
-                {
-                    onConflict: 'endpoint',
+                create: {
+                    userId,
+                    endpoint,
+                    p256dh,
+                    auth,
                 }
-            )
-            .select()
-            .single();
-
-        if (error) {
+            });
+            return NextResponse.json({ success: true, data: result });
+        } catch (error: any) {
             console.error('Error saving push subscription:', error);
             return NextResponse.json(
                 {
                     error: 'Failed to save subscription',
                     details: error.message,
-                    code: error.code
                 },
                 { status: 500 }
             );
         }
 
-        return NextResponse.json({ success: true, data });
     } catch (error) {
         console.error('Error in push subscribe endpoint:', error);
         return NextResponse.json(
@@ -86,21 +66,13 @@ export async function DELETE(request: NextRequest) {
             );
         }
 
-        if (!supabaseUrl || !supabaseServiceKey) {
-            return NextResponse.json(
-                { error: 'Server configuration error: Missing Supabase keys.' },
-                { status: 500 }
-            );
-        }
-
-        const supabase = createClient(supabaseUrl as string, supabaseServiceKey as string);
-
-        const { error } = await supabase
-            .from('push_subscriptions')
-            .delete()
-            .eq('endpoint', endpoint);
-
-        if (error) {
+        try {
+            const { prisma } = await import('@/lib/prisma');
+            await prisma.pushSubscription.deleteMany({
+                where: { endpoint }
+            });
+            return NextResponse.json({ success: true });
+        } catch (error) {
             console.error('Error deleting push subscription:', error);
             return NextResponse.json(
                 { error: 'Failed to delete subscription' },

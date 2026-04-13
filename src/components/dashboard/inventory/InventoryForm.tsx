@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { createInventoryItem, updateInventoryItem } from "@/app/actions/data";
 import { X, Loader2 } from "lucide-react";
 import { InventoryItem, ItemStatus } from "@/types/inventory";
 
@@ -43,17 +43,20 @@ export default function InventoryForm({ weddingId, onClose, onSuccess, initialDa
         setLoading(true);
 
         try {
+            const payload: any = {
+                name: formData.name,
+                category: formData.category,
+                quantity: formData.quantity,
+                unitCost: formData.unit_cost,
+                status: formData.status,
+                link: formData.link,
+                notes: formData.notes,
+            };
+
             if (initialData?.id) {
-                const { error } = await supabase
-                    .from('inventory_items')
-                    .update(formData)
-                    .eq('id', initialData.id);
-                if (error) throw error;
+                await updateInventoryItem(initialData.id, payload);
             } else {
-                const { error } = await supabase
-                    .from('inventory_items')
-                    .insert([{ ...formData, wedding_id: weddingId }]);
-                if (error) throw error;
+                await createInventoryItem(weddingId, payload);
             }
             onSuccess();
             onClose();

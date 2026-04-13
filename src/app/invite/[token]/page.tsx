@@ -1,17 +1,16 @@
-import { createClient } from "@/lib/supabase-server"; // Using server-side client
+import { prisma } from "@/lib/prisma";
+import { auth } from "@/auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
     const { token } = await params;
-    const supabase = await createClient();
+    const invite = await prisma.invitation.findUnique({
+        where: { token },
+        include: { wedding: true }
+    });
 
-    // Server-side fetch to validate (using policy that allows public read by token)
-    // Server-side fetch to validate (using RPC to bypass RLS for wedding details)
-    const { data: invite, error } = await supabase
-        .rpc('get_invitation_by_token', { lookup_token: token });
-
-    if (error || !invite || invite.status !== 'pending') {
+    if (!invite || invite.accepted) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <div className="text-center p-8">
@@ -23,22 +22,41 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
         );
     }
 
-    const { data: { session } } = await supabase.auth.getSession();
+    const session = await auth();
     const currentUserEmail = session?.user?.email;
     const isEmailMismatch = session?.user && (currentUserEmail !== invite.email);
 
     // Action to accept if already logged in matches invite email
     async function acceptInviteAndRedirect() {
         "use server";
-        if (!session?.user) return;
+        if (!session?.user?.id) throw new Error("Not authenticated");
+        const userId = session.user.id;
 
-        const supabase = await createClient();
+        try {
+            // Use transaction to accept invite
+            await prisma.$transaction(async (tx: any) => {
+                const currentInvite = await tx.invitation.findUnique({ where: { token } });
+                if (!currentInvite || currentInvite.accepted) {
+                    throw new Error("Invalid or expired invitation");
+                }
+                
+                // Add collaborator
+                await tx.collaborator.create({
+                    data: {
+                        userId,
+                        weddingId: currentInvite.weddingId,
+                        role: currentInvite.role,
+                    }
+                });
 
-        // Use secure RPC to accept
-        const { data, error } = await supabase.rpc('accept_invitation', { lookup_token: token });
-
-        if (error || (data && data.error)) {
-            const errorMessage = error?.message || data?.error || "Failed to accept invitation";
+                // Update invite status
+                await tx.invitation.update({
+                    where: { token },
+                    data: { accepted: true }
+                });
+            });
+        } catch (error: any) {
+            const errorMessage = error?.message || "Failed to accept invitation";
             redirect(`/dashboard?error=${encodeURIComponent(errorMessage)}`);
             return;
         }
@@ -46,9 +64,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
         redirect('/dashboard');
     }
 
-    // Prepare wedding name
-    // @ts-ignore
-    const weddingName = `${invite.weddings?.couple_name_1} & ${invite.weddings?.couple_name_2}'s Wedding`;
+    const weddingName = `${invite.wedding?.coupleName1} & ${invite.wedding?.coupleName2}'s Wedding`;
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-50 via-white to-violet-50 p-4">
