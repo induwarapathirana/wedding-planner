@@ -251,16 +251,16 @@ export default function BudgetPage() {
         { key: "units", label: "Qty", type: "number", width: 60, align: "right" },
         { key: "unitPrice", label: "Unit price", type: "money", width: 120, align: "right" },
         {
-            key: "estimatedCost", label: "Estimate", type: "money", width: 130, align: "right",
+            key: "estimatedCost", label: "Estimate", type: "money", width: 130, align: "right", summary: true,
             readOnly: (i) => i.unitPrice !== null && i.unitPrice !== undefined,
         },
         { key: "actualCost", label: "Actual", type: "money", width: 120, align: "right", placeholder: "—" },
         { key: "paidAmount", label: "Paid", type: "money", width: 120, align: "right" },
         {
-            key: "balance", label: "Balance", type: "money", width: 120, align: "right", get: balance,
+            key: "balance", label: "Balance", type: "money", width: 120, align: "right", get: balance, summary: true,
             render: (i) => <span className={cn(balance(i) === 0 ? "text-emerald-700" : "font-medium")}>{balance(i) === 0 ? "Paid" : money(balance(i))}</span>,
         },
-        { key: "dueDate", label: "Due", type: "date", width: 130 },
+        { key: "dueDate", label: "Due", type: "date", width: 130, summary: true },
         { key: "paidInFull", label: "Paid in full", type: "checkbox", width: 100, align: "center", get: (i) => !!i.paidAt, readOnly: false },
         { key: "notes", label: "Notes", type: "text", width: 200 },
     ];

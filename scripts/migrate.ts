@@ -64,6 +64,13 @@ async function copy<T>(label: string, rows: T[], write: (row: T) => Promise<unkn
     console.log(`✅ ${label}: ${ok}/${rows.length}`);
 }
 
+/**
+ * Supabase user id → Neon user id, for people who already signed in to the new
+ * site (their account was created there with a new id, matched here by email).
+ */
+const userIdMap = new Map<string, string>();
+const uid = (id: string): string => userIdMap.get(id) ?? id;
+
 async function migrate() {
     console.log("Starting data migration from Supabase to Neon...");
 
@@ -73,7 +80,7 @@ async function migrate() {
         if (authError) throw authError;
         const profiles = await fetchAll('profiles');
 
-        await copy('Users', authUsers.users, (authUser) => {
+        await copy('Users', authUsers.users, async (authUser) => {
             const profile = profiles.find((p) => p.id === authUser.id);
             const data = {
                 email: authUser.email,
@@ -87,6 +94,15 @@ async function migrate() {
                 signatureUrl: profile?.signature_url || null,
                 brandingColor: profile?.branding_color || '#000000',
             };
+            // Already on the new site under another id? Update that account instead
+            const existing = authUser.email
+                ? await prisma.user.findUnique({ where: { email: authUser.email }, select: { id: true } })
+                : null;
+            if (existing && existing.id !== authUser.id) {
+                userIdMap.set(authUser.id, existing.id);
+                console.log(`  Users: ${authUser.email} already signed in to the new site; merging into that account`);
+                return prisma.user.update({ where: { id: existing.id }, data });
+            }
             return prisma.user.upsert({
                 where: { id: authUser.id },
                 update: data,
@@ -98,7 +114,7 @@ async function migrate() {
         const weddings = await fetchAll('weddings');
         await copy('Weddings', weddings, (wed) => {
             const data = {
-                createdById: wed.created_by || wed.created_by_id || wed.owner_id || authUsers.users[0]?.id,
+                createdById: uid(wed.created_by || wed.created_by_id || wed.owner_id || authUsers.users[0]?.id),
                 coupleName1: wed.couple_name_1 || wed.partner_1_name || 'Partner 1',
                 coupleName2: wed.couple_name_2 || wed.partner_2_name || 'Partner 2',
                 weddingDate: date(wed.wedding_date),
@@ -122,9 +138,9 @@ async function migrate() {
         // 3. Wedding-scoped tables
         await copy('Collaborators', await fetchAll('collaborators'), (c) =>
             prisma.collaborator.upsert({
-                where: { weddingId_userId: { weddingId: c.wedding_id, userId: c.user_id } },
+                where: { weddingId_userId: { weddingId: c.wedding_id, userId: uid(c.user_id) } },
                 update: { role: c.role || 'editor' },
-                create: { weddingId: c.wedding_id, userId: c.user_id, role: c.role || 'editor', joinedAt: date(c.joined_at) ?? new Date() },
+                create: { weddingId: c.wedding_id, userId: uid(c.user_id), role: c.role || 'editor', joinedAt: date(c.joined_at) ?? new Date() },
             })
         );
 
@@ -267,7 +283,7 @@ async function migrate() {
         // 4. Planner data
         await copy('Clients', await fetchAll('clients'), (c) => {
             const data = {
-                plannerId: c.planner_id,
+                plannerId: uid(c.planner_id),
                 name: c.name || null,
                 firstName: c.first_name || null,
                 lastName: c.last_name || null,
@@ -288,7 +304,7 @@ async function migrate() {
 
         await copy('Directory vendors', await fetchAll('vendor_directory'), (d) => {
             const data = {
-                userId: d.user_id,
+                userId: uid(d.user_id),
                 companyName: d.company_name || null,
                 category: d.category || null,
                 contactName: d.contact_name || null,

@@ -557,7 +557,7 @@ export async function updateDirectoryVendor(id: string, data: any) {
     data: validate(directoryVendorUpdate, data),
   })
   revalidatePath("/dashboard/vendors")
-  return vendor
+  return serializeDecimals(vendor)
 }
 
 export async function deleteDirectoryVendor(id: string) {
