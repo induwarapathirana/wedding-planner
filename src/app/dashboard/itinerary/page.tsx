@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getEvents, deleteEvent, deleteEvents, getWeddingById } from "@/app/actions/data";
 import { Plus, Calendar as CalendarIcon, Filter, Trash2, CheckSquare, Square } from "lucide-react";
 import { Event } from "@/types/itinerary";
 import TimelineItem from "@/components/dashboard/itinerary/TimelineItem";
@@ -12,7 +12,6 @@ import { getEffectiveTier } from "@/lib/trial";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { TourGuide } from "@/components/dashboard/TourGuide";
-import { TierGate } from "@/components/dashboard/TierGate";
 import { ITINERARY_STEPS } from "@/lib/tours";
 
 export default function ItineraryPage() {
@@ -36,43 +35,21 @@ export default function ItineraryPage() {
         const wId = localStorage.getItem("current_wedding_id");
         if (wId) {
             setWeddingId(wId);
-            // Fetch wedding date
-            const { data: wedding } = await supabase
-                .from('weddings')
-                .select('wedding_date')
-                .eq('id', wId)
-                .single();
-
-            if (wedding) {
-                setWeddingDate(wedding.wedding_date);
+            const weddingData = await getWeddingById(wId);
+            if (weddingData?.weddingDate) {
+                setWeddingDate(weddingData.weddingDate.toISOString());
             }
-            // Get effective tier (validates trial & payment)
             const trialInfo = await getEffectiveTier(wId);
-            let effectiveTier = trialInfo.effectiveTier;
-
-            // Force premium for Planners
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-                if (profile?.role?.toLowerCase() === 'planner' || profile?.role?.toLowerCase() === 'pro') {
-                    effectiveTier = 'premium';
-                }
-            }
-            setTier(effectiveTier);
+            setTier(trialInfo.effectiveTier);
             fetchEvents(wId);
         }
         setLoading(false);
     };
 
     const fetchEvents = async (wId: string) => {
-        const { data, error } = await supabase
-            .from('events')
-            .select('*')
-            .eq('wedding_id', wId)
-            .order('start_time', { ascending: true });
-
-        if (!error && data) {
-            setEvents(data as Event[]);
+        const data = await getEvents(wId);
+        if (data) {
+            setEvents(data as any as Event[]);
         }
     };
 
@@ -85,18 +62,18 @@ export default function ItineraryPage() {
     };
 
     const executeDelete = async () => {
-        if (confirmState.type === 'bulk') {
-            const idsToDelete = Array.from(selectedIds);
-            const { error } = await supabase.from('events').delete().in('id', idsToDelete);
-            if (!error && weddingId) {
+        try {
+            if (confirmState.type === 'bulk') {
+                const idsToDelete = Array.from(selectedIds);
+                await deleteEvents(idsToDelete);
                 setSelectedIds(new Set());
-                fetchEvents(weddingId);
+                if (weddingId) fetchEvents(weddingId);
+            } else if (confirmState.id) {
+                await deleteEvent(confirmState.id);
+                if (weddingId) fetchEvents(weddingId);
             }
-        } else if (confirmState.id) {
-            const { error } = await supabase.from('events').delete().eq('id', confirmState.id);
-            if (!error && weddingId) {
-                fetchEvents(weddingId);
-            }
+        } catch (error: any) {
+            alert("Error deleting: " + error.message);
         }
         setConfirmState({ isOpen: false, type: 'single' });
     };
@@ -122,7 +99,7 @@ export default function ItineraryPage() {
     };
 
     return (
-        <TierGate weddingId={weddingId} featureName="Itinerary">
+        <>
             <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
@@ -243,6 +220,6 @@ export default function ItineraryPage() {
                     tier={tier}
                 />
             </div>
-        </TierGate>
+        </>
     );
 }

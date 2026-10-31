@@ -1,14 +1,15 @@
 export type PlanTier = 'free' | 'premium';
 
 export const PLAN_LIMITS = {
+    // Core planning lists are free and unlimited; Premium sells extras, not rows
     free: {
-        guests: 10,
-        budget_items: 3,
-        vendors: 3,
-        events: 2, // Itinerary/Timeline
-        checklist_items: 3,
-        inventory_items: 5,
-        collaborators: 0
+        guests: Infinity,
+        budget_items: Infinity,
+        vendors: Infinity,
+        events: Infinity, // Itinerary/Timeline
+        checklist_items: Infinity,
+        inventory_items: Infinity,
+        collaborators: 1 // Your partner
     },
     premium: {
         guests: Infinity,

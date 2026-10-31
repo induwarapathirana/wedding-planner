@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getUserProfile } from "@/app/actions/data";
 import { PlannerSettings } from "@/components/dashboard/settings/PlannerSettings";
 import { CoupleSettings } from "@/components/dashboard/settings/CoupleSettings";
 import { Loader2 } from "lucide-react";
@@ -18,14 +18,9 @@ function SettingsContent() {
     }, []);
 
     async function checkRole() {
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = await getUserProfile();
         if (user) {
-            const { data } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', user.id)
-                .single();
-            if (data) setRole(data.role);
+            setRole(user.role as any);
         }
         setLoading(false);
     }

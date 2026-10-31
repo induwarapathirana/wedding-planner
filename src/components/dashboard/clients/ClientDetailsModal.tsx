@@ -2,19 +2,10 @@
 
 import { useState } from "react";
 import { X, Calendar, Mail, Phone, DollarSign, FileText } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { updateClient } from "@/app/actions/data";
+import { fromClientRow, type ClientRow } from "@/lib/clients";
 
-type Client = {
-    id: string;
-    name: string;
-    email: string;
-    phone: string;
-    wedding_date: string;
-    budget: number;
-    status: 'lead' | 'active' | 'completed' | 'lost';
-    wedding_id?: string;
-    notes?: string;
-};
+type Client = ClientRow;
 
 type ClientDetailsModalProps = {
     client: Client | null;
@@ -36,17 +27,13 @@ export function ClientDetailsModal({ client, isOpen, onClose, onUpdate }: Client
         if (!client) return; // Guard against null
 
         setSaving(true);
-        const { error } = await supabase
-            .from('clients')
-            .update(formData)
-            .eq('id', client.id);
-
-        if (error) {
-            alert("Error updating client: " + error.message);
-        } else {
+        try {
+            await updateClient(client.id, fromClientRow(formData));
             setEditing(false);
             setFormData({});
             onUpdate();
+        } catch (error: any) {
+            alert("Error updating client: " + error.message);
         }
         setSaving(false);
     }

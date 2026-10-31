@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getInventoryItems, deleteInventoryItem, updateInventoryItem, getWeddingById } from "@/app/actions/data";
+import { toInventoryRow } from "@/lib/legacy-rows";
 import { Plus, Package, Search, Pencil, Trash2 } from "lucide-react";
 import { InventoryItem, ItemStatus } from "@/types/inventory";
 import InventoryItemRow from "@/components/dashboard/inventory/InventoryItem";
@@ -12,7 +13,6 @@ import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 import { getEffectiveTier } from "@/lib/trial";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 import { TourGuide } from "@/components/dashboard/TourGuide";
-import { TierGate } from "@/components/dashboard/TierGate";
 import { INVENTORY_STEPS } from "@/lib/tours";
 
 export default function InventoryPage() {
@@ -36,43 +36,21 @@ export default function InventoryPage() {
         const wId = localStorage.getItem("current_wedding_id");
         if (wId) {
             setWeddingId(wId);
-            // Fetch currency
-            const { data: wedding } = await supabase
-                .from('weddings')
-                .select('currency')
-                .eq('id', wId)
-                .single();
-
-            if (wedding) {
-                setCurrency(wedding.currency || 'USD');
+            const weddingData = await getWeddingById(wId);
+            if (weddingData) {
+                setCurrency(weddingData.currency || 'USD');
             }
-            // Get effective tier (validates trial & payment)
             const trialInfo = await getEffectiveTier(wId);
-            let effectiveTier = trialInfo.effectiveTier;
-
-            // Force premium for Planners
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-                if (profile?.role?.toLowerCase() === 'planner' || profile?.role?.toLowerCase() === 'pro') {
-                    effectiveTier = 'premium';
-                }
-            }
-            setTier(effectiveTier);
+            setTier(trialInfo.effectiveTier);
             fetchItems(wId);
         }
         setLoading(false);
     };
 
     const fetchItems = async (wId: string) => {
-        const { data, error } = await supabase
-            .from('inventory_items')
-            .select('*')
-            .eq('wedding_id', wId)
-            .order('created_at', { ascending: false });
-
-        if (!error && data) {
-            setItems(data as InventoryItem[]);
+        const data = await getInventoryItems(wId);
+        if (data) {
+            setItems(data.map(toInventoryRow));
         }
     };
 
@@ -82,9 +60,11 @@ export default function InventoryPage() {
 
     const executeDelete = async () => {
         if (!confirmState.id) return;
-        const { error } = await supabase.from('inventory_items').delete().eq('id', confirmState.id);
-        if (!error && weddingId) {
-            fetchItems(weddingId);
+        try {
+            await deleteInventoryItem(confirmState.id);
+            if (weddingId) fetchItems(weddingId);
+        } catch (error: any) {
+            alert("Error deleting: " + error.message);
         }
         setConfirmState({ isOpen: false });
     };
@@ -99,13 +79,11 @@ export default function InventoryPage() {
         const currentIndex = statuses.indexOf(item.status);
         const nextStatus = statuses[(currentIndex + 1) % statuses.length];
 
-        const { error } = await supabase
-            .from('inventory_items')
-            .update({ status: nextStatus })
-            .eq('id', item.id);
-
-        if (!error && weddingId) {
-            fetchItems(weddingId);
+        try {
+            await updateInventoryItem(item.id, { status: nextStatus });
+            if (weddingId) fetchItems(weddingId);
+        } catch (error: any) {
+            alert("Error updating status: " + error.message);
         }
     };
 
@@ -120,7 +98,7 @@ export default function InventoryPage() {
     const packedCount = items.filter(i => i.status === 'packed').length;
 
     return (
-        <TierGate weddingId={weddingId} featureName="Inventory">
+        <>
             <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
@@ -316,6 +294,6 @@ export default function InventoryPage() {
                     tier={tier}
                 />
             </div>
-        </TierGate>
+        </>
     );
 }

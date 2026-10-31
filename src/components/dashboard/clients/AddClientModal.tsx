@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/app/actions/data";
 import { X, Loader2 } from "lucide-react";
 
 type AddClientModalProps = {
@@ -27,27 +27,18 @@ export function AddClientModal({ isOpen, onClose, onSuccess }: AddClientModalPro
         e.preventDefault();
         setLoading(true);
 
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        try {
+            await createClient({
+                name: formData.name,
+                email: formData.email || null,
+                phone: formData.phone || null,
+                weddingDate: formData.wedding_date || null,
+                budget: formData.budget ? parseFloat(formData.budget) : null,
+                status: formData.status,
+            });
 
-        const { error } = await supabase.from('clients').insert({
-            planner_id: user.id,
-            name: formData.name,
-            email: formData.email || null,
-            phone: formData.phone || null,
-            wedding_date: formData.wedding_date || null,
-            budget: formData.budget ? parseFloat(formData.budget) : null,
-            status: formData.status
-        });
-
-        setLoading(false);
-
-        if (error) {
-            alert("Error adding client: " + error.message);
-        } else {
             onSuccess();
             onClose();
-            // Reset form
             setFormData({
                 name: "",
                 email: "",
@@ -56,6 +47,10 @@ export function AddClientModal({ isOpen, onClose, onSuccess }: AddClientModalPro
                 budget: "",
                 status: "lead"
             });
+        } catch (error: any) {
+            alert("Error adding client: " + error.message);
+        } finally {
+            setLoading(false);
         }
     }
 

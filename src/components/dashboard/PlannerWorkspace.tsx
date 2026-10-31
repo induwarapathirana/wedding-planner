@@ -12,12 +12,12 @@ import { BarChart3, TrendingUp, Users } from "lucide-react";
 
 type WeddingData = {
     id: string;
-    couple_name_1: string;
-    couple_name_2: string;
-    wedding_date: string;
+    coupleName1: string;
+    coupleName2: string;
+    weddingDate: string;
     currency?: string;
-    target_guest_count?: number;
-    estimated_budget?: number;
+    targetGuestCount?: number;
+    estimatedBudget?: number;
     tier?: 'free' | 'premium';
 };
 
@@ -39,7 +39,7 @@ type PlannerWorkspaceProps = {
 
 export function PlannerWorkspace({ wedding, stats, upcomingTasks, pendingPayments, pendingGuests }: PlannerWorkspaceProps) {
     const router = useRouter();
-    const daysToGo = differenceInDays(parseISO(wedding.wedding_date), new Date());
+    const daysToGo = differenceInDays(parseISO(wedding.weddingDate), new Date());
 
     return (
         <div className="space-y-6 md:space-y-8 pb-6">
@@ -47,16 +47,16 @@ export function PlannerWorkspace({ wedding, stats, upcomingTasks, pendingPayment
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between bg-white border border-gray-200 p-4 rounded-2xl shadow-sm">
                 <div className="min-w-0 flex items-center gap-3">
                     <div className="w-12 h-12 bg-gray-900 text-white rounded-xl flex items-center justify-center font-bold text-xl">
-                        {wedding.couple_name_1.charAt(0)}
+                        {wedding.coupleName1.charAt(0)}
                     </div>
                     <div>
                         <h2 className="font-serif text-xl font-bold text-gray-900 leading-tight">
-                            {wedding.couple_name_1} & {wedding.couple_name_2}
+                            {wedding.coupleName1} & {wedding.coupleName2}
                         </h2>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">Active Project</span>
                             <span>•</span>
-                            <span>{new Date(wedding.wedding_date).toLocaleDateString()}</span>
+                            <span>{new Date(wedding.weddingDate).toLocaleDateString()}</span>
                         </div>
                     </div>
                 </div>
@@ -191,7 +191,7 @@ export function PlannerWorkspace({ wedding, stats, upcomingTasks, pendingPayment
                                 {daysToGo > 0 ? daysToGo : "🎉"}
                             </p>
                             <p className="mt-2 text-xs md:text-sm text-muted-foreground font-medium">
-                                {daysToGo > 0 ? new Date(wedding.wedding_date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : "Today's the day!"}
+                                {daysToGo > 0 ? new Date(wedding.weddingDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : "Today's the day!"}
                             </p>
                         </div>
                     </div>
@@ -226,7 +226,7 @@ export function PlannerWorkspace({ wedding, stats, upcomingTasks, pendingPayment
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{task.title}</p>
                                         <p className="text-xs text-muted-foreground mt-1 font-medium">
-                                            {task.due_date ? new Date(task.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'No date set'}
+                                            {task.dueDate ? new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'No date set'}
                                         </p>
                                     </div>
                                 </div>
@@ -257,8 +257,8 @@ export function PlannerWorkspace({ wedding, stats, upcomingTasks, pendingPayment
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{payment.name}</p>
                                         <p className="text-xs text-muted-foreground mt-1 font-medium">
-                                            <span className="font-bold text-rose-600">{stats.currency}{formatLargeNumber(payment.estimated_cost)}</span>
-                                            {payment.due_date && <span> • {new Date(payment.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>}
+                                            <span className="font-bold text-rose-600">{stats.currency}{formatLargeNumber(payment.estimatedCost)}</span>
+                                            {payment.dueDate && <span> • {new Date(payment.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>}
                                         </p>
                                     </div>
                                 </div>

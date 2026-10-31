@@ -40,19 +40,19 @@ export function PlanComparisonModal({ isOpen, onClose }: { isOpen: boolean; onCl
                             <ul className="space-y-3 mb-8 flex-1">
                                 <li className="flex items-center gap-3 text-sm text-slate-600">
                                     <UsersIcon className="w-4 h-4 text-slate-400" />
-                                    <span><strong>{PLAN_LIMITS.free.guests}</strong> Guests</span>
+                                    <span><strong>Unlimited</strong> Guests</span>
                                 </li>
                                 <li className="flex items-center gap-3 text-sm text-slate-600">
                                     <WalletIcon className="w-4 h-4 text-slate-400" />
-                                    <span><strong>{PLAN_LIMITS.free.budget_items}</strong> Budget Items</span>
+                                    <span><strong>Unlimited</strong> Budget &amp; Checklist</span>
                                 </li>
                                 <li className="flex items-center gap-3 text-sm text-slate-600">
                                     <StoreIcon className="w-4 h-4 text-slate-400" />
-                                    <span><strong>{PLAN_LIMITS.free.vendors}</strong> Vendors</span>
+                                    <span><strong>Unlimited</strong> Vendors</span>
                                 </li>
                                 <li className="flex items-center gap-3 text-sm text-slate-600">
                                     <UsersIcon className="w-4 h-4 text-slate-400" />
-                                    <span>No Collaborators</span>
+                                    <span><strong>{PLAN_LIMITS.free.collaborators}</strong> Collaborator (your partner)</span>
                                 </li>
                             </ul>
 
@@ -78,15 +78,11 @@ export function PlanComparisonModal({ isOpen, onClose }: { isOpen: boolean; onCl
                             <ul className="space-y-3 mb-8 flex-1">
                                 <li className="flex items-center gap-3 text-sm font-medium text-slate-900">
                                     <Check className="w-4 h-4 text-green-500" />
-                                    <span><strong>Unlimited</strong> Guests</span>
+                                    <span>Everything in Free</span>
                                 </li>
                                 <li className="flex items-center gap-3 text-sm font-medium text-slate-900">
                                     <Check className="w-4 h-4 text-green-500" />
-                                    <span><strong>Unlimited</strong> Budget</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-sm font-medium text-slate-900">
-                                    <Check className="w-4 h-4 text-green-500" />
-                                    <span><strong>Unlimited</strong> Vendors</span>
+                                    <span><strong>WhatsApp</strong> RSVP confirmations</span>
                                 </li>
                                 <li className="flex items-center gap-3 text-sm font-medium text-slate-900">
                                     <Check className="w-4 h-4 text-green-500" />

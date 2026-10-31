@@ -1,21 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getClients, createClientWedding, updateClient } from "@/app/actions/data";
+import { toClientRow, type ClientRow } from "@/lib/clients";
 import { useRouter } from "next/navigation";
 import { Users, Calendar, FolderOpen, Plus, TrendingUp, Sparkles, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { AddClientModal } from "@/components/dashboard/clients/AddClientModal";
 
-type Client = {
-    id: string;
-    name: string;
-    email: string;
-    wedding_date: string;
-    budget: number;
-    status: 'lead' | 'active' | 'completed' | 'lost';
-    wedding_id?: string;
-};
+type Client = ClientRow;
 
 export function PlannerDashboard() {
     const router = useRouter();
@@ -35,18 +28,10 @@ export function PlannerDashboard() {
 
     const fetchData = async () => {
         setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        // Fetch Clients
-        const { data } = await supabase
-            .from('clients')
-            .select('*')
-            .eq('planner_id', user.id)
-            .order('created_at', { ascending: false });
+        const data = await getClients();
 
         if (data) {
-            const clientList = data as Client[];
+            const clientList = data.map(toClientRow);
             setClients(clientList);
 
             // Calculate Stats
@@ -67,49 +52,16 @@ export function PlannerDashboard() {
         if (!confirm(`Create a new wedding workspace for ${client.name}?`)) return;
 
         setCreatingWeddingFor(client.id);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const trialEndsAt = new Date();
-        trialEndsAt.setDate(trialEndsAt.getDate() + 14);
-
-        // 1. Create Wedding
-        const { data: wedding, error: weddingError } = await supabase
-            .from('weddings')
-            .insert({
-                created_by: user.id,
-                couple_name_1: client.name.split(' and ')[0] || client.name.split(' & ')[0] || client.name,
-                couple_name_2: client.name.split(' and ')[1] || client.name.split(' & ')[1] || '',
-                wedding_date: client.wedding_date || null,
-                estimated_budget: client.budget || 0,
-                currency: 'USD',
-                tier: 'free',
-                premium_trial_ends_at: trialEndsAt.toISOString()
-            })
-            .select()
-            .single();
-
-        if (weddingError) {
-            alert("Error creating wedding: " + weddingError.message);
-            setCreatingWeddingFor(null);
-            return;
+        try {
+            const wedding = await createClientWedding({
+                name: client.name,
+                weddingDate: client.wedding_date || null,
+                budget: client.budget || 0,
+            });
+            await updateClient(client.id, { weddingId: wedding.id, status: 'active' });
+        } catch (error: any) {
+            alert("Error creating wedding: " + error.message);
         }
-
-        // 2. Add Planner as Collaborator (Owner)
-        await supabase.from('collaborators').insert({
-            wedding_id: wedding.id,
-            user_id: user.id,
-            role: 'owner'
-        });
-
-        // 3. Link Client
-        await supabase
-            .from('clients')
-            .update({
-                wedding_id: wedding.id,
-                status: 'active'
-            })
-            .eq('id', client.id);
 
         fetchData();
         setCreatingWeddingFor(null);

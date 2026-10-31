@@ -1,4 +1,9 @@
-import { supabase } from "./supabase";
+"use server";
+
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+
+const PLANNER_ROLES = ["planner", "vendor", "pro"];
 
 export type PlanTier = 'free' | 'premium';
 
@@ -18,13 +23,15 @@ export interface TrialInfo {
  */
 export async function getEffectiveTier(weddingId: string): Promise<TrialInfo> {
     // Fetch wedding data
-    const { data: wedding, error } = await supabase
-        .from('weddings')
-        .select('tier, premium_trial_ends_at, payment_id')
-        .eq('id', weddingId)
-        .single();
+    const wedding = await prisma.wedding.findUnique({
+        where: { id: weddingId },
+        select: {
+            tier: true,
+            premiumTrialEndsAt: true
+        }
+    });
 
-    if (error || !wedding) {
+    if (!wedding) {
         // Default to free on error
         return {
             effectiveTier: 'free',
@@ -35,14 +42,9 @@ export async function getEffectiveTier(weddingId: string): Promise<TrialInfo> {
         };
     }
 
-    // STRICT CHECK:
-    // A user is 'premium' if:
-    // 1. They have a verified payment_id
-    // 2. OR their trial is still active
-    // 3. OR the DB explicitly says 'premium' (Manual Grant)
-    const isPaidPremium = !!wedding.payment_id;
-    const isManualPremium = wedding.tier === 'premium';
-    const trialEndsAt = wedding.premium_trial_ends_at;
+    // 'premium' in the DB covers both PayHere payments and manual grants
+    const isPaidPremium = wedding.tier === 'premium';
+    const trialEndsAt = wedding.premiumTrialEndsAt;
 
     // Check if trial is active
     const isInTrial = trialEndsAt
@@ -56,18 +58,19 @@ export async function getEffectiveTier(weddingId: string): Promise<TrialInfo> {
         daysRemaining = Math.ceil(diff / (1000 * 60 * 60 * 24));
     }
 
-    // Determine effective tier
-    // If DB says premium, we trust it (allows manual overrides)
-    const effectiveTier: PlanTier = isManualPremium || isPaidPremium || isInTrial ? 'premium' : 'free';
+    // Planners get premium features on every wedding they work on
+    const session = await auth();
+    const viewer = session?.user?.id
+        ? await prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true } })
+        : null;
+    const isPlanner = PLANNER_ROLES.includes(viewer?.role ?? '');
 
-    // AUTO-SYNC LOGIC REMOVED: We no longer auto-downgrade based on payment_id alone,
-    // as this breaks manual grants.
-    // If we want auto-downgrade for trials, it should be a separate scheduled job, not on read.
+    const effectiveTier: PlanTier = isPaidPremium || isInTrial || isPlanner ? 'premium' : 'free';
 
     return {
         effectiveTier,
         isInTrial,
-        trialEndsAt,
+        trialEndsAt: trialEndsAt ? trialEndsAt.toISOString() : null,
         daysRemaining,
         isPaidPremium
     };

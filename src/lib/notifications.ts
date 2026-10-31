@@ -1,8 +1,5 @@
 import webpush from 'web-push';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+import { prisma } from '@/lib/prisma';
 
 // Configure web-push with VAPID keys
 const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
@@ -62,20 +59,16 @@ export async function sendPushNotification(
  * Remove invalid subscription from database
  */
 async function removeInvalidSubscription(endpoint: string) {
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
+    await prisma.pushSubscription.deleteMany({
+        where: { endpoint },
+    });
     console.log('Removed invalid subscription:', endpoint);
 }
 
 /**
  * Send notifications for upcoming due dates
  */
-/**
- * Send notifications for upcoming due dates
- */
 export async function sendDueDateNotifications(scheduleType?: 'today' | 'tomorrow' | 'three_days') {
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
     // Get dates
     const today = new Date();
     const tomorrow = new Date(today);
@@ -87,47 +80,35 @@ export async function sendDueDateNotifications(scheduleType?: 'today' | 'tomorro
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
     const threeDaysStr = threeDaysOut.toISOString().split('T')[0];
 
-    // Determine filter date based on scheduleType
-    let dateFilter = '';
-
+    // Determine which dates to query
+    let targetDates: string[] = [];
     if (scheduleType === 'today') {
-        dateFilter = `due_date.eq.${todayStr}`;
+        targetDates = [todayStr];
     } else if (scheduleType === 'tomorrow') {
-        dateFilter = `due_date.eq.${tomorrowStr}`;
+        targetDates = [tomorrowStr];
     } else if (scheduleType === 'three_days') {
-        dateFilter = `due_date.eq.${threeDaysStr}`;
+        targetDates = [threeDaysStr];
     } else {
-        // Fallback or "all" check (legacy behavior + today)
-        dateFilter = `due_date.eq.${todayStr},due_date.eq.${tomorrowStr},due_date.eq.${threeDaysStr}`;
+        targetDates = [todayStr, tomorrowStr, threeDaysStr];
     }
 
-    // Query budget items
-    let budgetQuery = supabase
-        .from('budget_items')
-        .select('*, weddings!inner(id)')
-        .is('paid_at', null);
+    // Query budget items with Prisma
+    const budgetItems = await prisma.budgetItem.findMany({
+        where: {
+            paidAt: null,
+            dueDate: { in: targetDates.map(d => new Date(d)) },
+        },
+        include: { wedding: { select: { id: true } } },
+    });
 
-    if (scheduleType) {
-        budgetQuery = budgetQuery.filter('due_date', 'eq', scheduleType === 'today' ? todayStr : (scheduleType === 'tomorrow' ? tomorrowStr : threeDaysStr));
-    } else {
-        budgetQuery = budgetQuery.or(dateFilter);
-    }
-
-    const { data: budgetItems } = await budgetQuery;
-
-    // Query checklist items
-    let checklistQuery = supabase
-        .from('checklist_items')
-        .select('*, weddings!inner(id)')
-        .is('is_completed', false);
-
-    if (scheduleType) {
-        checklistQuery = checklistQuery.filter('due_date', 'eq', scheduleType === 'today' ? todayStr : (scheduleType === 'tomorrow' ? tomorrowStr : threeDaysStr));
-    } else {
-        checklistQuery = checklistQuery.or(dateFilter);
-    }
-
-    const { data: checklistItems } = await checklistQuery;
+    // Query checklist items with Prisma
+    const checklistItems = await prisma.checklistItem.findMany({
+        where: {
+            isCompleted: false,
+            dueDate: { in: targetDates.map(d => new Date(d)) },
+        },
+        include: { wedding: { select: { id: true } } },
+    });
 
     const notifications: Array<{
         weddingId: string;
@@ -135,27 +116,31 @@ export async function sendDueDateNotifications(scheduleType?: 'today' | 'tomorro
     }> = [];
 
     // Helper to format body based on due date
-    const getTimingText = (dueDate: string) => {
-        if (dueDate === todayStr) return 'due today';
-        if (dueDate === tomorrowStr) return 'due tomorrow';
-        if (dueDate === threeDaysStr) return 'due in 3 days';
+    const getTimingText = (dueDate: Date | null) => {
+        if (!dueDate) return 'due soon';
+        const dueDateStr = dueDate.toISOString().split('T')[0];
+        if (dueDateStr === todayStr) return 'due today';
+        if (dueDateStr === tomorrowStr) return 'due tomorrow';
+        if (dueDateStr === threeDaysStr) return 'due in 3 days';
         return 'due soon';
     };
 
-    const getTitleText = (dueDate: string) => {
-        if (dueDate === todayStr) return 'Due Today! 🚨';
-        if (dueDate === tomorrowStr) return 'Due Tomorrow ⏰';
-        if (dueDate === threeDaysStr) return 'Head\'s Up (3 Days) 📅';
+    const getTitleText = (dueDate: Date | null) => {
+        if (!dueDate) return 'Upcoming Deadline';
+        const dueDateStr = dueDate.toISOString().split('T')[0];
+        if (dueDateStr === todayStr) return 'Due Today! 🚨';
+        if (dueDateStr === tomorrowStr) return 'Due Tomorrow ⏰';
+        if (dueDateStr === threeDaysStr) return 'Head\'s Up (3 Days) 📅';
         return 'Upcoming Deadline';
     };
 
     // Create notifications for budget items
-    budgetItems?.forEach((item) => {
+    budgetItems.forEach((item) => {
         notifications.push({
-            weddingId: item.wedding_id,
+            weddingId: item.weddingId,
             payload: {
-                title: `💰 Payment ${getTitleText(item.due_date)}`,
-                body: `${item.name} ($${item.estimated_cost}) is ${getTimingText(item.due_date)}.`,
+                title: `💰 Payment ${getTitleText(item.dueDate)}`,
+                body: `${item.name} ($${item.estimatedCost}) is ${getTimingText(item.dueDate)}.`,
                 icon: '/icons/icon-192x192.png',
                 badge: '/icons/icon-192x192.png',
                 tag: `budget-${item.id}`,
@@ -165,12 +150,12 @@ export async function sendDueDateNotifications(scheduleType?: 'today' | 'tomorro
     });
 
     // Create notifications for checklist items
-    checklistItems?.forEach((item) => {
+    checklistItems.forEach((item) => {
         notifications.push({
-            weddingId: item.wedding_id,
+            weddingId: item.weddingId,
             payload: {
-                title: `✅ Task ${getTitleText(item.due_date)}`,
-                body: `${item.title} is ${getTimingText(item.due_date)}.`,
+                title: `✅ Task ${getTitleText(item.dueDate)}`,
+                body: `${item.title} is ${getTimingText(item.dueDate)}.`,
                 icon: '/icons/icon-192x192.png',
                 badge: '/icons/icon-192x192.png',
                 tag: `checklist-${item.id}`,
@@ -181,23 +166,24 @@ export async function sendDueDateNotifications(scheduleType?: 'today' | 'tomorro
 
     // Get all subscriptions for affected weddings
     const weddingIds = [...new Set(notifications.map((n) => n.weddingId))];
-    const { data: subscriptions } = await supabase
-        .from('push_subscriptions')
-        .select('*')
-        .in('wedding_id', weddingIds);
+    const subscriptions = await prisma.pushSubscription.findMany({
+        where: {
+            user: {
+                collaborators: {
+                    some: { weddingId: { in: weddingIds } },
+                },
+            },
+        },
+    });
 
     // Send notifications
     const results = [];
     for (const notification of notifications) {
-        const relevantSubs = subscriptions?.filter(
-            (sub) => sub.wedding_id === notification.weddingId
-        );
-
-        for (const sub of relevantSubs || []) {
+        for (const sub of subscriptions) {
             const result = await sendPushNotification(
                 sub.endpoint,
-                sub.p256dh_key,
-                sub.auth_key,
+                sub.p256dh,
+                sub.auth,
                 notification.payload
             );
             results.push(result);
@@ -207,10 +193,10 @@ export async function sendDueDateNotifications(scheduleType?: 'today' | 'tomorro
     return {
         scheduleType: scheduleType || 'all',
         queriedDates: { today: todayStr, tomorrow: tomorrowStr, threeDaysOut: threeDaysStr },
-        foundItems: (budgetItems?.length || 0) + (checklistItems?.length || 0),
-        budgetItemsCount: budgetItems?.length || 0,
-        checklistItemsCount: checklistItems?.length || 0,
-        subscriptionsCount: subscriptions?.length || 0,
+        foundItems: budgetItems.length + checklistItems.length,
+        budgetItemsCount: budgetItems.length,
+        checklistItemsCount: checklistItems.length,
+        subscriptionsCount: subscriptions.length,
         sent: results.filter((r) => r.success).length,
         failed: results.filter((r) => !r.success).length,
         total: results.length,

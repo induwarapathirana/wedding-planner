@@ -1,6 +1,7 @@
-"use server";
-
 /**
+ * Server-only helper. Deliberately NOT a "use server" module: that would expose
+ * sendWhatsAppMessage as a public endpoint anyone could use to message any number.
+ *
  * WhatsApp Business Cloud API Integration
  * Send messages to guests via WhatsApp after RSVP confirmation
  */

@@ -1,0 +1,343 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ============================================
+// NEXTAUTH MODELS (User doubles as Profile)
+// ============================================
+
+model Account {
+  id                String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String  @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionToken String   @unique
+  userId       String   @db.Uuid
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now()) @db.Timestamptz()
+
+  // Profile fields (merged from old profiles table)
+  role          String    @default("couple") // 'couple', 'planner', 'vendor'
+  companyName   String?
+  logoUrl       String?
+  website       String?
+  signatureUrl  String?
+  brandingColor String    @default("#000000")
+
+  accounts      Account[]
+  sessions      Session[]
+
+  // Domain relations
+  collaborators  Collaborator[]
+  createdWeddings Wedding[]      @relation("WeddingCreator")
+  clients        Client[]       @relation("PlannerClients")
+  feedbacks      Feedback[]
+  pushSubscriptions PushSubscription[]
+  directoryVendors  DirectoryVendor[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================
+// DOMAIN MODELS
+// ============================================
+
+model Wedding {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdById     String    @db.Uuid
+  coupleName1     String
+  coupleName2     String
+  weddingDate     DateTime? @db.Date
+  location        String?
+  currency        String    @default("USD")
+  styleTheme      String?
+  targetGuestCount Int?
+  estimatedBudget Decimal?
+  tier            String    @default("free") // 'free', 'premium'
+  premiumTrialEndsAt DateTime? @db.Timestamptz()
+  whatsappBusinessNumber String? // Enables WhatsApp RSVP confirmations
+
+  // Extended fields from expand_weddings_schema
+  name          String?
+  partner1Name  String?
+  partner2Name  String?
+  budget        Decimal   @default(0)
+
+  createdAt     DateTime  @default(now()) @db.Timestamptz()
+
+  createdBy     User      @relation("WeddingCreator", fields: [createdById], references: [id])
+  collaborators Collaborator[]
+  budgetItems   BudgetItem[]
+  budgetCategories BudgetCategory[]
+  guests        Guest[]
+  checklistItems ChecklistItem[]
+  vendors       Vendor[]
+  inventoryItems InventoryItem[]
+  events        Event[]
+  invitations   Invitation[]
+  clients       Client[]
+
+  @@index([createdById])
+}
+
+model Collaborator {
+  weddingId String   @db.Uuid
+  userId    String   @db.Uuid
+  role      String   @default("editor") // 'owner', 'editor', 'viewer'
+  joinedAt  DateTime @default(now()) @db.Timestamptz()
+
+  wedding   Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([weddingId, userId])
+
+  @@index([userId])
+}
+
+model BudgetItem {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  weddingId     String    @db.Uuid
+  category      String
+  name          String
+  estimatedCost Decimal   @default(0)
+  unitPrice     Decimal?
+  units         Int       @default(1)
+  actualCost    Decimal   @default(0)
+  paidAmount    Decimal   @default(0)
+  dueDate       DateTime? @db.Date
+  paidAt        DateTime? @db.Date
+  notes         String?
+  createdAt     DateTime  @default(now()) @db.Timestamptz()
+
+  wedding       Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  @@index([weddingId, category])
+}
+
+model BudgetCategory {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  weddingId String   @db.Uuid
+  name      String
+  allocated Decimal  @default(0) // Planned spend for this category
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz()
+
+  wedding   Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  @@unique([weddingId, name])
+}
+
+model Guest {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  weddingId           String   @db.Uuid
+  name                String
+  email               String?
+  groupCategory       String?
+  rsvpStatus          String   @default("pending") // 'pending', 'accepted', 'declined'
+  priority            String   @default("B") // A/B/C invite list
+  whatsappNumber      String?
+  side                String?  // 'bride', 'groom', 'both'
+  address             String?  // Postal address for invitation cards
+  inviteStatus        String   @default("not_sent") // 'not_sent', 'sent'
+  notes               String?
+  mealPreference      String?
+  plusOne             Boolean  @default(false)
+  tableAssignment     String?
+  companionGuestCount Int      @default(0)
+  companionNames      String?
+  selectedCompanions  String?
+  createdAt           DateTime @default(now()) @db.Timestamptz()
+
+  wedding             Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  @@index([weddingId, rsvpStatus])
+}
+
+model ChecklistItem {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  weddingId   String    @db.Uuid
+  title       String
+  category    String?
+  dueDate     DateTime? @db.Date
+  dueOffsetDays Int?    // Days before the wedding; due date follows the wedding date
+  isCompleted Boolean   @default(false)
+  notes       String?
+  createdAt   DateTime  @default(now()) @db.Timestamptz()
+
+  wedding     Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  @@index([weddingId, isCompleted, dueDate])
+}
+
+model Vendor {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  weddingId   String    @db.Uuid
+  category    String?
+  companyName String?
+  contactName String?
+  email       String?
+  phone       String?
+  website     String?
+  cost        Decimal?
+  deposit     Decimal?
+  priceEstimate Decimal?
+  pricingType String?   // 'flat_rate', 'per_person', 'hourly', 'per_item', 'package', 'tbd'
+  pricingUnit String?
+  status      String    @default("researching") // 'researching', 'contacted', 'hired', 'declined'
+  notes       String?
+  createdAt   DateTime  @default(now()) @db.Timestamptz()
+
+  wedding     Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  @@index([weddingId, category])
+}
+
+model DirectoryVendor {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @db.Uuid
+  companyName String?
+  category    String?
+  contactName String?
+  email       String?
+  phone       String?
+  website     String?
+  notes       String?
+  rating      Int?
+  priceEstimate Decimal?
+  pricingType String?
+  pricingUnit String?
+  createdAt   DateTime  @default(now()) @db.Timestamptz()
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model InventoryItem {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  weddingId   String    @db.Uuid
+  name        String
+  category    String?
+  quantity    Int       @default(1)
+  unitPrice   Decimal?
+  totalPrice  Decimal?
+  status      String    @default("needed") // 'needed', 'purchased', 'rented', 'borrowed', 'packed'
+  link        String?
+  notes       String?
+  createdAt   DateTime  @default(now()) @db.Timestamptz()
+
+  wedding     Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  @@index([weddingId])
+}
+
+model Event {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  weddingId   String    @db.Uuid
+  title       String
+  description String?
+  startTime   DateTime? @db.Timestamptz()
+  endTime     DateTime? @db.Timestamptz()
+  location    String?
+  category    String?
+  notes       String?
+  createdAt   DateTime  @default(now()) @db.Timestamptz()
+
+  wedding     Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  @@index([weddingId, startTime])
+}
+
+model Invitation {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  weddingId   String    @db.Uuid
+  token       String    @unique @default(dbgenerated("gen_random_uuid()"))
+  email       String?
+  role        String    @default("editor")
+  accepted    Boolean   @default(false)
+  createdAt   DateTime  @default(now()) @db.Timestamptz()
+
+  wedding     Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  @@index([weddingId])
+}
+
+model Feedback {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @db.Uuid
+  message   String
+  rating    Int?
+  createdAt DateTime @default(now()) @db.Timestamptz()
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PushSubscription {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @db.Uuid
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @db.Timestamptz()
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Client {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  plannerId   String    @db.Uuid
+  name        String?
+  firstName   String?
+  lastName    String?
+  email       String?
+  phone       String?
+  weddingDate DateTime? @db.Date
+  budget      Decimal?
+  status      String    @default("lead") // 'lead', 'active', 'completed'
+  notes       String?
+  weddingId   String?   @db.Uuid
+  createdAt   DateTime  @default(now()) @db.Timestamptz()
+
+  planner     User      @relation("PlannerClients", fields: [plannerId], references: [id], onDelete: Cascade)
+  wedding     Wedding?  @relation(fields: [weddingId], references: [id], onDelete: SetNull)
+
+  @@index([plannerId])
+}

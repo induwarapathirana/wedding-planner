@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { ArrowRight, Heart, Users, CheckCircle2, ShieldCheck, Star, Calendar, BookUser } from "lucide-react";
-import { PLAN_LIMITS } from "@/lib/limits";
 
 export default function Home() {
   return (
@@ -140,19 +139,23 @@ export default function Home() {
                 <ul className="space-y-3 text-sm text-gray-600">
                   <li className="flex items-center gap-3">
                     <CheckCircle2 className="h-4 w-4 text-gray-400" />
-                    Up to <span>{PLAN_LIMITS.free.guests} Guests</span>
+                    <strong>Unlimited</strong> Guests
                   </li>
                   <li className="flex items-center gap-3">
                     <CheckCircle2 className="h-4 w-4 text-gray-400" />
-                    Up to <span>{PLAN_LIMITS.free.vendors} Vendors</span>
+                    <strong>Unlimited</strong> Vendors
                   </li>
                   <li className="flex items-center gap-3">
                     <CheckCircle2 className="h-4 w-4 text-gray-400" />
-                    Up to <span>{PLAN_LIMITS.free.budget_items} Budget Items</span>
+                    <strong>Unlimited</strong> Budget Items
                   </li>
                   <li className="flex items-center gap-3">
                     <CheckCircle2 className="h-4 w-4 text-gray-400" />
-                    Up to <span>{PLAN_LIMITS.free.checklist_items} Checklist Tasks</span>
+                    <strong>Unlimited</strong> Checklist Tasks
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <CheckCircle2 className="h-4 w-4 text-gray-400" />
+                    Invite your partner
                   </li>
                 </ul>
               </div>
@@ -177,19 +180,11 @@ export default function Home() {
                 <ul className="space-y-3 text-sm text-gray-700">
                   <li className="flex items-center gap-3">
                     <ShieldCheck className="h-4 w-4 text-primary" />
-                    <strong>Unlimited</strong> Guests
+                    <strong>WhatsApp</strong> RSVP confirmations
                   </li>
                   <li className="flex items-center gap-3">
                     <ShieldCheck className="h-4 w-4 text-primary" />
-                    <strong>Unlimited</strong> Vendors
-                  </li>
-                  <li className="flex items-center gap-3">
-                    <ShieldCheck className="h-4 w-4 text-primary" />
-                    <strong>Unlimited</strong> Budget & Checklist
-                  </li>
-                  <li className="flex items-center gap-3">
-                    <ShieldCheck className="h-4 w-4 text-primary" />
-                    <strong>Team Collaboration</strong> (Invite Partners)
+                    <strong>Team Collaboration</strong> (family and your planner)
                   </li>
                   <li className="flex items-center gap-3">
                     <ShieldCheck className="h-4 w-4 text-primary" />

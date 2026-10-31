@@ -1,25 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getClients, createClientWedding, updateClient, getUserIdFromSession } from "@/app/actions/data";
 import { Plus, Search, Calendar, Mail, Phone, MoreHorizontal, Users } from "lucide-react";
 import { Check, Loader2, Sparkles, FolderOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/format";
 import { AddClientModal } from "@/components/dashboard/clients/AddClientModal";
 import { ClientDetailsModal } from "@/components/dashboard/clients/ClientDetailsModal";
+import { toClientRow, type ClientRow } from "@/lib/clients";
 
-type Client = {
-    id: string;
-    name: string;
-    email: string;
-    phone: string;
-    wedding_date: string;
-    budget: number;
-    status: 'lead' | 'active' | 'completed' | 'lost';
-    wedding_id?: string;
-    notes?: string;
-};
+type Client = ClientRow;
 
 export default function ClientsPage() {
     const router = useRouter();
@@ -31,106 +22,63 @@ export default function ClientsPage() {
     const [creatingWeddingFor, setCreatingWeddingFor] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
     const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-    const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [copied, setCopied] = useState(false);
 
     useEffect(() => {
         fetchClients();
+        getUserIdFromSession().then(setUserId);
     }, []);
+
+    async function copyInquiryLink() {
+        if (!userId) return;
+        try {
+            await navigator.clipboard.writeText(`${window.location.origin}/inquiry/${userId}`);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            alert(`Copy this link: ${window.location.origin}/inquiry/${userId}`);
+        }
+    }
 
     async function fetchClients() {
         setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
-
-        if (user) {
-            setUserId(user.id);
-            const { data, error } = await supabase
-                .from('clients')
-                .select('*')
-                .eq('planner_id', user.id)
-                .order('created_at', { ascending: false });
-
-            if (data) setClients(data as Client[]);
-        }
+        const data = await getClients();
+        if (data) setClients(data.map(toClientRow));
         setLoading(false);
     }
+
     async function handleCreateWedding(client: Client) {
         if (!confirm(`Create a new wedding workspace for ${client.name}?`)) return;
 
         setCreatingWeddingFor(client.id);
-        const { data: { user } } = await supabase.auth.getUser();
 
-        if (!user) return;
+        try {
+            const wedding = await createClientWedding({
+                name: client.name,
+                weddingDate: client.wedding_date || null,
+                budget: client.budget || 0,
+            });
 
-        const trialEndsAt = new Date();
-        trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+            await updateClient(client.id, {
+                weddingId: wedding.id,
+                status: 'active',
+            });
 
-        // 1. Create the Wedding
-        const { data: wedding, error: weddingError } = await supabase
-            .from('weddings')
-            .insert({
-                created_by: user.id,
-                // name: `${client.name}'s Wedding`, // Optional: requires 'name' column
-                couple_name_1: client.name.split(' and ')[0] || client.name.split(' & ')[0] || client.name,
-                couple_name_2: client.name.split(' and ')[1] || client.name.split(' & ')[1] || '',
-                wedding_date: client.wedding_date || null,
-                estimated_budget: client.budget || 0,
-                currency: 'USD',
-                tier: 'free',
-                premium_trial_ends_at: trialEndsAt.toISOString()
-            })
-            .select()
-            .single();
-
-        if (weddingError) {
-            alert("Error creating wedding: " + weddingError.message);
-            setCreatingWeddingFor(null);
-            return;
-        }
-
-        // 2. Add Planner as Collaborator (Owner) - CRITICAL for RLS
-        const { error: collabError } = await supabase.from('collaborators').insert({
-            wedding_id: wedding.id,
-            user_id: user.id,
-            role: 'owner'
-        });
-
-        if (collabError) {
-            console.error("Error adding collaborator:", collabError);
-            alert("Warning: Wedding created but permission setting failed. Please contact support.");
-        }
-
-        // 3. Link Client to Wedding
-        const { error: linkError } = await supabase
-            .from('clients')
-            .update({
-                wedding_id: wedding.id,
-                status: 'active' // Auto-promote to active
-            })
-            .eq('id', client.id);
-
-        if (linkError) {
-            alert("Warning: Wedding created but link failed: " + linkError.message);
-        } else {
-            // Success! Refresh logic
             fetchClients();
-            // Option: Redirect to that wedding immediately?
-            // router.push(`/dashboard?weddingId=${wedding.id}`);
+        } catch (error: any) {
+            alert("Error creating wedding: " + error.message);
         }
         setCreatingWeddingFor(null);
     }
 
     async function updateStatus(clientId: string, newStatus: Client['status']) {
-        // Optimistic update
         setClients(clients.map(c => c.id === clientId ? { ...c, status: newStatus } : c));
 
-        const { error } = await supabase
-            .from('clients')
-            .update({ status: newStatus })
-            .eq('id', clientId);
-
-        if (error) {
+        try {
+            await updateClient(clientId, { status: newStatus });
+        } catch (error: any) {
             alert("Error updating status: " + error.message);
-            fetchClients(); // Revert
+            fetchClients();
         }
     }
 
@@ -140,21 +88,19 @@ export default function ClientsPage() {
             (client.email && client.email.toLowerCase().includes(search.toLowerCase()));
         return matchesStatus && matchesSearch;
     });
+
     return (
         <div className="space-y-6">
-            <ClientDetailsModal
-                client={selectedClient}
-                isOpen={isDetailsModalOpen}
-                onClose={() => {
-                    setIsDetailsModalOpen(false);
-                    setSelectedClient(null);
-                }}
-                onUpdate={fetchClients}
-            />
             <AddClientModal
                 isOpen={isAddModalOpen}
                 onClose={() => setIsAddModalOpen(false)}
                 onSuccess={fetchClients}
+            />
+            <ClientDetailsModal
+                client={selectedClient}
+                isOpen={!!selectedClient}
+                onClose={() => setSelectedClient(null)}
+                onUpdate={fetchClients}
             />
 
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -165,15 +111,12 @@ export default function ClientsPage() {
                 <div className="flex gap-2">
                     {userId && (
                         <button
-                            onClick={() => {
-                                const link = `${window.location.origin}/inquiry/${userId}`;
-                                navigator.clipboard.writeText(link);
-                                alert("Lead form link copied!");
-                            }}
+                            onClick={copyInquiryLink}
                             className="flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 px-5 py-2.5 rounded-xl hover:bg-gray-50 transition-all shadow-sm font-medium"
+                            title="Share this form so new couples can send you an inquiry"
                         >
-                            <Sparkles className="w-4 h-4 text-purple-600" />
-                            Copy Form Link
+                            {copied ? <Check className="w-4 h-4 text-green-600" /> : <Sparkles className="w-4 h-4 text-purple-600" />}
+                            {copied ? "Link copied" : "Copy inquiry form link"}
                         </button>
                     )}
                     <button
@@ -265,11 +208,9 @@ export default function ClientsPage() {
                                     </div>
                                 </div>
                                 <button
-                                    onClick={() => {
-                                        setSelectedClient(client);
-                                        setIsDetailsModalOpen(true);
-                                    }}
+                                    onClick={() => setSelectedClient(client)}
                                     className="text-gray-400 hover:text-gray-600"
+                                    aria-label={`View details for ${client.name}`}
                                 >
                                     <MoreHorizontal className="w-5 h-5" />
                                 </button>

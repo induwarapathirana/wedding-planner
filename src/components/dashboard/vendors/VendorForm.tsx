@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { createVendor, updateVendor, createDirectoryVendor } from "@/app/actions/data";
 import { X, Loader2 } from "lucide-react";
 import { Vendor, VendorStatus } from "@/types/vendors";
 
@@ -50,37 +50,37 @@ export default function VendorForm({ weddingId, onClose, onSuccess, initialData 
         setLoading(true);
 
         try {
-            if (initialData?.id) {
-                const { error } = await supabase
-                    .from('vendors')
-                    .update(formData)
-                    .eq('id', initialData.id);
-                if (error) throw error;
-            } else {
-                const { error, data } = await supabase
-                    .from('vendors')
-                    .insert([{ ...formData, wedding_id: weddingId }])
-                    .select()
-                    .single();
+            const payload: any = {
+                category: formData.category,
+                companyName: formData.company_name,
+                contactName: formData.contact_name,
+                email: formData.email,
+                phone: formData.phone,
+                website: formData.website,
+                status: formData.status,
+                priceEstimate: formData.price_estimate,
+                pricingType: formData.pricing_type,
+                pricingUnit: formData.pricing_unit,
+                notes: formData.notes,
+            };
 
-                if (error) throw error;
+            if (initialData?.id) {
+                await updateVendor(initialData.id, payload);
+            } else {
+                await createVendor(weddingId, payload);
 
                 // If checkbox is checked, add to Directory
                 if (addToDirectory) {
-                    const { data: { user } } = await supabase.auth.getUser();
-                    if (user) {
-                        await supabase.from('vendor_directory').insert([{
-                            user_id: user.id,
-                            category: formData.category,
-                            company_name: formData.company_name,
-                            contact_name: formData.contact_name,
-                            email: formData.email,
-                            phone: formData.phone,
-                            website: formData.website,
-                            price_estimate: formData.price_estimate,
-                            notes: formData.notes
-                        }]);
-                    }
+                    await createDirectoryVendor({
+                        category: formData.category,
+                        companyName: formData.company_name,
+                        contactName: formData.contact_name,
+                        email: formData.email,
+                        phone: formData.phone,
+                        website: formData.website,
+                        priceEstimate: formData.price_estimate,
+                        notes: formData.notes,
+                    });
                 }
             }
             onSuccess();

@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { Outfit, Cormorant_Garamond } from "next/font/google";
-import { Analytics } from "@vercel/analytics/next";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { HowToGuide } from "@/components/HowToGuide";
+import { Providers } from "@/components/providers";
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -52,12 +51,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
+        suppressHydrationWarning
         className={`${outfit.variable} ${cormorant.variable} antialiased`}
       >
-        <HowToGuide />
-        {children}
-        <Analytics />
-        <SpeedInsights />
+        <Providers>
+          <HowToGuide />
+          {children}
+        </Providers>
       </body>
     </html>
   );

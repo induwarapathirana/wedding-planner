@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
+import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import {
     LayoutDashboard,
@@ -20,10 +21,12 @@ import {
     DollarSign,
     Share2,
     MessageSquare,
-    ArrowLeft
+    ArrowLeft,
+    Search
 } from "lucide-react";
+import { openCommandPalette } from "./CommandPalette";
 import WeddingSelector from "./WeddingSelector";
-import { supabase } from "@/lib/supabase";
+import { getUserProfile, getUserWeddingId } from "@/app/actions/data";
 
 const navItems = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -41,56 +44,40 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
     const router = useRouter();
     const searchParams = useSearchParams();
     const weddingId = searchParams.get('weddingId');
+    const { data: session } = useSession();
 
     const [hasWeddings, setHasWeddings] = useState(false);
     const [role, setRole] = useState<'couple' | 'planner' | 'vendor' | null>(null);
 
     useEffect(() => {
-        checkUserRole();
-    }, []);
+        if (session?.user) {
+            checkUserRole();
+        }
+    }, [session]);
 
     async function checkUserRole() {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .single();
-
+        const profile = await getUserProfile();
         if (profile) {
-            // Normalize role to lowercase to handle 'Planner' vs 'planner'
-            const normalizedRole = profile.role?.toLowerCase() as 'couple' | 'planner' | 'vendor';
-            setRole(normalizedRole);
+            // Older accounts may still carry 'vendor' or 'pro'; both mean planner
+            const normalizedRole = ['planner', 'vendor', 'pro'].includes(profile.role) ? 'planner' : profile.role;
+            setRole(normalizedRole as any);
             if (normalizedRole === 'couple') {
                 checkWeddings();
             } else {
-                // Planners/Pros always have "weddings" (access to dashboard), but conceptually different
                 setHasWeddings(true);
             }
         }
     }
 
     async function checkWeddings() {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data } = await supabase
-            .from('collaborators')
-            .select('wedding_id')
-            .eq('user_id', user.id)
-            .limit(1)
-            .maybeSingle();
-
-        if (data) {
+        const wId = await getUserWeddingId();
+        if (wId) {
             setHasWeddings(true);
         }
     }
 
     async function handleSignOut() {
-        await supabase.auth.signOut();
-        router.push("/login");
+        await signOut({ callbackUrl: "/login" });
     }
 
     const currentNavItems = (() => {
@@ -99,8 +86,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                 // Planner in Workspace Mode - Show Couple Features + Back Button
                 return [
                     { name: "Back to Clients", href: "/dashboard/clients", icon: ArrowLeft },
-                    { name: "Calendar", href: `/dashboard/calendar?weddingId=${weddingId}`, icon: CalendarDays },
-                    ...navItems.filter(item => item.name !== 'Calendar').map(item => ({
+                    ...navItems.map(item => ({
                         ...item,
                         href: `${item.href}?weddingId=${weddingId}`
                     }))
@@ -110,7 +96,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                 return [
                     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
                     { name: "Clients", href: "/dashboard/clients", icon: Users },
-                    { name: "Master Calendar", href: "/dashboard/calendar", icon: CalendarDays },
+                    { name: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
                     // Planners might want a master directory
                     { name: "Vendor Library", href: "/dashboard/vendors", icon: HeartHandshake },
                     { name: "Settings", href: "/dashboard/settings", icon: Settings }, // NEW
@@ -147,6 +133,20 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                     </div>
                 )}
 
+
+                {hasWeddings && (
+                    <button
+                        onClick={() => {
+                            onClose?.();
+                            openCommandPalette();
+                        }}
+                        className="mb-4 flex w-full items-center gap-3 rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-muted-foreground shadow-sm hover:border-primary/40 hover:text-foreground transition-colors"
+                    >
+                        <Search className="h-4 w-4" />
+                        <span className="flex-1 text-left">Search…</span>
+                        <kbd className="rounded-md border border-border bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium">⌘K</kbd>
+                    </button>
+                )}
 
                 {/* Navigation */}
                 <nav className="flex-1 space-y-1 overflow-y-auto">

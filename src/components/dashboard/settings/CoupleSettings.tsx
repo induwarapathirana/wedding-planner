@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { supabase } from "@/lib/supabase";
+import { getWeddingById, getUserWeddingId, updateWedding, deleteWeddingCascade, getUserIdFromSession, getCollaborators, getInvitations, createInvitation, deleteInvitation, deleteCollaborator } from "@/app/actions/data";
 import { useRouter } from "next/navigation";
 import { Save, ArrowLeft, Trash2, UserPlus, X, Bell, BellOff, Settings, MessageSquare, LifeBuoy } from "lucide-react";
 import Link from "next/link";
@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 import { FeedbackModal } from "@/components/dashboard/FeedbackModal";
 import { getEffectiveTier, PlanTier } from "@/lib/trial";
+import { PLAN_LIMITS } from "@/lib/limits";
 
 type WeddingData = {
     id: string;
@@ -21,7 +22,7 @@ type WeddingData = {
     target_guest_count?: number;
     estimated_budget?: number; // Added
     tier?: 'free' | 'premium'; // Added
-    whatsapp_business_number?: string; // For automated RSVP messages
+    whatsapp_business_number?: string; // Enables WhatsApp RSVP confirmations
 };
 
 
@@ -49,21 +50,11 @@ export function CoupleSettings({ weddingIdProp }: { weddingIdProp?: string }) {
         if (!wedding?.id) return;
         setIsDeleting(true);
         try {
-            const { error } = await supabase.rpc('delete_wedding_cascade', {
-                target_wedding_id: wedding.id
-            });
-
-            if (error) {
-                console.error("Delete failed:", error);
-                alert("Failed to delete wedding: " + error.message);
-                return;
-            }
-
-            // Success - Redirect to home or dashboard
+            await deleteWeddingCascade(wedding.id);
             window.location.href = '/dashboard';
-        } catch (err) {
-            console.error("Unexpected error:", err);
-            alert("An unexpected error occurred.");
+        } catch (err: any) {
+            console.error("Delete failed:", err);
+            alert("Failed to delete wedding: " + err.message);
         } finally {
             setIsDeleting(false);
             setConfirmState({ isOpen: false, action: null });
@@ -71,48 +62,39 @@ export function CoupleSettings({ weddingIdProp }: { weddingIdProp?: string }) {
     };
 
     async function fetchWedding() {
-        // Use prop if available (Planner View), otherwise localStorage (Couple View)
         const weddingId = weddingIdProp || localStorage.getItem("current_wedding_id");
 
         if (!weddingId) {
-            // Try to find one? Or just return
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                const { data } = await supabase
-                    .from('collaborators')
-                    .select('wedding_id')
-                    .eq('user_id', user.id)
-                    .maybeSingle();
-
-                if (data) {
-                    localStorage.setItem("current_wedding_id", data.wedding_id);
-                    fetchWedding(); // Retry
-                    return;
-                }
+            const foundId = await getUserWeddingId();
+            if (foundId) {
+                localStorage.setItem("current_wedding_id", foundId);
+                fetchWedding();
+                return;
             }
-            // router.push("/dashboard");
             return;
         }
 
-        const { data, error } = await supabase
-            .from('weddings')
-            .select('*')
-            .eq('id', weddingId)
-            .single();
+        const data = await getWeddingById(weddingId);
 
-        if (error) {
-            console.error('Error fetching wedding:', error);
-            // If fetching failed (e.g. invalid ID, no access), clear stale ID and redirect
+        if (!data) {
             if (!weddingIdProp) localStorage.removeItem("current_wedding_id");
             router.push("/dashboard");
             return;
-
-
         }
 
-        setWedding(data as WeddingData); // Cast including tier
+        setWedding({
+            id: data.id,
+            couple_name_1: data.coupleName1 || '',
+            couple_name_2: data.coupleName2 || '',
+            wedding_date: data.weddingDate ? new Date(data.weddingDate).toISOString().split('T')[0] : '',
+            location: data.location || '',
+            currency: data.currency || 'USD',
+            target_guest_count: data.targetGuestCount || 0,
+            whatsapp_business_number: data.whatsappBusinessNumber || '',
+            estimated_budget: Number(data.estimatedBudget) || 0,
+            tier: (data.tier as 'free' | 'premium') || 'free',
+        });
 
-        // Get effective tier (validates trial & payment)
         const trialInfo = await getEffectiveTier(weddingId);
         setEffectiveTier(trialInfo.effectiveTier);
 
@@ -134,31 +116,25 @@ export function CoupleSettings({ weddingIdProp }: { weddingIdProp?: string }) {
         if (!wedding) return;
 
         setSaving(true);
-        // ... (existing save logic remains the same, assuming it's correct in previous context)
 
-
-        const { error } = await supabase
-            .from('weddings')
-            .update({
-                couple_name_1: wedding.couple_name_1,
-                couple_name_2: wedding.couple_name_2,
-                wedding_date: wedding.wedding_date,
+        try {
+            await updateWedding(wedding.id, {
+                coupleName1: wedding.couple_name_1,
+                coupleName2: wedding.couple_name_2,
+                weddingDate: wedding.wedding_date ? new Date(wedding.wedding_date) : null,
                 location: wedding.location,
                 currency: wedding.currency,
-                target_guest_count: wedding.target_guest_count,
-                estimated_budget: wedding.estimated_budget, // Added
-                whatsapp_business_number: wedding.whatsapp_business_number, // For automated messages
-            })
-            .eq('id', wedding.id);
-
-        setSaving(false);
-
-        if (error) {
-            console.error('Error updating wedding:', error);
-            alert('Error saving changes');
-        } else {
+                targetGuestCount: wedding.target_guest_count,
+                estimatedBudget: wedding.estimated_budget,
+                whatsappBusinessNumber: wedding.whatsapp_business_number?.trim() || null,
+            });
             alert('Wedding details updated successfully!');
             router.push('/dashboard');
+        } catch (error: any) {
+            console.error('Error updating wedding:', error);
+            alert('Error saving changes');
+        } finally {
+            setSaving(false);
         }
     }
 
@@ -261,6 +237,21 @@ export function CoupleSettings({ weddingIdProp }: { weddingIdProp?: string }) {
                             </div>
 
                             <div>
+                                <label htmlFor="whatsapp-business-number" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                                    WhatsApp Business Number (Optional)
+                                </label>
+                                <input
+                                    id="whatsapp-business-number"
+                                    type="tel"
+                                    value={wedding?.whatsapp_business_number || ''}
+                                    onChange={(e) => setWedding(prev => prev ? { ...prev, whatsapp_business_number: e.target.value } : null)}
+                                    className="w-full px-4 h-11 md:h-12 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-base"
+                                    placeholder="e.g. +94771234567"
+                                />
+                                <p className="text-xs text-gray-400 mt-1.5 ml-1">When set, guests who RSVP get a confirmation message on WhatsApp.</p>
+                            </div>
+
+                            <div>
                                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                                     Location
                                 </label>
@@ -288,20 +279,6 @@ export function CoupleSettings({ weddingIdProp }: { weddingIdProp?: string }) {
                                     <option value="LKR">LKR (Rs)</option>
                                     <option value="INR">INR (₹)</option>
                                 </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                                    WhatsApp Business Number (Optional)
-                                </label>
-                                <input
-                                    type="tel"
-                                    value={wedding?.whatsapp_business_number || ''}
-                                    onChange={(e) => setWedding(prev => prev ? { ...prev, whatsapp_business_number: e.target.value } : null)}
-                                    className="w-full px-4 h-11 md:h-12 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-base"
-                                    placeholder="e.g., +94771234567"
-                                />
-                                <p className="text-xs text-gray-400 mt-1.5 ml-1">Used to send automated RSVP confirmation messages to guests via WhatsApp</p>
                             </div>
 
                             <div className="flex gap-4 pt-6 border-t border-gray-100">
@@ -335,23 +312,10 @@ export function CoupleSettings({ weddingIdProp }: { weddingIdProp?: string }) {
                                         : "Upgrade to unlock unlimited guests, budget items, and more."}
                                 </p>
                             </div>
-                            {wedding?.tier !== 'premium' && wedding?.id && (
-                                <PayHereButton
-                                    orderId={`premium-${wedding.id}-${Date.now()}`}
-                                    items="Vow & Venue Premium Plan"
-                                    amount={1990}
-                                    currency="LKR"
-                                    first_name={wedding.couple_name_1 || "User"}
-                                    last_name={wedding.couple_name_2 || ""}
-                                    email=""
-                                    phone=""
-                                    address=""
-                                    city=""
-                                    country="Sri Lanka"
-                                    className="w-full md:w-auto px-6 py-3 bg-purple-600 text-white text-sm font-semibold rounded-xl hover:bg-purple-700 transition-colors shadow-sm"
-                                >
-                                    Upgrade to Premium
-                                </PayHereButton>
+                            {wedding?.tier !== 'premium' && (
+                                <div className="shrink-0 w-full md:w-auto">
+                                    {/* PayHere Button Logic */}
+                                </div>
                             )}
                         </div>
                     </div>
@@ -452,8 +416,8 @@ function NotificationSettings({ weddingId }: { weddingId: string }) {
             );
 
             // Get user ID
-            supabase.auth.getUser().then(({ data: { user } }) => {
-                if (user) setUserId(user.id);
+            getUserIdFromSession().then((id) => {
+                if (id) setUserId(id);
             });
         }
     }, []);
@@ -579,20 +543,15 @@ function TeamMembers({ weddingId, tier }: { weddingId: string, tier: string }) {
 
     const executeTeamAction = async () => {
         if (teamConfirm.type === 'revoke' && teamConfirm.id) {
-            await supabase.from('invitations').delete().eq('id', teamConfirm.id);
+            await deleteInvitation(teamConfirm.id);
             fetchData();
         } else if (teamConfirm.type === 'remove_member' && teamConfirm.id) {
-            const { error } = await supabase
-                .from('collaborators')
-                .delete()
-                .eq('wedding_id', weddingId)
-                .eq('user_id', teamConfirm.id);
-
-            if (error) {
+            try {
+                await deleteCollaborator(weddingId, teamConfirm.id);
+                fetchData();
+            } catch (error: any) {
                 console.error(error);
                 alert("Failed to remove member. Ensure you are an owner.");
-            } else {
-                fetchData();
             }
         }
         setTeamConfirm({ isOpen: false, type: null, id: undefined });
@@ -601,29 +560,26 @@ function TeamMembers({ weddingId, tier }: { weddingId: string, tier: string }) {
         setLoading(true);
 
         // Get current user
-        const { data: { user } } = await supabase.auth.getUser();
-        setCurrentUserId(user?.id || null);
+        const userId = await getUserIdFromSession();
+        setCurrentUserId(userId || null);
 
         // Fetch Collaborators
-        const { data: collaData } = await supabase
-            .from('collaborators')
-            .select(`
-                user_id,
-                role,
-                profiles (email, full_name, avatar_url)
-            `)
-            .eq('wedding_id', weddingId);
-
-        if (collaData) setCollaborators(collaData);
+        const collaData = await getCollaborators(weddingId);
+        if (collaData) {
+            setCollaborators(collaData.map((c: any) => ({
+                user_id: c.user.id,
+                role: c.role,
+                profiles: {
+                    email: c.user.email,
+                    full_name: c.user.name,
+                    avatar_url: c.user.image,
+                },
+            })));
+        }
 
         // Fetch Invitations
-        const { data: inviteData } = await supabase
-            .from('invitations')
-            .select('*')
-            .eq('wedding_id', weddingId)
-            .eq('status', 'pending');
-
-        if (inviteData) setInvitations(inviteData);
+        const inviteData = await getInvitations(weddingId);
+        if (inviteData) setInvitations(inviteData as any[]);
         setLoading(false);
     };
 
@@ -631,34 +587,21 @@ function TeamMembers({ weddingId, tier }: { weddingId: string, tier: string }) {
 
     const handleInvite = async (e: React.FormEvent) => {
         e.preventDefault();
-        // Limit Check
-        // Planner typically has premium, but verify tier
-        // if (tier === 'free') {
-        //     alert("Free plan does not support adding collaborators. Please upgrade to Premium.");
-        //     return;
-        // }
 
         setSending(true);
         setGeneratedLink(null);
 
-        // Generate simple random token
-        const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-
-        const { error } = await supabase
-            .from('invitations')
-            .insert({
-                wedding_id: weddingId,
+        try {
+            // The server generates a secure token
+            const invitation = await createInvitation(weddingId, {
                 email: inviteEmail,
-                token: token,
-                role: inviteRole // Use selected role
+                role: inviteRole,
             });
-
-        if (error) {
-            alert(error.message);
-        } else {
-            setGeneratedLink(`${window.location.origin}/invite/${token}`);
+            setGeneratedLink(`${window.location.origin}/invite/${invitation.token}`);
             setInviteEmail("");
-            fetchData(); // Refresh to show in pending if needed
+            fetchData();
+        } catch (error: any) {
+            alert(error.message);
         }
         setSending(false);
     };
@@ -672,10 +615,10 @@ function TeamMembers({ weddingId, tier }: { weddingId: string, tier: string }) {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                 <h3 className="font-bold text-gray-900 mb-4">Invite Member</h3>
 
-                {tier === 'free' ? (
+                {tier === 'free' && collaborators.filter((c) => c.role !== 'owner').length + invitations.length >= PLAN_LIMITS.free.collaborators ? (
                     <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-100">
-                        <p className="text-sm text-gray-600 mb-2">Collaboration is a Premium feature.</p>
-                        <p className="text-xs text-muted-foreground">Upgrade your plan to invite your partner or team.</p>
+                        <p className="text-sm text-gray-600 mb-2">The free plan includes one collaborator, usually your partner.</p>
+                        <p className="text-xs text-muted-foreground">Upgrade to Premium to invite family and your planner too.</p>
                     </div>
                 ) : (
                     <form onSubmit={handleInvite} className="space-y-4">
@@ -786,7 +729,6 @@ See you there!`);
                                 <p className="text-xs text-gray-500 truncate">
                                     {member.profiles?.email}
                                 </p>
-
                             </div>
                             <div className="ml-auto flex items-center gap-2">
                                 <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full capitalize">
@@ -822,7 +764,7 @@ See you there!`);
                 isOpen={showLimitModal}
                 onClose={() => setShowLimitModal(false)}
                 feature="Collaborators"
-                limit={0}
+                limit={PLAN_LIMITS.free.collaborators}
                 tier={tier}
             />
         </div>

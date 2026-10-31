@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { verifyPayHereSignature } from '@/lib/payhere';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
     try {
@@ -51,44 +52,18 @@ export async function POST(req: NextRequest) {
 
         // Status code 2 means Success
         if (status_code === '2') {
-            // Initialize Supabase Admin client
-            // Use SERVICE_ROLE_KEY if available for direct DB update (bypassing RLS)
-            // Fallback to ANON_KEY which relies on RPC permissions
-            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-            const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-            const supabase = createClient(supabaseUrl, supabaseKey, {
-                auth: {
-                    autoRefreshToken: false,
-                    persistSession: false
-                }
-            });
-
-            // Try Direct Update first (if Service Key exists)
-            if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-                const { error } = await supabase
-                    .from('weddings')
-                    .update({
-                        payment_id: order_id,
-                        tier: 'premium' // Ensure tier is set to premium
-                    })
-                    .eq('id', weddingId);
-
-                if (error) {
-                    console.error("DB Update Failed:", error);
-                    return new NextResponse("DB Update Failed", { status: 500 });
-                }
-            } else {
-                // Fallback to RPC if only Anon Key
-                const { error } = await supabase.rpc('upgrade_wedding_tier', {
-                    wedding_id: weddingId,
-                    payment_id: order_id
+            try {
+                const { prisma } = await import('@/lib/prisma');
+                // Update wedding tier and payment ID via Prisma
+                await prisma.wedding.update({
+                    where: { id: weddingId },
+                    data: {
+                        tier: 'premium'
+                    }
                 });
-
-                if (error) {
-                    console.error("RPC Upgrade Failed:", error);
-                    return new NextResponse("RPC Failed", { status: 500 });
-                }
+            } catch (error) {
+                console.error("DB Update Failed:", error);
+                return new NextResponse("DB Update Failed", { status: 500 });
             }
 
             console.log(`Wedding ${weddingId} upgraded to Premium!`);

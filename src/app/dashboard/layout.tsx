@@ -2,14 +2,15 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { BottomNav } from "@/components/dashboard/bottom-nav";
 import { InstallPrompt } from "@/components/dashboard/install-prompt";
 import { NotificationPrompt } from "@/components/dashboard/notification-prompt";
 import { ModeProvider } from "@/context/mode-context";
+import { CommandPalette } from "@/components/dashboard/CommandPalette";
 import { Menu, X } from "lucide-react";
 import { registerServiceWorker } from "@/lib/registerServiceWorker";
-import { supabase } from "@/lib/supabase";
 
 export default function DashboardLayout({
     children,
@@ -17,32 +18,25 @@ export default function DashboardLayout({
     children: React.ReactNode;
 }) {
     const [isMobileOpen, setIsMobileOpen] = useState(false);
-    const [userId, setUserId] = useState<string | null>(null);
     const [weddingId, setWeddingId] = useState<string | null>(null);
     const pathname = usePathname();
     const isOverviewPage = pathname === '/dashboard';
+    const { data: session } = useSession();
 
     // Register service worker on mount
     useEffect(() => {
         registerServiceWorker();
     }, []);
 
-    // Get user and wedding IDs for notifications
+    // Get wedding ID from storage
     useEffect(() => {
-        async function fetchUserData() {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                setUserId(user.id);
-
-                // Get current wedding ID from storage
-                const storedWeddingId = localStorage.getItem('current_wedding_id');
-                if (storedWeddingId) {
-                    setWeddingId(storedWeddingId);
-                }
+        if (session?.user) {
+            const storedWeddingId = localStorage.getItem('current_wedding_id');
+            if (storedWeddingId) {
+                setWeddingId(storedWeddingId);
             }
         }
-        fetchUserData();
-    }, []);
+    }, [session]);
 
     return (
         <ModeProvider>
@@ -71,18 +65,15 @@ export default function DashboardLayout({
                 )}
 
                 {/* Sidebar Container */}
-                {/* Desktop: Fixed, always visible. Mobile: Fixed, slide-in. */}
                 <div className={`
                     fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-border transform transition-transform duration-300 ease-in-out
                     md:translate-x-0
                     ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
                 `}>
-
                     <Suspense fallback={<div className="h-full w-full bg-white border-r border-border" />}>
                         <Sidebar onClose={() => setIsMobileOpen(false)} />
                     </Suspense>
 
-                    {/* Close button for mobile inside sidebar (optional, for better UX) */}
                     <button
                         onClick={() => setIsMobileOpen(false)}
                         className="absolute top-4 right-4 p-2 md:hidden text-gray-500 hover:bg-gray-100 rounded-lg"
@@ -100,8 +91,6 @@ export default function DashboardLayout({
                 )}
 
                 {/* Main Content */}
-                {/* Add top padding on mobile to account for the header */}
-                {/* Add bottom padding on mobile to account for the bottom nav */}
                 <main className="md:pl-72 w-full transition-all duration-300">
                     <div className="mx-auto max-w-7xl px-4 py-6 md:px-8 md:py-10 pb-20 md:pb-10">
                         {children}
@@ -111,12 +100,15 @@ export default function DashboardLayout({
                 {/* Bottom Navigation - Mobile Only */}
                 <BottomNav onMoreClick={() => setIsMobileOpen(true)} />
 
+                {/* Global search / quick navigation (Cmd+K) */}
+                <CommandPalette />
+
                 {/* PWA Install Prompt */}
                 <InstallPrompt />
 
                 {/* Notification Permission Prompt */}
-                {userId && weddingId && (
-                    <NotificationPrompt userId={userId} weddingId={weddingId} />
+                {session?.user?.id && weddingId && (
+                    <NotificationPrompt userId={session.user.id} weddingId={weddingId} />
                 )}
             </div>
         </ModeProvider>
