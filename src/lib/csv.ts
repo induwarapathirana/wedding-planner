@@ -21,3 +21,33 @@ export function downloadCsv(filename: string, headers: string[], rows: (string |
     a.remove();
     URL.revokeObjectURL(url);
 }
+
+/**
+ * Parse CSV (or tab-separated text pasted from a spreadsheet) into rows of cells.
+ * Handles quoted cells with commas, quotes and line breaks.
+ */
+export function parseCsv(text: string): string[][] {
+    const clean = text.replace(/^﻿/, "");
+    const firstLine = clean.split(/\r?\n/, 1)[0] ?? "";
+    const delimiter = (firstLine.match(/\t/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? "\t" : ",";
+
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let cell = "";
+    let quoted = false;
+    for (let i = 0; i < clean.length; i++) {
+        const ch = clean[i];
+        if (quoted) {
+            if (ch === '"' && clean[i + 1] === '"') { cell += '"'; i++; }
+            else if (ch === '"') quoted = false;
+            else cell += ch;
+        } else if (ch === '"' && cell === "") quoted = true;
+        else if (ch === delimiter) { row.push(cell); cell = ""; }
+        else if (ch === "\n" || ch === "\r") {
+            if (ch === "\r" && clean[i + 1] === "\n") i++;
+            row.push(cell); rows.push(row); row = []; cell = "";
+        } else cell += ch;
+    }
+    if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter((r) => r.some((c) => c.trim() !== ""));
+}

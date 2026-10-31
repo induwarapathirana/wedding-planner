@@ -57,8 +57,17 @@ export const guestCreate = z.object({
     companionNames: text(5000),
     selectedCompanions: text(5000),
     whatsappNumber: text(30),
+    side: z.preprocess(blankToNull, z.enum(["bride", "groom", "both"]).nullable()).optional(),
+    address: text(500),
+    inviteStatus: z.enum(["not_sent", "sent"]).optional(),
+    notes: text(5000),
 });
 export const guestUpdate = guestCreate.partial();
+
+/** Bulk edits from the guest sheet's selection bar. */
+export const guestBulkUpdate = guestCreate
+    .pick({ rsvpStatus: true, tableAssignment: true, side: true, inviteStatus: true, priority: true, groupCategory: true, mealPreference: true })
+    .partial();
 
 export const budgetItemCreate = z.object({
     category: required(100),
@@ -78,6 +87,7 @@ export const checklistItemCreate = z.object({
     title: required(300),
     category: text(100),
     dueDate: date,
+    dueOffsetDays: integer(0),
     isCompleted: bool,
     notes: text(5000),
 });
@@ -132,6 +142,29 @@ export const eventCreate = z.object({
     notes: text(5000),
 });
 export const eventUpdate = eventCreate.partial();
+
+export const budgetCategoryCreate = z.object({
+    name: required(100),
+    allocated: amount,
+    sortOrder: integer(0).transform((v) => v ?? undefined),
+});
+export const budgetCategoryUpdate = budgetCategoryCreate.partial();
+
+export const weddingSetup = z.object({
+    coupleName1: required(100),
+    coupleName2: required(100),
+    weddingDate: date,
+    ceremonyTime: z.preprocess(blankToNull, z.string().regex(/^\d{2}:\d{2}$/).nullable()).optional(),
+    tzOffsetMinutes: z.number().int().min(-840).max(840).optional(),
+    location: text(300),
+    targetGuestCount: integer(0),
+    estimatedBudget: number,
+    currency: z.string().trim().min(3).max(5).default("LKR"),
+    traditions: z.array(z.enum(["poruwa", "kandyan", "homecoming", "church", "hindu", "nikah"])).default([]),
+    setup: z
+        .object({ checklist: z.boolean().default(true), budget: z.boolean().default(true), dayOf: z.boolean().default(true) })
+        .default({}),
+});
 
 export const clientUpdate = z
     .object({

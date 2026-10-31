@@ -1,1031 +1,492 @@
 "use client";
 
-import { useMode } from "@/context/mode-context";
-import { Users, UserPlus, Check, X, HelpCircle, Utensils, Armchair, Edit2, Trash2, CheckSquare, Square, LayoutGrid, Search, Download, Link as LinkIcon } from "lucide-react";
-import { downloadCsv } from "@/lib/csv";
-import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
-import { getGuests, createGuest, updateGuest, deleteGuest, deleteGuests, getWeddingById, getUserWeddingId } from "@/app/actions/data";
-import { GuestDialog } from "@/components/dashboard/guest-dialog";
-import { GroupSummaryModal } from "@/components/dashboard/group-summary-modal";
-import { BulkSeatingDialog } from "@/components/dashboard/bulk-seating-dialog";
-import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
-import { LimitModal } from "@/components/dashboard/limit-modal";
-import { getEffectiveTier } from "@/lib/trial";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { toast } from "sonner";
+import { Check, Download, FileUp, Link as LinkIcon, Search, Trash2, Users } from "lucide-react";
+import {
+    createGuest,
+    createGuests,
+    deleteGuest,
+    deleteGuests,
+    getGuests,
+    getWeddingById,
+    updateGuest,
+    updateGuests,
+} from "@/app/actions/data";
+import { SheetGrid, type SheetColumn } from "@/components/sheet/SheetGrid";
+import { ImportGuestsDialog } from "@/components/dashboard/guests/ImportGuestsDialog";
+import { useWeddingId } from "@/hooks/use-wedding-id";
 import { useWeddingPermission } from "@/hooks/use-wedding-permission";
+import { downloadCsv } from "@/lib/csv";
+import { normalizeGuest, type GuestField } from "@/lib/guest-import";
+import { cn } from "@/lib/utils";
 
-type Guest = {
-    id: string;
-    name: string;
-    group_category: string;
-    priority: "A" | "B" | "C";
-    rsvp_status: "accepted" | "declined" | "pending";
-    meal_preference?: string;
-    table_assignment?: string;
-    plus_one: boolean;
-    companion_guest_count?: number;
-    companion_names?: string[];
-    selected_companions?: string[];
-};
+type Guest = Awaited<ReturnType<typeof getGuests>>[number];
 
-import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
-import { ModeToggle } from "@/components/dashboard/mode-toggle";
+const SIDES = [
+    { value: "bride", label: "Bride" },
+    { value: "groom", label: "Groom" },
+    { value: "both", label: "Both" },
+];
+const RSVP = [
+    { value: "pending", label: "No reply" },
+    { value: "accepted", label: "Attending" },
+    { value: "declined", label: "Declined" },
+];
+const INVITE = [
+    { value: "not_sent", label: "Not sent" },
+    { value: "sent", label: "Sent" },
+];
+const MEALS = ["Non-veg", "Veg", "Vegan", "Halal", "Kids"].map((m) => ({ value: m, label: m }));
+const LISTS = ["A", "B", "C"].map((l) => ({ value: l, label: l }));
 
-export default function GuestPage() {
-    const { mode } = useMode();
+const party = (g: Guest) => 1 + (g.companionGuestCount || 0);
+const headcount = (list: Guest[]) => list.reduce((n, g) => n + party(g), 0);
+
+function companions(g: Guest): string[] {
+    if (!g.companionNames) return [];
+    try {
+        const parsed = JSON.parse(g.companionNames);
+        return Array.isArray(parsed) ? parsed : [String(parsed)];
+    } catch {
+        return g.companionNames.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+}
+
+const VIEWS: { key: string; label: string; match: (g: Guest) => boolean }[] = [
+    { key: "all", label: "Everyone", match: () => true },
+    { key: "bride", label: "Bride's side", match: (g) => g.side === "bride" || g.side === "both" },
+    { key: "groom", label: "Groom's side", match: (g) => g.side === "groom" || g.side === "both" },
+    { key: "uninvited", label: "Invite not sent", match: (g) => g.inviteStatus !== "sent" },
+    { key: "waiting", label: "No reply yet", match: (g) => g.rsvpStatus === "pending" },
+    { key: "unseated", label: "Attending, no table", match: (g) => g.rsvpStatus === "accepted" && !g.tableAssignment },
+];
+
+/** Map a grid column key to the guest fields it writes. */
+function toChanges(key: string, value: unknown): Record<string, unknown> {
+    if (key === "party") return { companionGuestCount: Math.max(0, Math.round(Number(value) || 1) - 1) };
+    if (key === "companions") {
+        const names = String(value ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+        return { companionNames: names.length ? JSON.stringify(names) : null };
+    }
+    return { [key]: value };
+}
+
+export default function GuestsPage() {
+    const weddingId = useWeddingId();
+    const { canEdit } = useWeddingPermission(weddingId ?? null);
     const [guests, setGuests] = useState<Guest[]>([]);
-    const [targetCount, setTargetCount] = useState(0);
-    const [tier, setTier] = useState<PlanTier>('free');
-    const [showLimitModal, setShowLimitModal] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [sortBy, setSortBy] = useState<"name" | "priority" | "status">("priority");
-    const [filterGroup, setFilterGroup] = useState<string>("All");
-    const [searchQuery, setSearchQuery] = useState("");
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-    const [weddingId, setWeddingId] = useState<string | null>(null);
+    const [target, setTarget] = useState(0);
+    const [view, setView] = useState("all");
+    const [search, setSearch] = useState("");
+    const [selected, setSelected] = useState<Set<string>>(new Set());
+    const [importOpen, setImportOpen] = useState(false);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
 
-    const { canEdit, loading: permLoading } = useWeddingPermission(weddingId);
-
-    // Dialog State
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
-    const [isSeatingDialogOpen, setIsSeatingDialogOpen] = useState(false);
-    const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
-
-    // Confirm Modal State
-    const [confirmState, setConfirmState] = useState<{ isOpen: boolean; type: 'single' | 'bulk'; id?: string }>({ isOpen: false, type: 'single' });
-
-    // Companion Expansion State
-    const [expandedGuestIds, setExpandedGuestIds] = useState<Set<string>>(new Set());
-    const [copiedGuestId, setCopiedGuestId] = useState<string | null>(null);
-
-    // Check if over limit based on CURRENT tier
-    const isOverLimit = guests.length > PLAN_LIMITS[tier].guests;
-
-    // Initial Data Load
     useEffect(() => {
-        async function loadData() {
-            setLoading(true);
-            const wId = localStorage.getItem("current_wedding_id");
-
-            if (!wId) {
-                setLoading(false);
-                return;
-            }
-
-            setWeddingId(wId);
-
-            // Wedding target, effective tier (trial-aware) and guests are independent
-            const [weddingData, trialInfo] = await Promise.all([
-                getWeddingById(wId),
-                getEffectiveTier(wId),
-                fetchGuests(wId),
-            ]);
-            if (weddingData) {
-                setTargetCount(weddingData.targetGuestCount || 0);
-            }
-            setTier(trialInfo.effectiveTier);
+        if (weddingId === undefined) return;
+        if (weddingId === null) {
+            setLoading(false);
+            return;
         }
-        loadData();
+        Promise.all([getGuests(weddingId), getWeddingById(weddingId)]).then(([list, wedding]) => {
+            setGuests(list);
+            setTarget(wedding?.targetGuestCount ?? 0);
+            setLoading(false);
+        });
+    }, [weddingId]);
+
+    const visible = useMemo(() => {
+        const match = VIEWS.find((v) => v.key === view)?.match ?? (() => true);
+        const q = search.trim().toLowerCase();
+        return guests.filter(
+            (g) =>
+                match(g) &&
+                (!q ||
+                    [g.name, g.groupCategory, g.whatsappNumber, g.email, g.tableAssignment, g.notes]
+                        .some((f) => f?.toLowerCase().includes(q)))
+        );
+    }, [guests, view, search]);
+
+    /** Apply locally first, then save; roll back if the save fails. */
+    const saveChanges = useCallback(async (id: string, changes: Record<string, unknown>) => {
+        let previous: Guest | undefined;
+        setGuests((list) =>
+            list.map((g) => {
+                if (g.id !== id) return g;
+                previous = g;
+                return { ...g, ...changes } as Guest;
+            })
+        );
+        try {
+            const saved = await updateGuest(id, changes);
+            setGuests((list) => list.map((g) => (g.id === id ? saved : g)));
+        } catch (e) {
+            if (previous) setGuests((list) => list.map((g) => (g.id === id ? previous! : g)));
+            toast.error((e as Error).message || "Couldn't save that change");
+        }
     }, []);
 
-    // Effect to check limit on load
-    useEffect(() => {
-        if (!loading && isOverLimit) {
-            setShowLimitModal(true);
-        }
-    }, [loading, isOverLimit]);
+    const onCommit = useCallback(
+        (row: Guest, key: string, value: unknown) => saveChanges(row.id, toChanges(key, value)),
+        [saveChanges]
+    );
 
-    async function fetchGuests(wId: string) {
-        const data = await getGuests(wId);
-        if (data) {
-            // Map Prisma camelCase to component snake_case expectations
-            const mapped = data.map((g: any) => ({
-                ...g,
-                group_category: g.groupCategory,
-                rsvp_status: g.rsvpStatus,
-                meal_preference: g.mealPreference,
-                table_assignment: g.tableAssignment,
-                plus_one: g.plusOne,
-                companion_guest_count: g.companionGuestCount,
-                companion_names: g.companionNames ? JSON.parse(g.companionNames) : [],
-                selected_companions: g.selectedCompanions ? JSON.parse(g.selectedCompanions) : [],
-            }));
-            setGuests(mapped as Guest[]);
+    const addGuest = async () => {
+        if (!weddingId) return;
+        try {
+            const created = await createGuest(weddingId, { name: "New guest" });
+            setView("all");
+            setSearch("");
+            setGuests((list) => [created, ...list]);
+            return created.id;
+        } catch (e) {
+            toast.error((e as Error).message);
         }
-        setLoading(false);
-    }
+    };
 
-    const handleOpenAdd = () => {
-        if (!canEdit) return;
-        const canAdd = checkLimit(tier, 'guests', guests.length);
-        if (!canAdd) {
-            setShowLimitModal(true);
+    const addMany = async (records: NonNullable<ReturnType<typeof normalizeGuest>>[]) => {
+        if (!weddingId || records.length === 0) return;
+        const created = await createGuests(weddingId, records);
+        setGuests((list) => [...created, ...list]);
+        setView("all");
+        toast.success(`Added ${created.length} ${created.length === 1 ? "household" : "households"}`);
+    };
+
+    const onPasteRows = async (rows: Record<string, string>[]) => {
+        const records = rows
+            .map((r) => {
+                const raw = { ...r } as Partial<Record<GuestField, string>>;
+                if (r.companions) raw.companionNames = r.companions;
+                return normalizeGuest(raw);
+            })
+            .filter((g): g is NonNullable<typeof g> => g !== null);
+        if (!records.length) {
+            toast.error("Paste rows that start with a name in the first column");
             return;
         }
-        setEditingGuest(null);
-        setIsDialogOpen(true);
-    };
-
-    const handleOpenEdit = (guest: Guest) => {
-        if (!canEdit) return;
-        setEditingGuest(guest);
-        setIsDialogOpen(true);
-    };
-
-    const handleSaveGuest = async (guestData: Partial<Guest>) => {
-        if (!weddingId || !canEdit) {
-            if (!canEdit) alert("You do not have permission to edit guests.");
-            return;
-        }
-
-        // Map snake_case to Prisma camelCase
-        const payload: any = {
-            name: guestData.name,
-            groupCategory: guestData.group_category,
-            rsvpStatus: guestData.rsvp_status,
-            mealPreference: guestData.meal_preference,
-            tableAssignment: guestData.table_assignment,
-            plusOne: guestData.plus_one,
-            priority: guestData.priority,
-            companionGuestCount: guestData.companion_guest_count,
-            companionNames: guestData.companion_names ? JSON.stringify(guestData.companion_names) : null,
-            selectedCompanions: guestData.selected_companions ? JSON.stringify(guestData.selected_companions) : null,
-        };
-
         try {
-            if (editingGuest) {
-                await updateGuest(editingGuest.id, payload);
-            } else {
-                await createGuest(weddingId, payload);
-            }
-        } catch (error: any) {
-            alert("Failed: " + error.message);
-        }
-
-        setIsDialogOpen(false);
-        fetchGuests(weddingId);
-    };
-
-    // Selection Logic
-    const toggleSelectAll = () => {
-        if (!canEdit) return;
-        if (selectedIds.size === guests.length) {
-            setSelectedIds(new Set());
-        } else {
-            setSelectedIds(new Set(guests.map(g => g.id)));
+            await addMany(records);
+        } catch (e) {
+            toast.error((e as Error).message);
         }
     };
 
-    const toggleSelect = (id: string) => {
-        if (!canEdit) return;
-        setSelectedIds((prev) => {
-            const newSet = new Set(prev);
-            if (newSet.has(id)) {
-                newSet.delete(id);
-            } else {
-                newSet.add(id);
-            }
-            return newSet;
-        });
-    };
-
-    const toggleCompanionSelection = async (guestId: string, companionName: string) => {
-        if (!canEdit) return;
-        const guest = guests.find(g => g.id === guestId);
-        if (!guest) return;
-
-        const currentSelected = guest.selected_companions || guest.companion_names || [];
-        const newSelected = currentSelected.includes(companionName)
-            ? currentSelected.filter(name => name !== companionName)
-            : [...currentSelected, companionName];
-
-        // Update local state
-        setGuests(guests.map(g =>
-            g.id === guestId ? { ...g, selected_companions: newSelected } : g
-        ));
-
-        // Update database
-        await updateGuest(guestId, { selectedCompanions: JSON.stringify(newSelected) });
-    };
-
-    const toggleAllCompanions = async (guestId: string, selectAll: boolean) => {
-        if (!canEdit) return;
-        const guest = guests.find(g => g.id === guestId);
-        if (!guest || !guest.companion_names) return;
-
-        const newSelected = selectAll ? [...guest.companion_names] : [];
-
-        // Update local state
-        setGuests(guests.map(g =>
-            g.id === guestId ? { ...g, selected_companions: newSelected } : g
-        ));
-
-        // Update database
-        await updateGuest(guestId, { selectedCompanions: JSON.stringify(newSelected) });
-    };
-
-    // Delete Logic
-    const confirmDelete = (id: string) => {
-        if (!canEdit) return;
-        setConfirmState({ isOpen: true, type: 'single', id });
-    };
-
-    const confirmBulkDelete = () => {
-        if (!canEdit) return;
-        setConfirmState({ isOpen: true, type: 'bulk' });
-    };
-
-    const executeDelete = async () => {
-        if (!canEdit) return;
+    const bulk = async (changes: Record<string, unknown>, label: string) => {
+        const ids = [...selected];
+        const before = guests;
+        setGuests((list) => list.map((g) => (selected.has(g.id) ? ({ ...g, ...changes } as Guest) : g)));
         try {
-            if (confirmState.type === 'single' && confirmState.id) {
-                await deleteGuest(confirmState.id);
-                if (weddingId) fetchGuests(weddingId);
-                setSelectedIds(prev => {
-                    const next = new Set(prev);
-                    next.delete(confirmState.id!);
-                    return next;
-                });
-            } else if (confirmState.type === 'bulk') {
-                const ids = Array.from(selectedIds);
-                await deleteGuests(ids);
-                if (weddingId) fetchGuests(weddingId);
-                setSelectedIds(new Set());
-            }
-        } catch (error: any) {
-            alert("Error deleting: " + error.message);
+            await updateGuests(ids, changes);
+            toast.success(`${label} for ${ids.length} ${ids.length === 1 ? "household" : "households"}`);
+        } catch (e) {
+            setGuests(before);
+            toast.error((e as Error).message);
         }
-        setConfirmState({ ...confirmState, isOpen: false });
     };
 
-    const handleBulkSeating = async (tableNo: string) => {
-        if (!canEdit) return;
-        const ids = Array.from(selectedIds);
-        if (ids.length === 0) return;
-
+    const removeSelected = async () => {
+        const ids = [...selected];
+        const removed = guests.filter((g) => selected.has(g.id));
+        setGuests((list) => list.filter((g) => !selected.has(g.id)));
+        setSelected(new Set());
         try {
-            for (const id of ids) {
-                await updateGuest(id, { tableAssignment: tableNo });
-            }
-            if (weddingId) fetchGuests(weddingId);
-            setSelectedIds(new Set());
-        } catch (error: any) {
-            alert("Error updating seating: " + error.message);
+            await deleteGuests(ids);
+            toast.success(`Deleted ${ids.length} ${ids.length === 1 ? "household" : "households"}`, {
+                action: { label: "Undo", onClick: () => addMany(removed.map(toRecord)) },
+            });
+        } catch (e) {
+            setGuests((list) => [...removed, ...list]);
+            toast.error((e as Error).message);
         }
     };
 
-    const handleBulkUnassign = async () => {
-        if (!canEdit) return;
-        const ids = Array.from(selectedIds);
-        if (ids.length === 0) return;
-
+    const removeOne = async (g: Guest) => {
+        setGuests((list) => list.filter((x) => x.id !== g.id));
         try {
-            for (const id of ids) {
-                await updateGuest(id, { tableAssignment: null });
-            }
-            if (weddingId) fetchGuests(weddingId);
-            setSelectedIds(new Set());
-        } catch (error: any) {
-            alert("Error unassigning seating: " + error.message);
+            await deleteGuest(g.id);
+            toast.success(`Deleted ${g.name}`, { action: { label: "Undo", onClick: () => addMany([toRecord(g)]) } });
+        } catch (e) {
+            setGuests((list) => [g, ...list]);
+            toast.error((e as Error).message);
         }
     };
 
-    // Stats Calculation
-    const totalHeadcount = guests.reduce((sum, guest) => sum + 1 + (guest.companion_guest_count || 0), 0);
-    const acceptedCount = guests
-        .filter(g => g.rsvp_status === 'accepted')
-        .reduce((sum, guest) => sum + 1 + (guest.companion_guest_count || 0), 0);
-    const declinedCount = guests
-        .filter(g => g.rsvp_status === 'declined')
-        .reduce((sum, guest) => sum + 1 + (guest.companion_guest_count || 0), 0);
-    const pendingCount = totalHeadcount - acceptedCount - declinedCount;
-
-    const stats = {
-        accepted: acceptedCount,
-        declined: declinedCount,
-        pending: pendingCount,
-        total: totalHeadcount,
-    };
-
-    // Filtering and Sorting Logic
-    const filteredGuests = guests.filter(g => {
-        const matchesGroup = filterGroup === "All" || g.group_category === filterGroup;
-        const matchesSearch = g.name.toLowerCase().includes(searchQuery.toLowerCase());
-        return matchesGroup && matchesSearch;
-    });
-
-    const sortedGuests = [...filteredGuests].sort((a, b) => {
-        if (sortBy === 'priority') {
-            const prioMap = { A: 1, B: 2, C: 3 };
-            const pA = prioMap[a.priority || 'B'];
-            const pB = prioMap[b.priority || 'B'];
-            if (pA !== pB) return pA - pB;
-        }
-        if (sortBy === 'status') {
-            return a.rsvp_status.localeCompare(b.rsvp_status);
-        }
-        return a.name.localeCompare(b.name);
-    });
-
-    // Progress Bar Calcs
-    const progressPercent = targetCount > 0 ? Math.min((stats.total / targetCount) * 100, 100) : 0;
-    const isOverTarget = targetCount > 0 && stats.total > targetCount;
-
-    // Selected Headcount Calculation
-    const selectedGuests = sortedGuests.filter((g) => selectedIds.has(g.id));
-
-    // Each guest's RSVP page lives at /invitation/<guest id>
-    async function copyInvitationLink(guestId: string) {
-        const link = `${window.location.origin}/invitation/${guestId}`;
+    const copyLink = async (g: Guest) => {
+        const link = `${window.location.origin}/invitation/${g.id}`;
         try {
             await navigator.clipboard.writeText(link);
-            setCopiedGuestId(guestId);
-            setTimeout(() => setCopiedGuestId((id) => (id === guestId ? null : id)), 2000);
+            setCopiedId(g.id);
+            setTimeout(() => setCopiedId((id) => (id === g.id ? null : id)), 2000);
+            toast.success(`RSVP link for ${g.name} copied`);
         } catch {
-            alert(`Copy this RSVP link: ${link}`);
+            toast.message("Copy this RSVP link", { description: link });
         }
-    }
+    };
 
-    function exportGuests() {
+    const exportCsv = () =>
         downloadCsv(
             `guest-list-${new Date().toISOString().slice(0, 10)}.csv`,
-            ["Name", "Group", "Priority", "RSVP", "Meal", "Table", "Companions", "Companion Names", "Headcount"],
-            sortedGuests.map((g) => [
-                g.name,
-                g.group_category,
-                g.priority,
-                g.rsvp_status,
-                g.meal_preference,
-                g.table_assignment,
-                g.companion_guest_count || 0,
-                (g.companion_names || []).join("; "),
-                1 + (g.companion_guest_count || 0),
+            ["Name", "Side", "Group", "Party", "WhatsApp", "Email", "Address", "Invite", "RSVP", "Meal", "Table", "List", "Companions", "Notes"],
+            visible.map((g) => [
+                g.name, g.side, g.groupCategory, party(g), g.whatsappNumber, g.email, g.address,
+                g.inviteStatus === "sent" ? "Sent" : "Not sent", RSVP.find((r) => r.value === g.rsvpStatus)?.label,
+                g.mealPreference, g.tableAssignment, g.priority, companions(g).join("; "), g.notes,
             ])
+        );
+
+    const columns: SheetColumn<Guest>[] = [
+        { key: "name", label: "Household", type: "text", width: 220, sticky: true, placeholder: "Name" },
+        { key: "side", label: "Side", type: "select", options: SIDES, width: 90 },
+        { key: "groupCategory", label: "Group", type: "text", width: 130 },
+        { key: "party", label: "Party", type: "number", width: 70, align: "right", get: party, readOnly: false },
+        { key: "whatsappNumber", label: "WhatsApp", type: "text", width: 150 },
+        {
+            key: "inviteStatus", label: "Invite", type: "select", options: INVITE, width: 100,
+            render: (g) => (
+                <span className={cn("text-xs font-medium", g.inviteStatus === "sent" ? "text-emerald-700" : "text-muted-foreground")}>
+                    {g.inviteStatus === "sent" ? "Sent" : "Not sent"}
+                </span>
+            ),
+        },
+        {
+            key: "rsvpStatus", label: "RSVP", type: "select", options: RSVP, width: 110,
+            render: (g) => (
+                <span
+                    className={cn(
+                        "inline-block rounded-full px-2 py-0.5 text-xs font-semibold",
+                        g.rsvpStatus === "accepted" && "bg-emerald-100 text-emerald-800",
+                        g.rsvpStatus === "declined" && "bg-rose-100 text-rose-800",
+                        g.rsvpStatus === "pending" && "bg-amber-100 text-amber-800"
+                    )}
+                >
+                    {RSVP.find((r) => r.value === g.rsvpStatus)?.label ?? g.rsvpStatus}
+                </span>
+            ),
+        },
+        { key: "mealPreference", label: "Meal", type: "select", options: MEALS, width: 100 },
+        { key: "tableAssignment", label: "Table", type: "text", width: 70 },
+        {
+            key: "priority", label: "List", type: "select", options: LISTS, width: 60, align: "center",
+            render: (g) => (
+                <span className={cn("inline-grid h-6 w-6 place-items-center rounded-md border text-xs font-bold", g.priority === "A" ? "border-primary bg-primary/15" : "border-border")}>
+                    {g.priority}
+                </span>
+            ),
+        },
+        { key: "companions", label: "Companions", type: "text", width: 180, get: (g) => companions(g).join(", "), readOnly: false, placeholder: "Names, comma separated" },
+        { key: "email", label: "Email", type: "text", width: 180 },
+        { key: "address", label: "Address", type: "text", width: 220 },
+        { key: "notes", label: "Notes", type: "text", width: 200 },
+    ];
+
+    const attending = guests.filter((g) => g.rsvpStatus === "accepted");
+    const stats = {
+        households: guests.length,
+        guests: headcount(guests),
+        attending: headcount(attending),
+        waiting: headcount(guests.filter((g) => g.rsvpStatus === "pending")),
+        declined: headcount(guests.filter((g) => g.rsvpStatus === "declined")),
+        veg: headcount(attending.filter((g) => g.mealPreference === "Veg" || g.mealPreference === "Vegan")),
+        halal: headcount(attending.filter((g) => g.mealPreference === "Halal")),
+        unseated: attending.filter((g) => !g.tableAssignment).length,
+    };
+
+    if (loading) {
+        return <div className="space-y-4 animate-pulse"><div className="h-9 w-48 rounded-lg bg-gray-200" /><div className="h-[60vh] rounded-2xl border border-border bg-white" /></div>;
+    }
+
+    if (!weddingId) {
+        return (
+            <div className="py-20 text-center">
+                <p className="text-muted-foreground">Create your wedding first.</p>
+                <Link href="/onboarding" className="mt-4 inline-block rounded-xl bg-primary px-5 py-2.5 font-medium text-white">Start planning</Link>
+            </div>
         );
     }
 
-    // Helper function to get companion count (selected or all)
-    const getCompanionCount = (guest: Guest) => {
-        if (guest.selected_companions) {
-            return guest.selected_companions.length;
-        }
-        return guest.companion_guest_count || 0;
-    };
-
-    const selectedHeadcount = selectedGuests.reduce((sum, guest) => sum + 1 + getCompanionCount(guest), 0);
-    const allSelectedAreAccepted = selectedGuests.every(g => g.rsvp_status === 'accepted');
-
-    // Dynamic Group Categories for Filtering
-    const DEFAULT_GROUPS = ["Bride Family", "Groom Family", "Bride Friends", "Groom Friends", "Mutual", "Work"];
-    const existingGroups = Array.from(new Set(guests.map(g => g.group_category).filter(Boolean)));
-    const groupCategories = ["All", ...Array.from(new Set([...DEFAULT_GROUPS, ...existingGroups]))].sort((a, b) => {
-        if (a === "All") return -1;
-        if (b === "All") return 1;
-        return a.localeCompare(b);
-    });
-
-    if (loading || permLoading) {
-        return <div className="p-10 text-center text-muted-foreground">Loading guest list...</div>;
-    }
-
     return (
-        <div className="space-y-8">
-            <div className="space-y-6 md:space-y-8 pb-20 md:pb-0"> {/* Add padding for sticky bar */}
-                {/* Header */}
-                <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-                    <div className="flex items-center gap-4">
-                        <div>
-                            <h2 className="font-serif text-2xl md:text-3xl font-bold text-foreground">Guest List</h2>
-                            <p className="mt-1 text-sm md:text-base text-muted-foreground">
-                                {mode === "simple"
-                                    ? "Manage RSVPs and headcount."
-                                    : "Detailed tracking for meals, seating, and groupings."}
-                            </p>
-                        </div>
-                        <ModeToggle />
-                    </div>
-
+        <div className="space-y-4 pb-6">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h1 className="font-serif text-3xl font-bold">Guests</h1>
+                    <p className="text-sm text-muted-foreground">
+                        {stats.households} households · {stats.guests} guests{target ? ` of ${target} planned` : ""}
+                    </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
                     {canEdit && (
-                        <button
-                            onClick={handleOpenAdd}
-                            className="flex lg:hidden items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all w-full md:w-auto"
-                        >
-                            <UserPlus className="w-4 h-4" />
-                            Add Guest
+                        <button onClick={() => setImportOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50">
+                            <FileUp className="h-4 w-4" /> Import
                         </button>
                     )}
+                    <button onClick={exportCsv} disabled={!visible.length} className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-40">
+                        <Download className="h-4 w-4" /> Export
+                    </button>
                 </div>
+            </div>
 
-                {/* Controls Bar */}
-                <div className="flex flex-col gap-4">
-                    <div className="grid grid-cols-1 md:flex md:items-center gap-3">
-                        {/* Search Bar - Full width on mobile */}
-                        <div className="relative flex-1">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <input
-                                type="text"
-                                placeholder="Search guests..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-2 md:flex items-center gap-3">
-                            <button
-                                onClick={() => setIsGroupModalOpen(true)}
-                                className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all shadow-sm"
-                            >
-                                <LayoutGrid className="w-4 h-4 text-gray-500" />
-                                Groups
-                            </button>
-
-                            <button
-                                onClick={exportGuests}
-                                disabled={sortedGuests.length === 0}
-                                className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-all shadow-sm"
-                                title="Download the guests shown as a CSV file"
-                            >
-                                <Download className="w-4 h-4 text-gray-500" />
-                                Export
-                            </button>
-
-                            <select
-                                value={filterGroup}
-                                onChange={(e) => setFilterGroup(e.target.value)}
-                                className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm appearance-none cursor-pointer"
-                            >
-                                {groupCategories.map(cat => (
-                                    <option key={cat} value={cat}>{cat === "All" ? "All Groups" : cat}</option>
-                                ))}
-                            </select>
-
-                            <select
-                                value={sortBy}
-                                onChange={(e) => setSortBy(e.target.value as any)}
-                                className="col-span-1 rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm appearance-none cursor-pointer"
-                            >
-                                <option value="priority">Sort: Priority</option>
-                                <option value="name">Sort: Name</option>
-                                <option value="status">Sort: Status</option>
-                            </select>
-
-                            {canEdit && (
-                                <button
-                                    onClick={handleOpenAdd}
-                                    className="hidden lg:flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all"
-                                >
-                                    <UserPlus className="w-4 h-4" />
-                                    Add Guest
-                                </button>
+            <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap gap-1 rounded-xl bg-gray-100 p-1" role="tablist" aria-label="Views">
+                    {VIEWS.map((v) => (
+                        <button
+                            key={v.key}
+                            role="tab"
+                            aria-selected={view === v.key}
+                            onClick={() => setView(v.key)}
+                            className={cn(
+                                "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                                view === v.key ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                             )}
-                        </div>
-                    </div>
+                        >
+                            {v.label}
+                            <span className="ml-1.5 text-xs text-muted-foreground tabular-nums">{guests.filter(v.match).length}</span>
+                        </button>
+                    ))}
                 </div>
-
-                {/* Selection Bar - Sticky at bottom for mobile, floated on desktop */}
-                {selectedIds.size > 0 && canEdit && (
-                    <div className="fixed bottom-20 left-4 right-4 md:relative md:bottom-auto md:left-auto md:right-auto z-40">
-                        <div className="bg-white/95 backdrop-blur-sm md:bg-muted/50 rounded-2xl md:rounded-xl p-2 border border-primary/20 md:border-border shadow-xl md:shadow-none flex flex-col md:flex-row md:items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                            <div className="flex items-center justify-between px-2 md:px-3">
-                                <span className="text-xs font-bold text-primary md:text-muted-foreground uppercase tracking-tight">
-                                    {selectedHeadcount} Selected
-                                </span>
-                                <button
-                                    onClick={() => setSelectedIds(new Set())}
-                                    className="md:hidden text-xs text-muted-foreground hover:text-foreground"
-                                >
-                                    Clear
-                                </button>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 md:gap-1">
-                                <button
-                                    disabled={!allSelectedAreAccepted}
-                                    onClick={() => setIsSeatingDialogOpen(true)}
-                                    className={cn(
-                                        "flex-1 md:flex-none flex items-center justify-center gap-2 rounded-lg border px-3 py-2 md:py-1.5 text-xs font-semibold transition-all shadow-sm",
-                                        allSelectedAreAccepted
-                                            ? "bg-primary text-white hover:bg-primary/90 border-primary"
-                                            : "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
-                                    )}
-                                    title={!allSelectedAreAccepted ? "Only accepted guests can be assigned seating" : "Assign selected guests to a table"}
-                                >
-                                    <Armchair className="w-4 h-4" />
-                                    <span className="hidden sm:inline">Assign Table</span>
-                                    <span className="sm:hidden">Assign</span>
-                                </button>
-                                <button
-                                    onClick={handleBulkUnassign}
-                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 rounded-lg bg-white border border-border px-3 py-2 md:py-1.5 text-xs font-semibold text-foreground hover:bg-gray-50 transition-all shadow-sm"
-                                >
-                                    Unassign
-                                </button>
-                                <button
-                                    onClick={confirmBulkDelete}
-                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2 md:py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition-all shadow-sm"
-                                >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                    Delete
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Target Progress Bar */}
-                {targetCount > 0 && (
-                    <div className="bg-white p-4 rounded-xl border border-border shadow-sm flex flex-col gap-2">
-                        <div className="flex justify-between text-sm font-medium">
-                            <span>Total Guests: {stats.total}</span>
-                            <span className={isOverTarget ? "text-amber-600" : "text-muted-foreground"}>Target: {targetCount}</span>
-                        </div>
-                        <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                                className={cn("h-full transition-all duration-500 rounded-full", isOverTarget ? "bg-amber-500" : "bg-primary")}
-                                style={{ width: `${progressPercent}% ` }}
-                            />
-                        </div>
-                        {isOverTarget && <p className="text-xs text-amber-600 font-medium">You have exceeded your target headcount.</p>}
-                    </div>
-                )}
-
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                    <div className="rounded-2xl border border-border bg-white p-5 shadow-sm flex items-center gap-4">
-                        <div className="rounded-full bg-green-100 p-3 text-green-600">
-                            <Check className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-muted-foreground">Confirmed</p>
-                            <p className="text-2xl font-bold text-foreground">{stats.accepted}</p>
-                        </div>
-                    </div>
-                    <div className="rounded-2xl border border-border bg-white p-5 shadow-sm flex items-center gap-4">
-                        <div className="rounded-full bg-amber-100 p-3 text-amber-600">
-                            <HelpCircle className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-muted-foreground">Pending</p>
-                            <p className="text-2xl font-bold text-foreground">{stats.pending}</p>
-                        </div>
-                    </div>
-                    <div className="rounded-2xl border border-border bg-white p-5 shadow-sm flex items-center gap-4">
-                        <div className="rounded-full bg-red-100 p-3 text-red-600">
-                            <X className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-muted-foreground">Declined</p>
-                            <p className="text-2xl font-bold text-foreground">{stats.declined}</p>
-                        </div>
-                    </div>
+                <div className="relative ml-auto w-full sm:w-64">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search guests"
+                        aria-label="Search guests"
+                        className="w-full rounded-xl border border-border bg-white py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
                 </div>
+            </div>
 
-                {/* Main Content */}
-                <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden relative">
-                    {/* Locked View Overlay - Strict Locking */}
-                    {isOverLimit && (
-                        <div className="absolute inset-0 z-50 bg-white/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center">
-                            <div className="bg-white p-8 rounded-2xl shadow-xl border border-purple-100 max-w-md w-full animate-in zoom-in-95 duration-300">
-                                <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                                    <div className="text-3xl">🔒</div>
-                                </div>
-                                <h3 className="text-2xl font-bold text-gray-900 mb-2">Content Locked</h3>
-                                <p className="text-gray-600 mb-6">
-                                    You have {guests.length} guests, which exceeds the Free plan limit of {PLAN_LIMITS.free.guests}.
-                                    Please upgrade to Premium to access your complete guest list.
-                                </p>
-                                <a
-                                    href="/dashboard/settings"
-                                    className="block w-full py-3 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 transition-transform hover:scale-[1.02] active:scale-[0.98]"
-                                >
-                                    Upgrade to Unlock
-                                </a>
-                                <p className="text-xs text-gray-400 mt-4">
-                                    Your data is safe, just hidden until you upgrade.
-                                </p>
-                            </div>
+            {selected.size > 0 && canEdit && (
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-4 py-2 text-sm">
+                    <span className="font-semibold">{selected.size} selected</span>
+                    <span className="text-muted-foreground">Set:</span>
+                    <select
+                        aria-label="Set RSVP for selected"
+                        value=""
+                        onChange={(e) => e.target.value && bulk({ rsvpStatus: e.target.value }, "RSVP updated")}
+                        className="rounded-lg border border-border bg-white px-2 py-1"
+                    >
+                        <option value="">RSVP…</option>
+                        {RSVP.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    </select>
+                    <select
+                        aria-label="Set side for selected"
+                        value=""
+                        onChange={(e) => e.target.value && bulk({ side: e.target.value }, "Side updated")}
+                        className="rounded-lg border border-border bg-white px-2 py-1"
+                    >
+                        <option value="">Side…</option>
+                        {SIDES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    </select>
+                    <TableInput onSet={(table) => bulk({ tableAssignment: table }, `Table ${table} set`)} />
+                    <button onClick={() => bulk({ inviteStatus: "sent" }, "Marked as invited")} className="rounded-lg border border-border bg-white px-3 py-1 font-medium hover:bg-gray-50">
+                        Mark invited
+                    </button>
+                    <button onClick={removeSelected} className="ml-auto inline-flex items-center gap-1 rounded-lg px-3 py-1 font-medium text-rose-700 hover:bg-rose-50">
+                        <Trash2 className="h-4 w-4" /> Delete
+                    </button>
+                </div>
+            )}
+
+            {guests.length === 0 ? (
+                <div className="rounded-2xl border-2 border-dashed border-border bg-white px-6 py-16 text-center">
+                    <Users className="mx-auto h-10 w-10 text-muted-foreground" />
+                    <h2 className="mt-3 font-serif text-2xl font-bold">Bring your guest list in</h2>
+                    <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                        Import the sheet you already have, or start typing. Each row is a household: the main guest plus anyone coming with them.
+                    </p>
+                    {canEdit && (
+                        <div className="mt-5 flex flex-wrap justify-center gap-2">
+                            <button onClick={() => setImportOpen(true)} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow">Import from Excel or Sheets</button>
+                            <button onClick={addGuest} className="rounded-xl border border-border bg-white px-5 py-2.5 text-sm font-medium">Add the first guest</button>
                         </div>
                     )}
-
-                    <div className={cn(isOverLimit && "opacity-10 blur-sm pointer-events-none select-none")}>
-                        {mode === "simple" ? (
-                            /* SIMPLE MODE: Clean List */
-                            <div className="divide-y divide-border">
-                                {sortedGuests.map((guest) => {
-                                    const hasCompanions = guest.companion_names && guest.companion_names.length > 0;
-                                    const isExpanded = expandedGuestIds.has(guest.id);
-                                    const selectedCompanions = guest.selected_companions || guest.companion_names || [];
-                                    const allCompanionsSelected = hasCompanions && selectedCompanions.length === guest.companion_names!.length;
-                                    const someCompanionsSelected = hasCompanions && selectedCompanions.length > 0 && selectedCompanions.length < guest.companion_names!.length;
-
-                                    return (
-                                        <div key={guest.id} className={cn("hover:bg-muted/30 transition-colors", selectedIds.has(guest.id) && "bg-muted/50")}>
-                                            <div className="flex items-center justify-between p-4 md:p-6">
-                                                <div className="flex items-center gap-3 md:gap-4">
-                                                    {canEdit && (
-                                                        <button onClick={() => toggleSelect(guest.id)} className="text-muted-foreground hover:text-primary">
-                                                            {selectedIds.has(guest.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
-                                                        </button>
-                                                    )}
-
-                                                    <div
-                                                        onClick={() => handleOpenEdit(guest)}
-                                                        className={cn(
-                                                            "h-8 w-8 md:h-10 md:w-10 rounded-full flex items-center justify-center font-bold text-[10px] md:text-xs ring-2 ring-white shadow-sm flex-shrink-0 cursor-pointer hover:ring-primary/20 transition-all",
-                                                            guest.priority === 'A' ? "bg-red-100 text-red-700" :
-                                                                guest.priority === 'C' ? "bg-gray-100 text-gray-600" : "bg-blue-50 text-blue-600"
-                                                        )}>
-                                                        {guest.priority || 'B'}
-                                                    </div>
-                                                    <div onClick={() => handleOpenEdit(guest)} className="cursor-pointer group">
-                                                        <div className="flex items-center gap-2">
-                                                            <p className="font-medium text-sm md:text-base text-foreground leading-none group-hover:text-primary transition-colors">{guest.name}</p>
-                                                            {hasCompanions && (
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setExpandedGuestIds(prev => {
-                                                                            const newSet = new Set(prev);
-                                                                            if (newSet.has(guest.id)) {
-                                                                                newSet.delete(guest.id);
-                                                                            } else {
-                                                                                newSet.add(guest.id);
-                                                                            }
-                                                                            return newSet;
-                                                                        });
-                                                                    }}
-                                                                    className="inline-flex items-center gap-1 rounded-full bg-slate-100 hover:bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600 transition-colors"
-                                                                >
-                                                                    <Users className="w-3 h-3" />
-                                                                    {selectedCompanions.length} of {guest.companion_names!.length + 1}
-                                                                    <span className="text-xs">{isExpanded ? '▲' : '▼'}</span>
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                        <p className="text-[11px] md:text-sm text-muted-foreground mt-1">{guest.group_category || 'Uncategorized'}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-1 md:gap-3">
-                                                    <span className={cn(
-                                                        "hidden xs:inline-flex items-center rounded-full px-2 py-0.5 text-[10px] md:text-xs font-medium mr-1 md:mr-0",
-                                                        guest.rsvp_status === 'accepted' ? "bg-green-100 text-green-700" :
-                                                            guest.rsvp_status === 'declined' ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
-                                                    )}>
-                                                        {guest.rsvp_status.charAt(0).toUpperCase() + guest.rsvp_status.slice(1)}
-                                                    </span>
-                                                    {canEdit && (
-                                                        <>
-                                                            <button onClick={(e) => { e.stopPropagation(); copyInvitationLink(guest.id); }} className="p-2 text-muted-foreground hover:text-primary transition-colors" title="Copy RSVP link" aria-label={`Copy RSVP link for ${guest.name}`}>
-                                                                {copiedGuestId === guest.id ? <Check className="w-4 h-4 text-green-600" /> : <LinkIcon className="w-4 h-4" />}
-                                                            </button>
-                                                            <button onClick={() => handleOpenEdit(guest)} className="p-2 text-muted-foreground hover:text-primary transition-colors">
-                                                                <Edit2 className="w-4 h-4" />
-                                                            </button>
-                                                            <button onClick={() => confirmDelete(guest.id)} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Companion Expansion */}
-                                            {isExpanded && hasCompanions && (
-                                                <div className="pl-14 pr-4 pb-4 space-y-2">
-                                                    {canEdit && (
-                                                        <div className="flex items-center gap-2 mb-2">
-                                                            <button
-                                                                onClick={() => toggleAllCompanions(guest.id, !allCompanionsSelected)}
-                                                                className="text-xs text-primary hover:underline font-medium"
-                                                            >
-                                                                {allCompanionsSelected ? 'Deselect All' : 'Select All'}
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                    {/* Main Guest */}
-                                                    <div className="flex items-center gap-2 py-1.5 px-3 bg-green-50 rounded-lg">
-                                                        <CheckSquare className="w-4 h-4 text-green-600" />
-                                                        <span className="text-sm text-gray-700">{guest.name} <span className="text-xs text-gray-500">(main guest)</span></span>
-                                                    </div>
-                                                    {/* Companions */}
-                                                    {guest.companion_names!.map((companionName, idx) => {
-                                                        const isSelected = selectedCompanions.includes(companionName);
-                                                        return (
-                                                            <button
-                                                                key={idx}
-                                                                onClick={() => toggleCompanionSelection(guest.id, companionName)}
-                                                                disabled={!canEdit}
-                                                                className={cn(
-                                                                    "flex items-center gap-2 py-1.5 px-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors w-full text-left",
-                                                                    !canEdit && "opacity-60 cursor-not-allowed hover:bg-gray-50"
-                                                                )}
-                                                            >
-                                                                {isSelected ? (
-                                                                    <CheckSquare className={cn("w-4 h-4", canEdit ? "text-primary" : "text-gray-400")} />
-                                                                ) : (
-                                                                    <Square className="w-4 h-4 text-gray-400" />
-                                                                )}
-                                                                <span className={cn("text-sm", isSelected ? "text-gray-900 font-medium" : "text-gray-600")}>
-                                                                    {companionName}
-                                                                </span>
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                                {sortedGuests.length === 0 && <div className="p-8 text-center text-muted-foreground">No guests found matching this filter.</div>}
-                            </div>
-                        ) : (
-                            /* ADVANCED MODE: Responsive Layout */
-                            <>
-                                {/* Mobile Card View */}
-                                <div className="md:hidden divide-y divide-border">
-                                    {sortedGuests.map((guest) => (
-                                        <div key={guest.id} className={cn("p-4 hover:bg-muted/30 transition-colors", selectedIds.has(guest.id) && "bg-muted/50")}>
-                                            <div onClick={() => handleOpenEdit(guest)} className="flex items-start justify-between mb-3 cursor-pointer">
-                                                <div className="flex items-center gap-3">
-                                                    {canEdit && (
-                                                        <button onClick={(e) => { e.stopPropagation(); toggleSelect(guest.id); }} className="text-muted-foreground pt-0.5 hover:text-primary">
-                                                            {selectedIds.has(guest.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
-                                                        </button>
-                                                    )}
-                                                    <div className="flex items-center gap-3 group">
-                                                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary uppercase group-hover:bg-primary/20 transition-colors">
-                                                            {guest.name.charAt(0)}
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-semibold text-foreground text-sm group-hover:text-primary transition-colors">{guest.name}</p>
-                                                            <p className="text-[11px] text-muted-foreground">{guest.group_category || 'Uncategorized'}</p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-1">
-                                                    {canEdit && (
-                                                        <>
-                                                            <button onClick={(e) => { e.stopPropagation(); copyInvitationLink(guest.id); }} className="p-2 text-muted-foreground hover:text-primary transition-colors" title="Copy RSVP link" aria-label={`Copy RSVP link for ${guest.name}`}>
-                                                                {copiedGuestId === guest.id ? <Check className="w-4 h-4 text-green-600" /> : <LinkIcon className="w-4 h-4" />}
-                                                            </button>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(guest); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
-                                                                <Edit2 className="w-4 h-4" />
-                                                            </button>
-                                                            <button onClick={(e) => { e.stopPropagation(); confirmDelete(guest.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-2 pl-8">
-                                                <div className="bg-muted px-2 py-1.5 rounded-lg">
-                                                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Status</p>
-                                                    <span className={cn(
-                                                        "text-xs font-medium",
-                                                        guest.rsvp_status === 'accepted' ? "text-green-600" :
-                                                            guest.rsvp_status === 'declined' ? "text-red-600" : "text-amber-600"
-                                                    )}>
-                                                        {guest.rsvp_status.charAt(0).toUpperCase() + guest.rsvp_status.slice(1)}
-                                                    </span>
-                                                </div>
-                                                <div className="bg-muted px-2 py-1.5 rounded-lg">
-                                                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Priority</p>
-                                                    <span className="text-xs font-medium">{guest.priority || 'B'}</span>
-                                                </div>
-                                                <div className="bg-muted px-2 py-1.5 rounded-lg col-span-2">
-                                                    <div className="flex items-center justify-between">
-                                                        <div>
-                                                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Party Size</p>
-                                                            <span className="text-xs font-medium flex items-center gap-1">
-                                                                <Users className="w-3 h-3" />
-                                                                {1 + (guest.companion_guest_count || 0)}
-                                                            </span>
-                                                        </div>
-                                                        {(guest.companion_names && guest.companion_names.length > 0) && (
-                                                            <button
-                                                                onClick={() => {
-                                                                    setExpandedGuestIds(prev => {
-                                                                        const newSet = new Set(prev);
-                                                                        if (newSet.has(guest.id)) newSet.delete(guest.id);
-                                                                        else newSet.add(guest.id);
-                                                                        return newSet;
-                                                                    });
-                                                                }}
-                                                                className="text-[10px] font-medium text-primary bg-primary/10 px-2 py-1 rounded-full hover:bg-primary/20 transition-colors"
-                                                            >
-                                                                {expandedGuestIds.has(guest.id) ? "Hide Guests" : "View Guests"}
-                                                            </button>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Expanded Companion List for Advanced Mode */}
-                                                    {expandedGuestIds.has(guest.id) && guest.companion_names && guest.companion_names.length > 0 && (
-                                                        <div className="mt-3 space-y-2 pt-2 border-t border-gray-200">
-                                                            {/* Main Guest */}
-                                                            <div className="flex items-center gap-2 py-1">
-                                                                <CheckSquare className="w-3.5 h-3.5 text-green-600" />
-                                                                <span className="text-xs text-gray-700 font-medium">{guest.name} (Main)</span>
-                                                            </div>
-                                                            {/* Companions */}
-                                                            {guest.companion_names.map((companionName, idx) => {
-                                                                const isSelected = (guest.selected_companions || guest.companion_names || []).includes(companionName);
-                                                                return (
-                                                                    <button
-                                                                        key={idx}
-                                                                        onClick={() => toggleCompanionSelection(guest.id, companionName)}
-                                                                        disabled={!canEdit}
-                                                                        className={cn(
-                                                                            "flex items-center gap-2 w-full text-left py-1 hover:bg-white/50 rounded transition-colors",
-                                                                            !canEdit && "opacity-60 cursor-not-allowed"
-                                                                        )}
-                                                                    >
-                                                                        {isSelected ? (
-                                                                            <CheckSquare className={cn("w-3.5 h-3.5", canEdit ? "text-primary" : "text-gray-400")} />
-                                                                        ) : (
-                                                                            <Square className="w-3.5 h-3.5 text-gray-400" />
-                                                                        )}
-                                                                        <span className={cn("text-xs", isSelected ? "text-gray-900" : "text-gray-500")}>
-                                                                            {companionName}
-                                                                        </span>
-                                                                    </button>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="bg-muted px-2 py-1.5 rounded-lg">
-                                                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">Seating</p>
-                                                    <span className="text-xs font-medium flex items-center gap-1 truncate">
-                                                        <Armchair className="w-3 h-3" />
-                                                        {guest.table_assignment || 'Unassigned'}
-                                                    </span>
-                                                </div>
-                                                {guest.rsvp_status === 'accepted' && guest.meal_preference && (
-                                                    <div className="bg-muted px-2 py-1.5 rounded-lg col-span-2 flex items-center gap-2">
-                                                        <Utensils className="w-3 h-3 text-muted-foreground" />
-                                                        <span className="text-xs font-medium">{guest.meal_preference}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                {/* Desktop Table View */}
-                                <div className="hidden md:block overflow-x-auto">
-                                    <table className="w-full text-sm text-left">
-                                        <thead className="bg-muted text-muted-foreground font-medium uppercase text-xs">
-                                            <tr>
-                                                <th className="px-6 py-4 w-12">
-                                                    {canEdit && (
-                                                        <button onClick={toggleSelectAll} className="flex items-center">
-                                                            {selectedIds.size > 0 && selectedIds.size === guests.length ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
-                                                        </button>
-                                                    )}
-                                                </th>
-                                                <th className="px-6 py-4 w-1/4">Guest Name</th>
-                                                <th className="px-6 py-4">Group</th>
-                                                <th className="px-6 py-4">Priority</th>
-                                                <th className="px-6 py-4">Status</th>
-                                                <th className="px-6 py-4">Meal Choice</th>
-                                                <th className="px-6 py-4">Seating</th>
-                                                <th className="px-6 py-4">Total Party</th>
-                                                <th className="px-6 py-4">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-border">
-                                            {sortedGuests.map((guest) => {
-                                                const hasCompanions = guest.companion_names && guest.companion_names.length > 0;
-                                                const selectedCompanions = guest.selected_companions || guest.companion_names || [];
-
-                                                return (
-                                                    <tr key={guest.id} onClick={() => handleOpenEdit(guest)} className={cn("hover:bg-muted/30 transition-colors cursor-pointer group", selectedIds.has(guest.id) && "bg-muted/50")}>
-                                                        <td className="px-6 py-4">
-                                                            {canEdit && (
-                                                                <button onClick={(e) => { e.stopPropagation(); toggleSelect(guest.id); }} className="text-muted-foreground hover:text-primary">
-                                                                    {selectedIds.has(guest.id) ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
-                                                                </button>
-                                                            )}
-                                                        </td>
-                                                        <td className="px-6 py-4 font-medium text-foreground relative">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
-                                                                    {guest.name.charAt(0)}
-                                                                </div>
-                                                                <div>
-                                                                    <div className="flex items-center gap-2">
-                                                                        {guest.name}
-                                                                        {hasCompanions && (
-                                                                            <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                                                                                <Users className="mr-1 w-3 h-3" />
-                                                                                {selectedCompanions.length}/{guest.companion_names!.length + 1}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                    {hasCompanions && (
-                                                                        <div className="absolute left-6 top-full z-10 hidden w-48 rounded-lg border border-border bg-white p-2 shadow-lg group-hover:block">
-                                                                            <p className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">Companions</p>
-                                                                            <div className="space-y-1">
-                                                                                {guest.companion_names!.map((c, i) => (
-                                                                                    <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
-                                                                                        <div className="h-1.5 w-1.5 rounded-full bg-primary/40" />
-                                                                                        {c}
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-muted-foreground">{guest.group_category || '-'}</td>
-                                                        <td className="px-6 py-4 text-muted-foreground">{guest.priority || 'B'}</td>
-                                                        <td className="px-6 py-4">
-                                                            <span className={cn(
-                                                                "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium",
-                                                                guest.rsvp_status === 'accepted' ? "bg-green-100 text-green-700" :
-                                                                    guest.rsvp_status === 'declined' ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
-                                                            )}>
-                                                                {guest.rsvp_status.charAt(0).toUpperCase() + guest.rsvp_status.slice(1)}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-muted-foreground">{guest.meal_preference || '-'}</td>
-                                                        <td className="px-6 py-4 text-muted-foreground">
-                                                            <div className="flex items-center gap-2">
-                                                                {guest.table_assignment && <Armchair className="w-3 h-3" />}
-                                                                {guest.table_assignment || '-'}
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-muted-foreground font-medium">{1 + (guest.companion_guest_count || 0)}</td>
-                                                        <td className="px-6 py-4">
-                                                            <div className="flex items-center gap-2">
-                                                                {canEdit && (
-                                                                    <>
-                                                                        <button onClick={(e) => { e.stopPropagation(); copyInvitationLink(guest.id); }} className="p-2 text-muted-foreground hover:text-primary transition-colors" title="Copy RSVP link" aria-label={`Copy RSVP link for ${guest.name}`}>
-                                                                            {copiedGuestId === guest.id ? <Check className="w-4 h-4 text-green-600" /> : <LinkIcon className="w-4 h-4" />}
-                                                                        </button>
-                                                                        <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(guest); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
-                                                                            <Edit2 className="w-4 h-4" />
-                                                                        </button>
-                                                                        <button onClick={(e) => { e.stopPropagation(); confirmDelete(guest.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
-                                                                            <Trash2 className="w-4 h-4" />
-                                                                        </button>
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </>
-                        )}
-                        {sortedGuests.length === 0 && <div className="p-10 text-center text-muted-foreground italic">No guests found.</div>}
-                    </div>
                 </div>
+            ) : (
+                <SheetGrid
+                    rows={visible}
+                    columns={columns}
+                    getRowId={(g) => g.id}
+                    onCommit={onCommit}
+                    readOnly={!canEdit}
+                    onAddRow={canEdit ? addGuest : undefined}
+                    addRowLabel="Add a household"
+                    onPasteRows={canEdit ? onPasteRows : undefined}
+                    selectedIds={canEdit ? selected : undefined}
+                    onSelectionChange={canEdit ? setSelected : undefined}
+                    emptyState="No guests match this view."
+                    rowActions={(g) => (
+                        <>
+                            <button onClick={() => copyLink(g)} className="rounded-md p-1.5 text-muted-foreground hover:bg-gray-100 hover:text-foreground" title="Copy RSVP link" aria-label={`Copy RSVP link for ${g.name}`}>
+                                {copiedId === g.id ? <Check className="h-4 w-4 text-emerald-600" /> : <LinkIcon className="h-4 w-4" />}
+                            </button>
+                            {canEdit && (
+                                <button onClick={() => removeOne(g)} className="rounded-md p-1.5 text-muted-foreground hover:bg-rose-50 hover:text-rose-700" title="Delete" aria-label={`Delete ${g.name}`}>
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            )}
+                        </>
+                    )}
+                />
+            )}
 
-                <GuestDialog
-                    isOpen={isDialogOpen}
-                    onClose={() => setIsDialogOpen(false)}
-                    onSubmit={handleSaveGuest}
-                    initialData={editingGuest}
-                />
-                <LimitModal
-                    isOpen={showLimitModal}
-                    onClose={() => setShowLimitModal(false)}
-                    feature="Guests"
-                    limit={PLAN_LIMITS[tier]?.guests || PLAN_LIMITS.free.guests}
-                    tier={tier}
-                />
-                <GroupSummaryModal
-                    isOpen={isGroupModalOpen}
-                    onClose={() => setIsGroupModalOpen(false)}
-                    guests={guests}
-                />
-                <BulkSeatingDialog
-                    isOpen={isSeatingDialogOpen}
-                    onClose={() => setIsSeatingDialogOpen(false)}
-                    onConfirm={handleBulkSeating}
-                    selectedCount={selectedIds.size}
-                />
+            {guests.length > 0 && (
+                <div className="flex flex-wrap gap-x-6 gap-y-1 rounded-xl bg-gray-50 px-4 py-3 text-sm text-muted-foreground tabular-nums">
+                    <span><b className="text-foreground">{stats.attending}</b> attending</span>
+                    <span><b className="text-foreground">{stats.waiting}</b> waiting</span>
+                    <span><b className="text-foreground">{stats.declined}</b> declined</span>
+                    <span>Meals: <b className="text-foreground">{stats.veg}</b> veg · <b className="text-foreground">{stats.halal}</b> halal</span>
+                    <span><b className="text-foreground">{stats.unseated}</b> attending households without a table</span>
+                    {canEdit && <span className="ml-auto hidden md:inline">Tip: paste rows from Excel straight into the sheet</span>}
+                </div>
+            )}
 
-                <ConfirmDialog
-                    isOpen={confirmState.isOpen}
-                    onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
-                    onConfirm={executeDelete}
-                    title={confirmState.type === 'bulk' ? "Delete Guests?" : "Delete Guest?"}
-                    description={confirmState.type === 'bulk'
-                        ? `Are you sure you want to delete ${selectedIds.size} guests? This action cannot be undone.`
-                        : "Are you sure you want to delete this guest? This action cannot be undone."}
-                    variant="danger"
-                />
-            </div>
+            <ImportGuestsDialog open={importOpen} onClose={() => setImportOpen(false)} onImport={addMany} />
         </div>
+    );
+}
+
+/** Rebuild a create payload from a deleted guest, for Undo. */
+function toRecord(g: Guest) {
+    return {
+        name: g.name,
+        side: (g.side as "bride" | "groom" | "both" | null) ?? null,
+        groupCategory: g.groupCategory,
+        companionGuestCount: g.companionGuestCount,
+        companionNames: g.companionNames,
+        whatsappNumber: g.whatsappNumber,
+        email: g.email,
+        address: g.address,
+        rsvpStatus: g.rsvpStatus as "pending" | "accepted" | "declined",
+        mealPreference: g.mealPreference,
+        tableAssignment: g.tableAssignment,
+        priority: g.priority as "A" | "B" | "C",
+        notes: g.notes,
+    };
+}
+
+function TableInput({ onSet }: { onSet: (table: string) => void }) {
+    const [value, setValue] = useState("");
+    return (
+        <form
+            onSubmit={(e) => {
+                e.preventDefault();
+                if (value.trim()) {
+                    onSet(value.trim());
+                    setValue("");
+                }
+            }}
+            className="flex items-center gap-1"
+        >
+            <input
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder="Table…"
+                aria-label="Set table for selected"
+                className="w-20 rounded-lg border border-border bg-white px-2 py-1"
+            />
+        </form>
     );
 }

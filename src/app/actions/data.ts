@@ -16,7 +16,11 @@ import {
   inventoryItemCreate, inventoryItemUpdate,
   eventCreate, eventUpdate,
   clientUpdate, weddingUpdate,
+  guestBulkUpdate, budgetCategoryCreate, budgetCategoryUpdate, weddingSetup,
 } from "@/lib/validation"
+import {
+  BUDGET_TEMPLATE, DAY_OF_TEMPLATE, checklistFor, dueDateFor, timeframeFor, type Tradition,
+} from "@/lib/templates"
 import { getEffectiveTier } from "@/lib/trial"
 import { PLAN_LIMITS } from "@/lib/limits"
 
@@ -29,15 +33,26 @@ import { PLAN_LIMITS } from "@/lib/limits"
 // no access; writes throw. Write payloads are validated by the schemas in
 // src/lib/validation.ts, which only allow the columns a client may set.
 
-function serializeDecimals<T>(obj: T): T {
-  if (obj === null || obj === undefined) return obj;
+/** Decimal columns become plain numbers so they can cross to the client. */
+type Serialized<T> = T extends Prisma.Decimal
+  ? number
+  : T extends Date
+    ? Date
+    : T extends (infer U)[]
+      ? Serialized<U>[]
+      : T extends object
+        ? { [K in keyof T]: Serialized<T[K]> }
+        : T
+
+function serializeDecimals<T>(obj: T): Serialized<T> {
+  if (obj === null || obj === undefined) return obj as Serialized<T>;
   if (typeof (obj as any).toNumber === 'function') return (obj as any).toNumber();
-  if (obj instanceof Date) return obj as any;
-  if (Array.isArray(obj)) return obj.map(serializeDecimals) as unknown as T;
+  if (obj instanceof Date) return obj as Serialized<T>;
+  if (Array.isArray(obj)) return obj.map(serializeDecimals) as Serialized<T>;
   if (typeof obj === 'object') {
-    return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, serializeDecimals(v)])) as unknown as T;
+    return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, serializeDecimals(v)])) as Serialized<T>;
   }
-  return obj;
+  return obj as Serialized<T>;
 }
 
 // Deduplicated per request, so several actions in one render share one lookup.
@@ -125,32 +140,124 @@ export async function getWeddingById(id: string) {
   return serializeDecimals(w);
 }
 
-export async function createWedding(data: {
-  coupleName1: string
-  coupleName2: string
-  weddingDate: string
-  styleTheme?: string
-}) {
+/** Create a wedding from the setup questions and generate its starter plan. */
+export async function createWedding(input: unknown) {
   const userId = await requireUserId()
+  const data = validate(weddingSetup, input)
 
   const trialEndsAt = new Date()
   trialEndsAt.setDate(trialEndsAt.getDate() + 14)
 
-  // Nested create keeps the wedding and its owner row in one transaction
-  const wedding = await prisma.wedding.create({
-    data: {
-      createdById: userId,
-      coupleName1: data.coupleName1,
-      coupleName2: data.coupleName2,
-      weddingDate: data.weddingDate ? new Date(data.weddingDate) : null,
-      styleTheme: data.styleTheme || "Elegant",
-      tier: "free",
-      premiumTrialEndsAt: trialEndsAt,
-      collaborators: { create: { userId, role: "owner" } },
-    },
+  const wedding = await prisma.$transaction(async (tx) => {
+    const created = await tx.wedding.create({
+      data: {
+        createdById: userId,
+        coupleName1: data.coupleName1,
+        coupleName2: data.coupleName2,
+        weddingDate: data.weddingDate ?? null,
+        location: data.location ?? null,
+        targetGuestCount: data.targetGuestCount ?? null,
+        estimatedBudget: data.estimatedBudget ?? 0,
+        currency: data.currency,
+        styleTheme: "Elegant",
+        tier: "free",
+        premiumTrialEndsAt: trialEndsAt,
+        collaborators: { create: { userId, role: "owner" } },
+      },
+    })
+    if (data.setup.checklist) await seedChecklist(tx, created.id, created.weddingDate, data.traditions)
+    if (data.setup.budget) await seedBudget(tx, created.id, data.estimatedBudget ?? 0, data.targetGuestCount ?? 0)
+    if (data.setup.dayOf && created.weddingDate) {
+      await seedDayOf(tx, created.id, created.weddingDate, data.ceremonyTime ?? "10:00", data.tzOffsetMinutes ?? -330)
+    }
+    return created
   })
 
   return serializeDecimals(wedding)
+}
+
+type Tx = Prisma.TransactionClient
+
+async function seedChecklist(tx: Tx, weddingId: string, weddingDate: Date | null, traditions: Tradition[]) {
+  const existing = new Set(
+    (await tx.checklistItem.findMany({ where: { weddingId }, select: { title: true } })).map((t) => t.title.toLowerCase())
+  )
+  const tasks = checklistFor(traditions).filter((t) => !existing.has(t.title.toLowerCase()))
+  await tx.checklistItem.createMany({
+    data: tasks.map((t) => ({
+      weddingId,
+      title: t.title,
+      category: timeframeFor(t.daysBefore),
+      dueOffsetDays: t.daysBefore,
+      dueDate: weddingDate ? dueDateFor(weddingDate, t.daysBefore) : null,
+    })),
+  })
+  return tasks.length
+}
+
+async function seedBudget(tx: Tx, weddingId: string, total: number, guests: number) {
+  const existing = new Set(
+    (await tx.budgetCategory.findMany({ where: { weddingId }, select: { name: true } })).map((c) => c.name.toLowerCase())
+  )
+  const categories = BUDGET_TEMPLATE.filter((c) => !existing.has(c.name.toLowerCase()))
+  for (const [i, cat] of categories.entries()) {
+    await tx.budgetCategory.create({
+      data: { weddingId, name: cat.name, allocated: Math.round((total * cat.pct) / 100), sortOrder: existing.size + i },
+    })
+  }
+  await tx.budgetItem.createMany({
+    data: categories.flatMap((cat) =>
+      cat.items.map((item) => ({
+        weddingId,
+        category: cat.name,
+        name: item.name,
+        units: item.perGuest && guests > 0 ? guests : 1,
+      }))
+    ),
+  })
+  return categories.length
+}
+
+async function seedDayOf(tx: Tx, weddingId: string, weddingDate: Date, ceremonyTime: string, tzOffsetMinutes: number) {
+  // Ceremony start in UTC: the wedding date at the local ceremony time, shifted by the browser's offset
+  const [h, m] = ceremonyTime.split(":").map(Number)
+  const ceremony = new Date(weddingDate)
+  ceremony.setUTCHours(h, m, 0, 0)
+  ceremony.setUTCMinutes(ceremony.getUTCMinutes() + tzOffsetMinutes)
+
+  await tx.event.createMany({
+    data: DAY_OF_TEMPLATE.map((slot) => {
+      const start = new Date(ceremony.getTime() + slot.offsetMinutes * 60_000)
+      return {
+        weddingId,
+        title: slot.title,
+        category: slot.category,
+        startTime: start,
+        endTime: new Date(start.getTime() + slot.durationMinutes * 60_000),
+      }
+    }),
+  })
+  return DAY_OF_TEMPLATE.length
+}
+
+/** Add a starter checklist, budget split or day-of timeline to an existing wedding. */
+export async function applyTemplate(weddingId: string, kind: "checklist" | "budget" | "dayOf", options?: { ceremonyTime?: string; tzOffsetMinutes?: number }) {
+  await requireWeddingAccess(weddingId, true)
+  const wedding = await prisma.wedding.findUnique({
+    where: { id: weddingId },
+    select: { weddingDate: true, estimatedBudget: true, targetGuestCount: true },
+  })
+  if (!wedding) throw new Error("Wedding not found")
+
+  const added = await prisma.$transaction(async (tx) => {
+    if (kind === "checklist") return seedChecklist(tx, weddingId, wedding.weddingDate, ["poruwa", "homecoming"])
+    if (kind === "budget") return seedBudget(tx, weddingId, Number(wedding.estimatedBudget ?? 0), wedding.targetGuestCount ?? 0)
+    if (!wedding.weddingDate) throw new Error("Set your wedding date first")
+    return seedDayOf(tx, weddingId, wedding.weddingDate, options?.ceremonyTime ?? "10:00", options?.tzOffsetMinutes ?? -330)
+  })
+
+  revalidatePath("/dashboard")
+  return { added }
 }
 
 // ============================================
@@ -190,6 +297,31 @@ export async function deleteGuest(id: string) {
   revalidatePath("/dashboard/guests")
 }
 
+/** Bulk add, for pasted rows and CSV imports. */
+export async function createGuests(weddingId: string, records: unknown[]) {
+  await requireWeddingAccess(weddingId, true)
+  if (!Array.isArray(records) || records.length === 0) return []
+  if (records.length > 2000) throw new Error("Import up to 2,000 guests at a time")
+  const data = records.map((r, i) => {
+    try {
+      return { ...validate(guestCreate, r), weddingId }
+    } catch (e) {
+      throw new Error(`Row ${i + 1}: ${(e as Error).message}`)
+    }
+  })
+  const guests = await prisma.guest.createManyAndReturn({ data })
+  revalidatePath("/dashboard/guests")
+  return guests
+}
+
+export async function updateGuests(ids: string[], changes: unknown) {
+  const userId = await requireUserId()
+  const data = validate(guestBulkUpdate, changes)
+  const { count } = await prisma.guest.updateMany({ where: { id: { in: ids }, wedding: editableBy(userId) }, data })
+  revalidatePath("/dashboard/guests")
+  return { count }
+}
+
 export async function deleteGuests(ids: string[]) {
   const userId = await requireUserId()
   await prisma.guest.deleteMany({ where: { id: { in: ids }, wedding: editableBy(userId) } })
@@ -209,10 +341,67 @@ export async function getBudgetItems(weddingId: string) {
   return serializeDecimals(items);
 }
 
+/** Make sure a category row exists so it shows up with an allocation. */
+async function ensureCategory(weddingId: string, name: string) {
+  const count = await prisma.budgetCategory.count({ where: { weddingId } })
+  await prisma.budgetCategory.upsert({
+    where: { weddingId_name: { weddingId, name } },
+    update: {},
+    create: { weddingId, name, sortOrder: count },
+  })
+}
+
+export async function getBudgetCategories(weddingId: string) {
+  if (!(await canReadWedding(weddingId))) return []
+  const categories = await prisma.budgetCategory.findMany({
+    where: { weddingId },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  })
+  return serializeDecimals(categories)
+}
+
+export async function createBudgetCategory(weddingId: string, data: unknown) {
+  await requireWeddingAccess(weddingId, true)
+  const parsed = validate(budgetCategoryCreate, data)
+  const count = await prisma.budgetCategory.count({ where: { weddingId } })
+  const category = await prisma.budgetCategory.create({ data: { sortOrder: count, ...parsed, weddingId } })
+  revalidatePath("/dashboard/budget")
+  return serializeDecimals(category)
+}
+
+export async function updateBudgetCategory(id: string, data: unknown) {
+  const userId = await requireUserId()
+  const parsed = validate(budgetCategoryUpdate, data)
+  const existing = await prisma.budgetCategory.findFirst({ where: { id, wedding: editableBy(userId) } })
+  if (!existing) throw new Error("Category not found")
+
+  const category = await prisma.$transaction(async (tx) => {
+    // Renaming carries the category's items along
+    if (parsed.name && parsed.name !== existing.name) {
+      await tx.budgetItem.updateMany({ where: { weddingId: existing.weddingId, category: existing.name }, data: { category: parsed.name } })
+    }
+    return tx.budgetCategory.update({ where: { id }, data: parsed })
+  })
+  revalidatePath("/dashboard/budget")
+  return serializeDecimals(category)
+}
+
+export async function deleteBudgetCategory(id: string) {
+  const userId = await requireUserId()
+  const existing = await prisma.budgetCategory.findFirst({ where: { id, wedding: editableBy(userId) } })
+  if (!existing) throw new Error("Category not found")
+  const items = await prisma.budgetItem.count({ where: { weddingId: existing.weddingId, category: existing.name } })
+  if (items > 0) throw new Error(`Move or delete the ${items} item${items === 1 ? "" : "s"} in "${existing.name}" first`)
+  await prisma.budgetCategory.delete({ where: { id } })
+  revalidatePath("/dashboard/budget")
+}
+
 export async function createBudgetItem(weddingId: string, data: any) {
   await requireWeddingAccess(weddingId, true)
+  const parsed = validate(budgetItemCreate, data)
+  await ensureCategory(weddingId, parsed.category)
   const item = await prisma.budgetItem.create({
-    data: { ...validate(budgetItemCreate, data), weddingId },
+    data: { ...parsed, weddingId },
   })
   revalidatePath("/dashboard/budget")
   return serializeDecimals(item)
@@ -224,6 +413,7 @@ export async function updateBudgetItem(id: string, data: any) {
     where: { id, wedding: editableBy(userId) },
     data: validate(budgetItemUpdate, data),
   })
+  await ensureCategory(item.weddingId, item.category)
   revalidatePath("/dashboard/budget")
   return serializeDecimals(item)
 }
@@ -636,10 +826,24 @@ export async function updateClient(id: string, data: any) {
 export async function updateWedding(id: string, data: any) {
   await requireWeddingAccess(id, true)
   // Plan fields only change through the payment webhook
-  const wedding = await prisma.wedding.update({
-    where: { id },
-    data: validate(weddingUpdate, data),
-  })
+  const changes = validate(weddingUpdate, data)
+  const before = await prisma.wedding.findUnique({ where: { id }, select: { weddingDate: true } })
+  const wedding = await prisma.wedding.update({ where: { id }, data: changes })
+
+  // Open tasks that came from the template move with the wedding date
+  const newDate = wedding.weddingDate
+  if (newDate && before?.weddingDate?.getTime() !== newDate.getTime()) {
+    const tasks = await prisma.checklistItem.findMany({
+      where: { weddingId: id, isCompleted: false, dueOffsetDays: { not: null } },
+      select: { id: true, dueOffsetDays: true },
+    })
+    await prisma.$transaction(
+      tasks.map((t) =>
+        prisma.checklistItem.update({ where: { id: t.id }, data: { dueDate: dueDateFor(newDate, t.dueOffsetDays!) } })
+      )
+    )
+    revalidatePath("/dashboard/checklist")
+  }
   revalidatePath("/dashboard/settings")
   revalidatePath("/dashboard")
   return serializeDecimals(wedding)

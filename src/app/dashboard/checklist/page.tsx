@@ -4,7 +4,8 @@ import { useMode } from "@/context/mode-context";
 import { CheckCircle2, Circle, Plus, Edit2, CalendarDays, Trash2, CheckSquare, Square, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState, Suspense } from "react";
-import { getChecklistItems, createChecklistItem, updateChecklistItem, deleteChecklistItem, deleteChecklistItems, getUserWeddingId } from "@/app/actions/data";
+import { getChecklistItems, createChecklistItem, updateChecklistItem, deleteChecklistItem, deleteChecklistItems, getUserWeddingId, applyTemplate } from "@/app/actions/data";
+import { toast } from "sonner";
 import { ChecklistDialog } from "@/components/dashboard/checklist-dialog";
 import { useSearchParams } from "next/navigation";
 import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
@@ -299,6 +300,29 @@ function ChecklistContent() {
                 </div>
 
                 <div id="tour-checklist-list" className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden min-h-[400px]">
+                    {items.length === 0 && canEdit && weddingId && (
+                        <div className="mb-6 rounded-2xl border-2 border-dashed border-border bg-white px-6 py-10 text-center">
+                            <h2 className="font-serif text-2xl font-bold">Start from a checklist</h2>
+                            <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                                We'll add about 30 tasks, from booking the venue to final fittings, dated back from your wedding day.
+                            </p>
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        const { added } = await applyTemplate(weddingId, "checklist");
+                                        await fetchItems(weddingId);
+                                        toast.success(`Added ${added} tasks`);
+                                    } catch (e: any) {
+                                        toast.error(e.message);
+                                    }
+                                }}
+                                className="mt-4 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow"
+                            >
+                                Add the starter checklist
+                            </button>
+                        </div>
+                    )}
+
                     {mode === "simple" ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border h-full">
                             <div className="p-4 md:p-6">

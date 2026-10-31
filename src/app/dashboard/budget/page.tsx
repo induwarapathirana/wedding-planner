@@ -1,633 +1,479 @@
 "use client";
 
-import { useMode } from "@/context/mode-context";
-import { DollarSign, PieChart, TrendingUp, Plus, Edit2, Wallet, Trash2, CheckSquare, Square, Search, Filter, LayoutGrid, Sparkles } from "lucide-react";
-import { ModeToggle } from "@/components/dashboard/mode-toggle";
-import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
-import { getBudgetItems, createBudgetItem, updateBudgetItem, deleteBudgetItem, deleteBudgetItems, getWeddingById } from "@/app/actions/data";
-import { BudgetDialog } from "@/components/dashboard/budget-dialog";
-import { CURRENCIES } from "@/lib/constants";
-import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
-import { getEffectiveTier } from "@/lib/trial";
-import { LimitModal } from "@/components/dashboard/limit-modal";
-import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
-import { TourGuide } from "@/components/dashboard/TourGuide";
-import { BUDGET_STEPS } from "@/lib/tours";
-
-type BudgetItem = {
-    id: string;
-    category: string;
-    item_name: string;
-    estimated_cost: number;
-    actual_cost: number;
-    paid_amount: number;
-    due_date?: string;
-    is_paid: boolean;
-    notes?: string;
-    unit_price?: number;
-    units?: number;
-};
-
-
-
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { toast } from "sonner";
+import { Download, Pencil, Plus, Sparkles, Trash2, Wallet } from "lucide-react";
+import {
+    applyTemplate,
+    createBudgetCategory,
+    createBudgetItem,
+    deleteBudgetCategory,
+    deleteBudgetItem,
+    getBudgetCategories,
+    getBudgetItems,
+    getWeddingById,
+    updateBudgetCategory,
+    updateBudgetItem,
+    updateWedding,
+} from "@/app/actions/data";
+import { SheetGrid, type SheetColumn, type SheetGroup } from "@/components/sheet/SheetGrid";
+import { useWeddingId } from "@/hooks/use-wedding-id";
 import { useWeddingPermission } from "@/hooks/use-wedding-permission";
+import { CURRENCIES } from "@/lib/constants";
+import { downloadCsv } from "@/lib/csv";
+import { cn } from "@/lib/utils";
+
+type Item = Awaited<ReturnType<typeof getBudgetItems>>[number];
+type Category = Awaited<ReturnType<typeof getBudgetCategories>>[number];
+
+const num = (v: unknown) => Number(v) || 0;
+/** What an item will cost: the actual price once known, otherwise the estimate. */
+const cost = (i: Item) => (num(i.actualCost) > 0 ? num(i.actualCost) : num(i.estimatedCost));
+const balance = (i: Item) => Math.max(0, cost(i) - num(i.paidAmount));
+
+/** Map a grid edit to the item fields it changes (keeps estimate = qty × unit price). */
+function toChanges(item: Item, key: string, value: unknown): Record<string, unknown> {
+    if (key === "paidInFull") {
+        return value ? { paidAt: new Date(), paidAmount: cost(item) } : { paidAt: null };
+    }
+    const changes: Record<string, unknown> = { [key]: value };
+    if (key === "units" || key === "unitPrice") {
+        const units = key === "units" ? num(value) || 1 : item.units || 1;
+        const unitPrice = key === "unitPrice" ? value : item.unitPrice;
+        if (unitPrice !== null && unitPrice !== undefined) changes.estimatedCost = units * num(unitPrice);
+    }
+    return changes;
+}
 
 export default function BudgetPage() {
-    const { mode } = useMode();
-    const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
+    const weddingId = useWeddingId();
+    const { canEdit } = useWeddingPermission(weddingId ?? null);
+    const [items, setItems] = useState<Item[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [total, setTotal] = useState(0);
+    const [currency, setCurrency] = useState("LKR");
     const [loading, setLoading] = useState(true);
-    const [currency, setCurrency] = useState("USD");
-    const [weddingId, setWeddingId] = useState<string | null>(null);
-    const [tier, setTier] = useState<PlanTier>('free');
-    const [showLimitModal, setShowLimitModal] = useState(false); // Added state
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [newCategory, setNewCategory] = useState("");
+    const [seeding, setSeeding] = useState(false);
 
-    const { canEdit, loading: permLoading } = useWeddingPermission(weddingId);
-
-
-    // Dialog State
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [editingItem, setEditingItem] = useState<BudgetItem | null>(null);
-
-    // Confirm Modal State
-    const [confirmState, setConfirmState] = useState<{ isOpen: boolean; type: 'single' | 'bulk'; id?: string }>({ isOpen: false, type: 'single' });
-
-    // Search & Filter State
-    const [searchQuery, setSearchQuery] = useState("");
-    const [selectedCategory, setSelectedCategory] = useState("All");
-    const [isSearchVisible, setIsSearchVisible] = useState(false);
-
-    const categories = [
-        "All", "Venue", "Catering", "Photography", "Attire", "Decor", "Music", "Transportation", "Stationery", "Favors", "Other"
-    ];
-
-    const filteredItems = budgetItems.filter(item => {
-        const matchesSearch = item.item_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (item.notes?.toLowerCase() || "").includes(searchQuery.toLowerCase());
-        const matchesCategory = selectedCategory === "All" || item.category === selectedCategory;
-        return matchesSearch && matchesCategory;
-    });
-
-    // Stats (Derived from filteredItems)
-    const totalEstimated = filteredItems.reduce((acc, item) => acc + item.estimated_cost, 0);
-    const totalPaid = filteredItems.reduce((acc, item) => acc + item.paid_amount, 0);
-    const totalActual = filteredItems.reduce((acc, item) => acc + (item.actual_cost || 0), 0);
-    const totalPending = filteredItems.reduce((acc, item) => {
-        const cost = item.actual_cost > 0 ? item.actual_cost : item.estimated_cost;
-        return acc + (cost - item.paid_amount);
-    }, 0);
-
-    useEffect(() => {
-        async function loadData() {
-            setLoading(true);
-            // Check URL param first (Planner View), then localStorage (Standard View)
-            const params = new URLSearchParams(window.location.search);
-            const urlWeddingId = params.get('weddingId');
-            const wId = urlWeddingId || localStorage.getItem("current_wedding_id");
-
-            if (wId) {
-                setWeddingId(wId);
-                // Fetch Settings (Currency & Tier)
-                const weddingData = await getWeddingById(wId);
-                if (weddingData) {
-                    if (weddingData.currency) setCurrency(weddingData.currency);
-                }
-                // Use getEffectiveTier for proper trial/payment validation
-                const trialInfo = await getEffectiveTier(wId);
-                setTier(trialInfo.effectiveTier);
-                fetchBudget(wId);
-            } else {
-                setLoading(false);
-            }
-        }
-        loadData();
+    const load = useCallback(async (id: string) => {
+        const [list, cats, wedding] = await Promise.all([getBudgetItems(id), getBudgetCategories(id), getWeddingById(id)]);
+        setItems(list);
+        setCategories(cats);
+        setTotal(num(wedding?.estimatedBudget));
+        setCurrency(wedding?.currency || "LKR");
+        setLoading(false);
     }, []);
 
-    async function fetchBudget(wId: string) {
-        const data = await getBudgetItems(wId);
-        if (data) {
-            const mappedItems = data.map((item: any) => ({
-                ...item,
-                item_name: item.name,
-                estimated_cost: Number(item.estimatedCost),
-                actual_cost: Number(item.actualCost),
-                paid_amount: Number(item.paidAmount),
-                due_date: item.dueDate,
-                is_paid: !!item.paidAt,
-                unit_price: item.unitPrice ? Number(item.unitPrice) : undefined,
-                units: item.units,
-            }));
-            setBudgetItems(mappedItems as BudgetItem[]);
-        }
-        setLoading(false);
-    }
-
-    const sortedItems = filteredItems; // Currently following DB order, but we use filteredItems below
-
-    // Selection Logic
-    const toggleSelectAll = () => {
-        if (!canEdit) return; // Prevent selection if viewer
-        if (selectedIds.size === budgetItems.length) {
-            setSelectedIds(new Set());
-        } else {
-            setSelectedIds(new Set(budgetItems.map(i => i.id)));
-        }
-    };
-
-    const toggleSelect = (id: string) => {
-        if (!canEdit) return; // Prevent selection if viewer
-        const newSelected = new Set(selectedIds);
-        if (newSelected.has(id)) {
-            newSelected.delete(id);
-        } else {
-            newSelected.add(id);
-        }
-        setSelectedIds(newSelected);
-    };
-
-    // Delete Logic
-    // Delete Logic
-    const confirmDelete = (id: string) => {
-        if (!canEdit) return;
-        setConfirmState({ isOpen: true, type: 'single', id });
-    };
-
-    const confirmBulkDelete = () => {
-        if (!canEdit) return;
-        setConfirmState({ isOpen: true, type: 'bulk' });
-    };
-
-    const executeDelete = async () => {
-        try {
-            if (confirmState.type === 'single' && confirmState.id) {
-                await deleteBudgetItem(confirmState.id);
-                if (weddingId) fetchBudget(weddingId);
-                setSelectedIds(prev => {
-                    const next = new Set(prev);
-                    next.delete(confirmState.id!);
-                    return next;
-                });
-            } else if (confirmState.type === 'bulk') {
-                const ids = Array.from(selectedIds);
-                await deleteBudgetItems(ids);
-                if (weddingId) fetchBudget(weddingId);
-                setSelectedIds(new Set());
-            }
-        } catch (error: any) {
-            alert("Error deleting: " + error.message);
-        }
-        setConfirmState({ ...confirmState, isOpen: false });
-    };
-
-    const handleOpenAdd = () => {
-        if (!canEdit) return;
-        const canAdd = checkLimit(tier, 'budget_items', budgetItems.length);
-        if (!canAdd) {
-            setShowLimitModal(true);
+    useEffect(() => {
+        if (weddingId === undefined) return;
+        if (weddingId === null) {
+            setLoading(false);
             return;
         }
-        setEditingItem(null);
-        setIsDialogOpen(true);
-    };
+        load(weddingId);
+    }, [weddingId, load]);
 
-    const handleOpenEdit = (item: BudgetItem) => {
-        if (!canEdit) return;
-        setEditingItem(item);
-        setIsDialogOpen(true);
-    };
+    const symbol = CURRENCIES.find((c) => c.code === currency)?.symbol ?? currency;
+    const money = useCallback((n: number) => `${symbol} ${Math.round(n).toLocaleString()}`, [symbol]);
 
-    const handleSaveItem = async (itemData: Partial<BudgetItem>) => {
-        if (!weddingId || !canEdit) return;
+    // Every known category, in order, plus any used by items but missing a row
+    const categoryNames = useMemo(() => {
+        const names = categories.map((c) => c.name);
+        for (const i of items) if (!names.includes(i.category)) names.push(i.category);
+        return names;
+    }, [categories, items]);
 
-        const { item_name, is_paid, id, ...rest } = itemData;
+    const groupBy = useCallback(
+        (rows: Item[]): SheetGroup<Item>[] =>
+            categoryNames.map((name) => ({ key: name, label: name, rows: rows.filter((r) => r.category === name) })),
+        [categoryNames]
+    );
 
-        const payload: any = {
-            name: item_name,
-            category: rest.category,
-            estimatedCost: rest.estimated_cost,
-            unitPrice: rest.unit_price || null,
-            units: rest.units || 1,
-            actualCost: rest.actual_cost,
-            paidAmount: rest.paid_amount,
-            dueDate: rest.due_date ? new Date(rest.due_date) : null,
-            paidAt: is_paid ? new Date() : null,
-            notes: rest.notes,
-        };
-
+    const saveItem = useCallback(async (id: string, changes: Record<string, unknown>) => {
+        let previous: Item | undefined;
+        setItems((list) =>
+            list.map((i) => {
+                if (i.id !== id) return i;
+                previous = i;
+                return { ...i, ...changes } as Item;
+            })
+        );
         try {
-            if (editingItem) {
-                await updateBudgetItem(editingItem.id, payload);
-            } else {
-                await createBudgetItem(weddingId, payload);
+            const saved = await updateBudgetItem(id, changes);
+            setItems((list) => list.map((i) => (i.id === id ? saved : i)));
+            if (changes.category && !categories.some((c) => c.name === changes.category) && weddingId) {
+                setCategories(await getBudgetCategories(weddingId));
             }
-        } catch (error: any) {
-            alert("Error: " + error.message);
+        } catch (e) {
+            if (previous) setItems((list) => list.map((i) => (i.id === id ? previous! : i)));
+            toast.error((e as Error).message || "Couldn't save that change");
         }
-        setIsDialogOpen(false);
-        fetchBudget(weddingId);
+    }, [categories, weddingId]);
+
+    const onCommit = useCallback((row: Item, key: string, value: unknown) => saveItem(row.id, toChanges(row, key, value)), [saveItem]);
+
+    const addItem = async (category?: string) => {
+        if (!weddingId) return;
+        try {
+            const created = await createBudgetItem(weddingId, { name: "New item", category: category || categoryNames[0] || "General" });
+            setItems((list) => [...list, created]);
+            return created.id;
+        } catch (e) {
+            toast.error((e as Error).message);
+        }
     };
 
-
-    const getCurrencySymbol = (code: string) => {
-        return CURRENCIES.find(c => c.code === code)?.symbol || '$';
+    const onPasteRows = async (rows: Record<string, string>[]) => {
+        if (!weddingId) return;
+        let added = 0;
+        for (const r of rows) {
+            if (!r.name?.trim()) continue;
+            try {
+                const created = await createBudgetItem(weddingId, {
+                    name: r.name,
+                    category: r.category?.trim() || categoryNames[0] || "General",
+                    units: r.units,
+                    unitPrice: r.unitPrice,
+                    estimatedCost: r.estimatedCost ?? (r.unitPrice ? num(r.unitPrice.replace(/[^\d.]/g, "")) * (num(r.units) || 1) : undefined),
+                    actualCost: r.actualCost,
+                    paidAmount: r.paidAmount,
+                    notes: r.notes,
+                });
+                setItems((list) => [...list, created]);
+                added++;
+            } catch (e) {
+                toast.error(`${r.name}: ${(e as Error).message}`);
+            }
+        }
+        if (added) {
+            toast.success(`Added ${added} budget ${added === 1 ? "item" : "items"}`);
+            setCategories(await getBudgetCategories(weddingId));
+        }
     };
-    const symbol = getCurrencySymbol(currency);
 
-    const formatMoney = (amount: number) => {
-        return `${symbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+    const removeItem = async (item: Item) => {
+        setItems((list) => list.filter((i) => i.id !== item.id));
+        try {
+            await deleteBudgetItem(item.id);
+            toast.success(`Deleted ${item.name}`);
+        } catch (e) {
+            setItems((list) => [...list, item]);
+            toast.error((e as Error).message);
+        }
     };
 
-    if (loading || permLoading) {
-        return <div className="p-8 text-center text-muted-foreground">Loading budget...</div>;
+    const saveCategory = async (cat: Category, changes: { name?: string; allocated?: number }) => {
+        const before = categories;
+        setCategories((list) => list.map((c) => (c.id === cat.id ? { ...c, ...changes } : c)));
+        if (changes.name) setItems((list) => list.map((i) => (i.category === cat.name ? { ...i, category: changes.name! } : i)));
+        try {
+            await updateBudgetCategory(cat.id, changes);
+        } catch (e) {
+            setCategories(before);
+            if (weddingId) load(weddingId);
+            toast.error((e as Error).message);
+        }
+    };
+
+    const addCategory = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const name = newCategory.trim();
+        if (!name || !weddingId) return;
+        try {
+            const created = await createBudgetCategory(weddingId, { name });
+            setCategories((list) => [...list, created]);
+            setNewCategory("");
+        } catch (err) {
+            toast.error((err as Error).message.includes("Unique") ? `"${name}" already exists` : (err as Error).message);
+        }
+    };
+
+    const removeCategory = async (cat: Category) => {
+        try {
+            await deleteBudgetCategory(cat.id);
+            setCategories((list) => list.filter((c) => c.id !== cat.id));
+        } catch (e) {
+            toast.error((e as Error).message);
+        }
+    };
+
+    const saveTotal = async (value: number) => {
+        if (!weddingId || value === total) return;
+        const before = total;
+        setTotal(value);
+        try {
+            await updateWedding(weddingId, { estimatedBudget: value });
+        } catch (e) {
+            setTotal(before);
+            toast.error((e as Error).message);
+        }
+    };
+
+    const useTemplate = async () => {
+        if (!weddingId) return;
+        setSeeding(true);
+        try {
+            const { added } = await applyTemplate(weddingId, "budget");
+            await load(weddingId);
+            toast.success(added ? `Added ${added} categories with starter items` : "Your budget already has these categories");
+        } catch (e) {
+            toast.error((e as Error).message);
+        } finally {
+            setSeeding(false);
+        }
+    };
+
+    const exportCsv = () =>
+        downloadCsv(
+            `budget-${new Date().toISOString().slice(0, 10)}.csv`,
+            ["Category", "Item", "Qty", "Unit price", "Estimate", "Actual", "Paid", "Balance", "Due", "Notes"],
+            categoryNames.flatMap((c) =>
+                items.filter((i) => i.category === c).map((i) => [
+                    c, i.name, i.units, i.unitPrice, num(i.estimatedCost), num(i.actualCost), num(i.paidAmount), balance(i),
+                    i.dueDate ? new Date(i.dueDate).toISOString().slice(0, 10) : "", i.notes,
+                ])
+            )
+        );
+
+    const totals = {
+        planned: items.reduce((n, i) => n + cost(i), 0),
+        paid: items.reduce((n, i) => n + num(i.paidAmount), 0),
+        due: items.reduce((n, i) => n + balance(i), 0),
+        allocated: categories.reduce((n, c) => n + num(c.allocated), 0),
+    };
+    const overBudget = total > 0 && totals.planned > total;
+
+    const columns: SheetColumn<Item>[] = [
+        { key: "name", label: "Item", type: "text", width: 220, sticky: true },
+        { key: "category", label: "Category", type: "select", options: categoryNames.map((c) => ({ value: c, label: c })), width: 150 },
+        { key: "units", label: "Qty", type: "number", width: 60, align: "right" },
+        { key: "unitPrice", label: "Unit price", type: "money", width: 120, align: "right" },
+        {
+            key: "estimatedCost", label: "Estimate", type: "money", width: 130, align: "right",
+            readOnly: (i) => i.unitPrice !== null && i.unitPrice !== undefined,
+        },
+        { key: "actualCost", label: "Actual", type: "money", width: 120, align: "right", placeholder: "—" },
+        { key: "paidAmount", label: "Paid", type: "money", width: 120, align: "right" },
+        {
+            key: "balance", label: "Balance", type: "money", width: 120, align: "right", get: balance,
+            render: (i) => <span className={cn(balance(i) === 0 ? "text-emerald-700" : "font-medium")}>{balance(i) === 0 ? "Paid" : money(balance(i))}</span>,
+        },
+        { key: "dueDate", label: "Due", type: "date", width: 130 },
+        { key: "paidInFull", label: "Paid in full", type: "checkbox", width: 100, align: "center", get: (i) => !!i.paidAt, readOnly: false },
+        { key: "notes", label: "Notes", type: "text", width: 200 },
+    ];
+
+    const renderGroupHeader = (group: SheetGroup<Item>) => {
+        const cat = categories.find((c) => c.name === group.key);
+        const planned = group.rows.reduce((n, i) => n + cost(i), 0);
+        const paid = group.rows.reduce((n, i) => n + num(i.paidAmount), 0);
+        const allocated = num(cat?.allocated);
+        const left = allocated - planned;
+        return (
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+                {cat && canEdit ? (
+                    <CategoryName name={group.label} onRename={(name) => saveCategory(cat, { name })} />
+                ) : (
+                    <span className="font-semibold">{group.label}</span>
+                )}
+                <span className="text-muted-foreground tabular-nums">Planned <b className="text-foreground">{money(planned)}</b></span>
+                <span className="text-muted-foreground tabular-nums">Paid <b className="text-foreground">{money(paid)}</b></span>
+                {cat && (
+                    <span className="flex items-center gap-1 text-muted-foreground">
+                        of
+                        {canEdit ? (
+                            <AmountInput value={allocated} symbol={symbol} label={`Allocation for ${group.label}`} onSave={(v) => saveCategory(cat, { allocated: v })} />
+                        ) : (
+                            <b className="text-foreground">{money(allocated)}</b>
+                        )}
+                    </span>
+                )}
+                {allocated > 0 && (
+                    <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", left < 0 ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800")}>
+                        {left < 0 ? `${money(-left)} over` : `${money(left)} left`}
+                    </span>
+                )}
+                {cat && canEdit && group.rows.length === 0 && (
+                    <button onClick={() => removeCategory(cat)} className="ml-auto rounded p-1 text-muted-foreground hover:bg-rose-50 hover:text-rose-700" aria-label={`Delete category ${group.label}`}>
+                        <Trash2 className="h-4 w-4" />
+                    </button>
+                )}
+            </div>
+        );
+    };
+
+    if (loading) {
+        return <div className="space-y-4 animate-pulse"><div className="h-9 w-48 rounded-lg bg-gray-200" /><div className="h-28 rounded-2xl bg-white border border-border" /><div className="h-[50vh] rounded-2xl border border-border bg-white" /></div>;
     }
 
+    if (!weddingId) {
+        return (
+            <div className="py-20 text-center">
+                <p className="text-muted-foreground">Create your wedding first.</p>
+                <Link href="/onboarding" className="mt-4 inline-block rounded-xl bg-primary px-5 py-2.5 font-medium text-white">Start planning</Link>
+            </div>
+        );
+    }
+
+    const isEmpty = items.length === 0 && categories.length === 0;
+
     return (
-        <>
-            <div className="space-y-6 md:space-y-8 pb-20 md:pb-0">
-                {/* Header */}
-                <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                        <div className="flex items-center gap-4">
-                            <div>
-                                <h2 className="font-serif text-3xl font-bold text-foreground">Budget Tracker</h2>
-                                <p className="mt-1 text-muted-foreground">Manage your wedding expenses and payments.</p>
-                            </div>
-                            <ModeToggle />
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <TourGuide steps={BUDGET_STEPS} pageKey="budget" />
-                            <button
-                                onClick={() => setIsSearchVisible(!isSearchVisible)}
-                                className="md:hidden flex items-center justify-center h-10 w-10 rounded-xl border border-border bg-white text-gray-500 shadow-sm"
-                            >
-                                <Search className="w-4 h-4" />
-                            </button>
-                            {canEdit && (
-                                <button
-                                    id="tour-add-item"
-                                    onClick={handleOpenAdd}
-                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 rounded-xl bg-primary px-4 md:px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all">
-                                    <Plus className="w-4 h-4" />
-                                    Add Item
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Search & Filter Bar */}
-                    <div
-                        id="tour-status-filter"
-                        className={cn(
-                            "grid grid-cols-1 md:grid-cols-12 gap-3 transition-all duration-300",
-                            isSearchVisible ? "block" : "hidden md:grid"
-                        )}>
-                        <div className="md:col-span-7 relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <input
-                                type="text"
-                                placeholder="Search items..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
-                            />
-                        </div>
-                        <div className="md:col-span-5 flex gap-2">
-                            <div className="relative flex-1">
-                                <LayoutGrid className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                                <select
-                                    value={selectedCategory}
-                                    onChange={(e) => setSelectedCategory(e.target.value)}
-                                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm appearance-none cursor-pointer"
-                                >
-                                    {categories.map(cat => (
-                                        <option key={cat} value={cat}>{cat === "All" ? "All Categories" : cat}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            {canEdit && selectedIds.size > 0 && (
-                                <button
-                                    onClick={confirmBulkDelete}
-                                    className="flex items-center justify-center p-2.5 rounded-xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 transition-all shadow-sm"
-                                    title="Delete Selected"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                    <span className="ml-2 md:hidden">Delete ({selectedIds.size})</span>
-                                </button>
-                            )}
-                        </div>
-                    </div>
+        <div className="space-y-4 pb-6">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h1 className="font-serif text-3xl font-bold">Budget</h1>
+                    <p className="text-sm text-muted-foreground">Click any cell to edit. Quantity × unit price fills in the estimate.</p>
                 </div>
+                <button onClick={exportCsv} disabled={!items.length} className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-40">
+                    <Download className="h-4 w-4" /> Export
+                </button>
+            </div>
 
-                {/* Summary Cards */}
-                <div id="tour-budget-summary" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-                        <div className="flex items-center gap-4">
-                            <div className="rounded-full bg-blue-100 p-3 text-blue-600">
-                                <PieChart className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground">Total Estimated</p>
-                                <p className="text-2xl font-bold text-foreground">{formatMoney(totalEstimated)}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-                        <div className="flex items-center gap-4">
-                            <div className="rounded-full bg-purple-100 p-3 text-purple-600">
-                                <TrendingUp className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground">Total Actual</p>
-                                <p className="text-2xl font-bold text-foreground">{formatMoney(totalActual)}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-                        <div className="flex items-center gap-4">
-                            <div className="rounded-full bg-green-100 p-3 text-green-600">
-                                <DollarSign className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground">Paid So Far</p>
-                                <p className="text-2xl font-bold text-foreground">{formatMoney(totalPaid)}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-                        <div className="flex items-center gap-4">
-                            <div className="rounded-full bg-amber-100 p-3 text-amber-600">
-                                <Wallet className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground">Remaining Due</p>
-                                <p className="text-2xl font-bold text-foreground">{formatMoney(totalPending)}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Main Content */}
-                <div id="tour-budget-list" className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
-                    {mode === "simple" ? (
-                        /* SIMPLE MODE: Clean List */
-                        <div className="divide-y divide-border">
-                            {filteredItems.map((item) => (
-                                <div
-                                    key={item.id}
-                                    onClick={() => handleOpenEdit(item)}
-                                    className={cn(
-                                        "flex flex-col md:flex-row md:items-center justify-between p-4 md:p-6 hover:bg-muted/30 transition-colors cursor-pointer group",
-                                        selectedIds.has(item.id) && "bg-muted/50"
-                                    )}
-                                >
-                                    <div className="flex items-start md:items-center gap-3 md:gap-4 mb-3 md:mb-0">
-                                        {canEdit && (
-                                            <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground hover:text-primary mt-0.5 md:mt-0">
-                                                {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
-                                            </button>
-                                        )}
-
-                                        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0 group-hover:bg-primary/20 transition-colors">
-                                            <Wallet className="w-5 h-5" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <p className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">{item.item_name}</p>
-                                                <span className="inline-flex items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 uppercase tracking-tight">
-                                                    {item.category}
-                                                </span>
-                                            </div>
-                                            <p className="text-xs text-muted-foreground mt-0.5">
-                                                {item.unit_price && item.unit_price > 0 ? (
-                                                    <span className="font-medium text-primary/80">
-                                                        {formatMoney(item.unit_price)} × {item.units || 1}
-                                                    </span>
-                                                ) : (
-                                                    <span>Standard Item</span>
-                                                )}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center justify-between md:justify-end gap-4 pl-10 md:pl-0">
-                                        <div className="text-right">
-                                            <p className={cn("font-bold text-base md:text-sm", item.is_paid ? "text-green-600" : "text-foreground")}>
-                                                {formatMoney(item.estimated_cost)}
-                                            </p>
-                                            <span className={cn(
-                                                "text-[10px] font-bold uppercase tracking-wider",
-                                                item.is_paid ? "text-green-600/70" : "text-amber-600/70"
-                                            )}>
-                                                {item.is_paid ? "Paid" : "Pending"}
-                                            </span>
-                                        </div>
-                                        {canEdit && (
-                                            <div className="flex items-center gap-1 md:gap-2">
-                                                <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
-                                                    <Edit2 className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                            {filteredItems.length === 0 && <div className="p-8 text-center text-muted-foreground">No budget items found matching your filters.</div>}
-                        </div>
+            <div className="grid gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+                <div className="bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total budget</p>
+                    {canEdit ? (
+                        <AmountInput value={total} symbol={symbol} label="Total budget" onSave={saveTotal} large />
                     ) : (
-                        /* ADVANCED MODE: Responsive Layout */
-                        <>
-                            {/* Mobile Card View */}
-                            <div className="md:hidden divide-y divide-border">
-                                {filteredItems.map((item) => (
-                                    <div
-                                        key={item.id}
-                                        onClick={() => handleOpenEdit(item)}
-                                        className={cn(
-                                            "p-4 hover:bg-muted/30 transition-colors cursor-pointer group",
-                                            selectedIds.has(item.id) && "bg-muted/50"
-                                        )}
-                                    >
-                                        <div className="flex items-start justify-between mb-4">
-                                            <div className="flex items-center gap-3">
-                                                {canEdit && (
-                                                    <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground pt-0.5 hover:text-primary">
-                                                        {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
-                                                    </button>
-                                                )}
-                                                <div>
-                                                    <p className="font-bold text-foreground group-hover:text-primary transition-colors">{item.item_name}</p>
-                                                    <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-1">
-                                                        {item.category}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            {canEdit && (
-                                                <div className="flex items-center gap-1">
-                                                    <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
-                                                        <Edit2 className="w-4 h-4" />
-                                                    </button>
-                                                    <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="p-2 text-muted-foreground hover:text-red-600 transition-colors">
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="grid grid-cols-3 gap-2 mb-3">
-                                            <div className="bg-muted/30 px-2 py-2 rounded-xl border border-border/50 text-center">
-                                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight mb-1">Est.</p>
-                                                <span className="text-xs font-bold text-foreground">{formatMoney(item.estimated_cost)}</span>
-                                            </div>
-                                            <div className="bg-muted/30 px-2 py-2 rounded-xl border border-border/50 text-center">
-                                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight mb-1">Actual</p>
-                                                <span className="text-xs font-bold text-foreground">{item.actual_cost > 0 ? formatMoney(item.actual_cost) : '-'}</span>
-                                            </div>
-                                            <div className="bg-muted/30 px-2 py-2 rounded-xl border border-border/50 text-center">
-                                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight mb-1">Paid</p>
-                                                <span className="text-xs font-bold text-green-600">{item.paid_amount > 0 ? formatMoney(item.paid_amount) : '-'}</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex items-center justify-between mt-2 pl-8">
-                                            <div className="flex items-center gap-4">
-                                                {item.due_date && (
-                                                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                                                        <TrendingUp className="w-3 h-3" />
-                                                        <span className="text-[11px] font-medium">{new Date(item.due_date).toLocaleDateString()}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <span className={cn(
-                                                "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider",
-                                                item.is_paid ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700 shadow-sm"
-                                            )}>
-                                                {item.is_paid ? "Paid" : "Pending"}
-                                            </span>
-                                        </div>
-                                    </div>
-                                ))}
-                                {filteredItems.length === 0 && <div className="p-8 text-center text-muted-foreground">No items found matching your filters.</div>}
-                            </div>
-
-                            {/* Desktop Table View */}
-                            <div className="hidden md:block overflow-x-auto">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-muted text-muted-foreground font-medium uppercase text-xs">
-                                        <tr>
-                                            <th className="px-6 py-4 w-12">
-                                                {canEdit && (
-                                                    <button onClick={toggleSelectAll} className="flex items-center">
-                                                        {selectedIds.size > 0 && selectedIds.size === budgetItems.length ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
-                                                    </button>
-                                                )}
-                                            </th>
-                                            <th className="px-6 py-4">Item</th>
-                                            <th className="px-6 py-4">Category</th>
-                                            <th className="px-6 py-4">Est. Cost</th>
-                                            <th className="px-6 py-4">Actual</th>
-                                            <th className="px-6 py-4">Paid</th>
-                                            <th className="px-6 py-4">Due Date</th>
-                                            <th className="px-6 py-4">Status</th>
-                                            <th className="px-6 py-4">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-border">
-                                        {filteredItems.map((item) => (
-                                            <tr
-                                                key={item.id}
-                                                onClick={() => handleOpenEdit(item)}
-                                                className={cn(
-                                                    "hover:bg-muted/30 transition-colors cursor-pointer group",
-                                                    selectedIds.has(item.id) && "bg-muted/50"
-                                                )}
-                                            >
-                                                <td className="px-6 py-4">
-                                                    {canEdit && (
-                                                        <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="text-muted-foreground hover:text-primary">
-                                                            {selectedIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-4 h-4" />}
-                                                        </button>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 font-medium text-foreground">
-                                                    <div className="group-hover:text-primary transition-colors">{item.item_name}</div>
-                                                    {item.unit_price && item.unit_price > 0 && (
-                                                        <div className="text-[10px] text-muted-foreground font-normal">
-                                                            {formatMoney(item.unit_price)} × {item.units || 1}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 text-muted-foreground uppercase text-[10px] font-bold tracking-tight">{item.category}</td>
-                                                <td className="px-6 py-4 text-foreground font-medium">{formatMoney(item.estimated_cost)}</td>
-                                                <td className="px-6 py-4 text-foreground">{item.actual_cost > 0 ? formatMoney(item.actual_cost) : '-'}</td>
-                                                <td className="px-6 py-4 text-green-600 font-medium">{item.paid_amount > 0 ? formatMoney(item.paid_amount) : '-'}</td>
-                                                <td className="px-6 py-4 text-muted-foreground">{item.due_date ? new Date(item.due_date).toLocaleDateString() : '-'}</td>
-                                                <td className="px-6 py-4">
-                                                    <span className={cn(
-                                                        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                                                        item.is_paid ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
-                                                    )}>
-                                                        {item.is_paid ? "Paid" : "Pending"}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 flex items-center gap-2">
-                                                    {canEdit && (
-                                                        <>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="text-muted-foreground hover:text-primary transition-colors">
-                                                                <Edit2 className="w-4 h-4" />
-                                                            </button>
-                                                            <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id); }} className="text-muted-foreground hover:text-red-600 transition-colors">
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                        {filteredItems.length === 0 && (
-                                            <tr>
-                                                <td colSpan={9} className="p-8 text-center text-muted-foreground">No items found matching your filters. Add one to get started!</td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </>
+                        <p className="mt-1 font-serif text-2xl font-bold tabular-nums">{money(total)}</p>
+                    )}
+                    {total > 0 && totals.allocated !== total && categories.length > 0 && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            {totals.allocated < total ? `${money(total - totals.allocated)} not allocated to a category` : `Categories add up to ${money(totals.allocated - total)} more`}
+                        </p>
                     )}
                 </div>
-
-                <BudgetDialog
-                    isOpen={isDialogOpen}
-                    onClose={() => setIsDialogOpen(false)}
-                    onSubmit={handleSaveItem}
-                    initialData={editingItem}
-                    currencySymbol={symbol}
-                // Pass readOnly if needed, but we prevent opening dialog above
-                />
-
-                <ConfirmDialog
-                    // ... keeping remaining components ...
-
-                    isOpen={confirmState.isOpen}
-                    onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
-                    onConfirm={executeDelete}
-                    title={confirmState.type === 'bulk' ? "Delete Budget Items?" : "Delete Budget Item?"}
-                    description={confirmState.type === 'bulk'
-                        ? `Are you sure you want to delete ${selectedIds.size} items? This action cannot be undone.`
-                        : "Are you sure you want to delete this budget item? This action cannot be undone."}
-                    variant="danger"
-                />
-
-                <LimitModal
-                    isOpen={showLimitModal}
-                    onClose={() => setShowLimitModal(false)}
-                    feature="Budget Items"
-                    limit={PLAN_LIMITS.free.budget_items}
-                    tier={tier}
-                />
+                <div className="bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Planned spend</p>
+                    <p className={cn("mt-1 font-serif text-2xl font-bold tabular-nums", overBudget && "text-rose-700")}>{money(totals.planned)}</p>
+                    {total > 0 && (
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100">
+                            <div className={cn("h-full rounded-full", overBudget ? "bg-rose-500" : "bg-primary")} style={{ width: `${Math.min(100, (totals.planned / total) * 100)}%` }} />
+                        </div>
+                    )}
+                </div>
+                <div className="bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Paid so far</p>
+                    <p className="mt-1 font-serif text-2xl font-bold tabular-nums text-emerald-700">{money(totals.paid)}</p>
+                </div>
+                <div className="bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Still to pay</p>
+                    <p className="mt-1 font-serif text-2xl font-bold tabular-nums">{money(totals.due)}</p>
+                </div>
             </div>
-        </>
+
+            {isEmpty ? (
+                <div className="rounded-2xl border-2 border-dashed border-border bg-white px-6 py-16 text-center">
+                    <Wallet className="mx-auto h-10 w-10 text-muted-foreground" />
+                    <h2 className="mt-3 font-serif text-2xl font-bold">Start from a budget split</h2>
+                    <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                        We'll add 10 categories (venue & food, photo & video, attire and more) with a share of your total and a few starter items. Everything stays editable.
+                    </p>
+                    {canEdit && (
+                        <button onClick={useTemplate} disabled={seeding} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow disabled:opacity-50">
+                            <Sparkles className="h-4 w-4" /> {seeding ? "Setting up…" : "Set up my budget"}
+                        </button>
+                    )}
+                    {total === 0 && <p className="mt-3 text-xs text-muted-foreground">Tip: enter your total budget above first, so each category gets its share.</p>}
+                </div>
+            ) : (
+                <SheetGrid
+                    rows={items}
+                    columns={columns}
+                    getRowId={(i) => i.id}
+                    onCommit={onCommit}
+                    readOnly={!canEdit}
+                    formatMoney={money}
+                    groupBy={groupBy}
+                    renderGroupHeader={renderGroupHeader}
+                    onAddRow={canEdit ? addItem : undefined}
+                    addRowLabel={(group) => `Add to ${group}`}
+                    onPasteRows={canEdit ? onPasteRows : undefined}
+                    maxHeight="65vh"
+                    rowActions={(i) =>
+                        canEdit ? (
+                            <button onClick={() => removeItem(i)} className="rounded-md p-1.5 text-muted-foreground hover:bg-rose-50 hover:text-rose-700" aria-label={`Delete ${i.name}`}>
+                                <Trash2 className="h-4 w-4" />
+                            </button>
+                        ) : null
+                    }
+                />
+            )}
+
+            {!isEmpty && canEdit && (
+                <form onSubmit={addCategory} className="flex flex-wrap items-center gap-2">
+                    <input
+                        value={newCategory}
+                        onChange={(e) => setNewCategory(e.target.value)}
+                        placeholder="New category, e.g. Homecoming"
+                        aria-label="New category name"
+                        className="w-64 rounded-xl border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    <button type="submit" disabled={!newCategory.trim()} className="inline-flex items-center gap-1 rounded-xl border border-border bg-white px-3 py-2 text-sm font-medium disabled:opacity-40">
+                        <Plus className="h-4 w-4" /> Add category
+                    </button>
+                </form>
+            )}
+        </div>
+    );
+}
+
+function AmountInput({ value, symbol, label, onSave, large }: { value: number; symbol: string; label: string; onSave: (v: number) => void; large?: boolean }) {
+    const [draft, setDraft] = useState(String(Math.round(value)));
+    useEffect(() => setDraft(String(Math.round(value))), [value]);
+    const commit = () => {
+        const n = Number(draft.replace(/[^\d.]/g, ""));
+        if (Number.isFinite(n)) onSave(n);
+        else setDraft(String(Math.round(value)));
+    };
+    return (
+        <span className={cn("inline-flex items-baseline gap-1", large && "mt-1")}>
+            <span className={cn("text-muted-foreground", large ? "text-lg" : "text-xs")}>{symbol}</span>
+            <input
+                value={Number(draft) ? Number(draft).toLocaleString() : draft}
+                onChange={(e) => setDraft(e.target.value.replace(/[^\d.]/g, ""))}
+                onBlur={commit}
+                onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
+                inputMode="decimal"
+                aria-label={label}
+                className={cn(
+                    "rounded-md border border-transparent bg-transparent tabular-nums hover:border-border focus:border-primary focus:bg-white focus:outline-none",
+                    large ? "w-40 px-1 font-serif text-2xl font-bold" : "w-28 px-1 py-0.5 text-sm font-semibold text-foreground"
+                )}
+            />
+        </span>
+    );
+}
+
+function CategoryName({ name, onRename }: { name: string; onRename: (name: string) => void }) {
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(name);
+    if (!editing) {
+        return (
+            <button onClick={() => { setDraft(name); setEditing(true); }} className="group inline-flex items-center gap-1 font-semibold" aria-label={`Rename ${name}`}>
+                {name}
+                <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
+            </button>
+        );
+    }
+    const done = () => {
+        setEditing(false);
+        if (draft.trim() && draft.trim() !== name) onRename(draft.trim());
+    };
+    return (
+        <input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={done}
+            onKeyDown={(e) => {
+                if (e.key === "Enter") done();
+                if (e.key === "Escape") setEditing(false);
+            }}
+            aria-label="Category name"
+            className="w-48 rounded-md border border-primary bg-white px-2 py-0.5 text-sm font-semibold focus:outline-none"
+        />
     );
 }
