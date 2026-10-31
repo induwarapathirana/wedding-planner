@@ -21,8 +21,10 @@ import {
     DollarSign,
     Share2,
     MessageSquare,
-    ArrowLeft
+    ArrowLeft,
+    Search
 } from "lucide-react";
+import { openCommandPalette } from "./CommandPalette";
 import WeddingSelector from "./WeddingSelector";
 import { getUserProfile, getUserWeddingId } from "@/app/actions/data";
 
@@ -128,6 +130,20 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                     </div>
                 )}
 
+
+                {hasWeddings && (
+                    <button
+                        onClick={() => {
+                            onClose?.();
+                            openCommandPalette();
+                        }}
+                        className="mb-4 flex w-full items-center gap-3 rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-muted-foreground shadow-sm hover:border-primary/40 hover:text-foreground transition-colors"
+                    >
+                        <Search className="h-4 w-4" />
+                        <span className="flex-1 text-left">Search…</span>
+                        <kbd className="rounded-md border border-border bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium">⌘K</kbd>
+                    </button>
+                )}
 
                 {/* Navigation */}
                 <nav className="flex-1 space-y-1 overflow-y-auto">

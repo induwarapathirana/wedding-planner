@@ -1,7 +1,8 @@
 "use client";
 
 import { useMode } from "@/context/mode-context";
-import { Users, UserPlus, Check, X, HelpCircle, Utensils, Armchair, Edit2, Trash2, CheckSquare, Square, LayoutGrid, Search } from "lucide-react";
+import { Users, UserPlus, Check, X, HelpCircle, Utensils, Armchair, Edit2, Trash2, CheckSquare, Square, LayoutGrid, Search, Download } from "lucide-react";
+import { downloadCsv } from "@/lib/csv";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { getGuests, createGuest, updateGuest, deleteGuest, deleteGuests, getWeddingById, getUserWeddingId } from "@/app/actions/data";
@@ -73,17 +74,16 @@ export default function GuestPage() {
 
             setWeddingId(wId);
 
-            // Fetch wedding target
-            const weddingData = await getWeddingById(wId);
+            // Wedding target, effective tier (trial-aware) and guests are independent
+            const [weddingData, trialInfo] = await Promise.all([
+                getWeddingById(wId),
+                getEffectiveTier(wId),
+                fetchGuests(wId),
+            ]);
             if (weddingData) {
                 setTargetCount(weddingData.targetGuestCount || 0);
             }
-
-            // Fetch Effective Tier (checking trial status)
-            const trialInfo = await getEffectiveTier(wId);
             setTier(trialInfo.effectiveTier);
-
-            fetchGuests(wId);
         }
         loadData();
     }, []);
@@ -333,6 +333,24 @@ export default function GuestPage() {
     // Selected Headcount Calculation
     const selectedGuests = sortedGuests.filter((g) => selectedIds.has(g.id));
 
+    function exportGuests() {
+        downloadCsv(
+            `guest-list-${new Date().toISOString().slice(0, 10)}.csv`,
+            ["Name", "Group", "Priority", "RSVP", "Meal", "Table", "Companions", "Companion Names", "Headcount"],
+            sortedGuests.map((g) => [
+                g.name,
+                g.group_category,
+                g.priority,
+                g.rsvp_status,
+                g.meal_preference,
+                g.table_assignment,
+                g.companion_guest_count || 0,
+                (g.companion_names || []).join("; "),
+                1 + (g.companion_guest_count || 0),
+            ])
+        );
+    }
+
     // Helper function to get companion count (selected or all)
     const getCompanionCount = (guest: Guest) => {
         if (guest.selected_companions) {
@@ -407,6 +425,16 @@ export default function GuestPage() {
                             >
                                 <LayoutGrid className="w-4 h-4 text-gray-500" />
                                 Groups
+                            </button>
+
+                            <button
+                                onClick={exportGuests}
+                                disabled={sortedGuests.length === 0}
+                                className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-all shadow-sm"
+                                title="Download the guests shown as a CSV file"
+                            >
+                                <Download className="w-4 h-4 text-gray-500" />
+                                Export
                             </button>
 
                             <select

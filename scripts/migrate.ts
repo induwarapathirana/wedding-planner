@@ -317,7 +317,7 @@ async function migrate() {
                         }
                     });
                 } catch (e) {
-                    console.log(`Error migrating client ${c.id}:`, e.message);
+                    console.log(`Error migrating client ${c.id}:`, (e as Error).message);
                 }
             }
             console.log(`✅ Processed ${clients.length} Clients.`);

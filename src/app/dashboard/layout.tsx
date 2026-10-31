@@ -8,6 +8,7 @@ import { BottomNav } from "@/components/dashboard/bottom-nav";
 import { InstallPrompt } from "@/components/dashboard/install-prompt";
 import { NotificationPrompt } from "@/components/dashboard/notification-prompt";
 import { ModeProvider } from "@/context/mode-context";
+import { CommandPalette } from "@/components/dashboard/CommandPalette";
 import { Menu, X } from "lucide-react";
 import { registerServiceWorker } from "@/lib/registerServiceWorker";
 
@@ -98,6 +99,9 @@ export default function DashboardLayout({
 
                 {/* Bottom Navigation - Mobile Only */}
                 <BottomNav onMoreClick={() => setIsMobileOpen(true)} />
+
+                {/* Global search / quick navigation (Cmd+K) */}
+                <CommandPalette />
 
                 {/* PWA Install Prompt */}
                 <InstallPrompt />

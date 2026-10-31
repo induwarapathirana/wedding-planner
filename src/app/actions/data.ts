@@ -1,12 +1,19 @@
 "use server"
 
+import { cache } from "react"
+import { randomBytes } from "crypto"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
+import type { Prisma } from "@prisma/client"
 
 // ============================================
 // AUTH HELPERS
 // ============================================
+//
+// Every exported function in this file is a public POST endpoint, so each one
+// must check who is calling it. Reads return empty results when the caller has
+// no access; writes throw.
 
 function serializeDecimals<T>(obj: T): T {
   if (obj === null || obj === undefined) return obj;
@@ -19,6 +26,52 @@ function serializeDecimals<T>(obj: T): T {
   return obj;
 }
 
+// Deduplicated per request, so several actions in one render share one lookup.
+const getSessionUserId = cache(async (): Promise<string | null> => {
+  const session = await auth()
+  return session?.user?.id ?? null
+})
+
+const getRoleFor = cache(async (weddingId: string, userId: string): Promise<WeddingRole> => {
+  const collab = await prisma.collaborator.findUnique({
+    where: { weddingId_userId: { weddingId, userId } },
+    select: { role: true },
+  })
+  return (collab?.role as WeddingRole) || null
+})
+
+async function requireUserId() {
+  const userId = await getSessionUserId()
+  if (!userId) throw new Error("Unauthorized")
+  return userId
+}
+
+/** Throws unless the caller can read (or, with `write`, edit) the wedding. */
+async function requireWeddingAccess(weddingId: string, write = false) {
+  const userId = await requireUserId()
+  const role = await getRoleFor(weddingId, userId)
+  if (!role || (write && role === "viewer")) throw new Error("You don't have access to this wedding")
+  return { userId, role }
+}
+
+/** Returns false instead of throwing; used by read actions. */
+async function canReadWedding(weddingId: string) {
+  const userId = await getSessionUserId()
+  if (!userId || !weddingId) return false
+  return !!(await getRoleFor(weddingId, userId))
+}
+
+/** Relation filter limiting a record to weddings the user can edit. */
+function editableBy(userId: string): Prisma.WeddingWhereInput {
+  return { collaborators: { some: { userId, role: { in: ["owner", "editor"] } } } }
+}
+
+/** Strip fields a client must never set directly (ownership, ids, timestamps). */
+function clean<T extends Record<string, any>>(data: T, extra: string[] = []) {
+  const blocked = new Set(["id", "weddingId", "wedding", "createdAt", "userId", "plannerId", ...extra])
+  return Object.fromEntries(Object.entries(data ?? {}).filter(([k]) => !blocked.has(k))) as any
+}
+
 export async function getCurrentUser() {
   const session = await auth()
   if (!session?.user?.id) return null
@@ -26,21 +79,18 @@ export async function getCurrentUser() {
 }
 
 export async function getUserProfile() {
-  const session = await auth()
-  if (!session?.user?.id) return null
+  const userId = await getSessionUserId()
+  if (!userId) return null
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-  })
-  return user
+  return prisma.user.findUnique({ where: { id: userId } })
 }
 
 export async function updateUserRole(role: string) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
+  const userId = await requireUserId()
+  if (role !== "couple" && role !== "planner") throw new Error("Invalid role")
 
   await prisma.user.update({
-    where: { id: session.user.id },
+    where: { id: userId },
     data: { role },
   })
   revalidatePath("/dashboard")
@@ -51,17 +101,18 @@ export async function updateUserRole(role: string) {
 // ============================================
 
 export async function getUserWeddingId() {
-  const session = await auth()
-  if (!session?.user?.id) return null
+  const userId = await getSessionUserId()
+  if (!userId) return null
 
   const collab = await prisma.collaborator.findFirst({
-    where: { userId: session.user.id },
+    where: { userId },
     select: { weddingId: true },
   })
   return collab?.weddingId ?? null
 }
 
 export async function getWeddingById(id: string) {
+  if (!(await canReadWedding(id))) return null
   const w = await prisma.wedding.findUnique({ where: { id } })
   return serializeDecimals(w);
 }
@@ -72,34 +123,26 @@ export async function createWedding(data: {
   weddingDate: string
   styleTheme?: string
 }) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
+  const userId = await requireUserId()
 
   const trialEndsAt = new Date()
   trialEndsAt.setDate(trialEndsAt.getDate() + 14)
 
+  // Nested create keeps the wedding and its owner row in one transaction
   const wedding = await prisma.wedding.create({
     data: {
-      createdById: session.user.id,
+      createdById: userId,
       coupleName1: data.coupleName1,
       coupleName2: data.coupleName2,
       weddingDate: data.weddingDate ? new Date(data.weddingDate) : null,
       styleTheme: data.styleTheme || "Elegant",
       tier: "free",
       premiumTrialEndsAt: trialEndsAt,
+      collaborators: { create: { userId, role: "owner" } },
     },
   })
 
-  // Add creator as owner collaborator
-  await prisma.collaborator.create({
-    data: {
-      weddingId: wedding.id,
-      userId: session.user.id,
-      role: "owner",
-    },
-  })
-
-  return wedding
+  return serializeDecimals(wedding)
 }
 
 // ============================================
@@ -107,6 +150,7 @@ export async function createWedding(data: {
 // ============================================
 
 export async function getGuests(weddingId: string) {
+  if (!(await canReadWedding(weddingId))) return []
   return prisma.guest.findMany({
     where: { weddingId },
     orderBy: { createdAt: "desc" },
@@ -114,29 +158,33 @@ export async function getGuests(weddingId: string) {
 }
 
 export async function createGuest(weddingId: string, data: any) {
+  await requireWeddingAccess(weddingId, true)
   const guest = await prisma.guest.create({
-    data: { weddingId, ...data },
+    data: { ...clean(data), weddingId },
   })
   revalidatePath("/dashboard/guests")
   return guest
 }
 
 export async function updateGuest(id: string, data: any) {
+  const userId = await requireUserId()
   const guest = await prisma.guest.update({
-    where: { id },
-    data,
+    where: { id, wedding: editableBy(userId) },
+    data: clean(data),
   })
   revalidatePath("/dashboard/guests")
   return guest
 }
 
 export async function deleteGuest(id: string) {
-  await prisma.guest.delete({ where: { id } })
+  const userId = await requireUserId()
+  await prisma.guest.delete({ where: { id, wedding: editableBy(userId) } })
   revalidatePath("/dashboard/guests")
 }
 
 export async function deleteGuests(ids: string[]) {
-  await prisma.guest.deleteMany({ where: { id: { in: ids } } })
+  const userId = await requireUserId()
+  await prisma.guest.deleteMany({ where: { id: { in: ids }, wedding: editableBy(userId) } })
   revalidatePath("/dashboard/guests")
 }
 
@@ -145,6 +193,7 @@ export async function deleteGuests(ids: string[]) {
 // ============================================
 
 export async function getBudgetItems(weddingId: string) {
+  if (!(await canReadWedding(weddingId))) return []
   const items = await prisma.budgetItem.findMany({
     where: { weddingId },
     orderBy: { category: "asc" },
@@ -153,29 +202,33 @@ export async function getBudgetItems(weddingId: string) {
 }
 
 export async function createBudgetItem(weddingId: string, data: any) {
+  await requireWeddingAccess(weddingId, true)
   const item = await prisma.budgetItem.create({
-    data: { weddingId, ...data },
+    data: { ...clean(data), weddingId },
   })
   revalidatePath("/dashboard/budget")
   return serializeDecimals(item)
 }
 
 export async function updateBudgetItem(id: string, data: any) {
+  const userId = await requireUserId()
   const item = await prisma.budgetItem.update({
-    where: { id },
-    data,
+    where: { id, wedding: editableBy(userId) },
+    data: clean(data),
   })
   revalidatePath("/dashboard/budget")
   return serializeDecimals(item)
 }
 
 export async function deleteBudgetItem(id: string) {
-  await prisma.budgetItem.delete({ where: { id } })
+  const userId = await requireUserId()
+  await prisma.budgetItem.delete({ where: { id, wedding: editableBy(userId) } })
   revalidatePath("/dashboard/budget")
 }
 
 export async function deleteBudgetItems(ids: string[]) {
-  await prisma.budgetItem.deleteMany({ where: { id: { in: ids } } })
+  const userId = await requireUserId()
+  await prisma.budgetItem.deleteMany({ where: { id: { in: ids }, wedding: editableBy(userId) } })
   revalidatePath("/dashboard/budget")
 }
 
@@ -184,6 +237,7 @@ export async function deleteBudgetItems(ids: string[]) {
 // ============================================
 
 export async function getChecklistItems(weddingId: string) {
+  if (!(await canReadWedding(weddingId))) return []
   return prisma.checklistItem.findMany({
     where: { weddingId },
     orderBy: { dueDate: "asc" },
@@ -191,29 +245,33 @@ export async function getChecklistItems(weddingId: string) {
 }
 
 export async function createChecklistItem(weddingId: string, data: any) {
+  await requireWeddingAccess(weddingId, true)
   const item = await prisma.checklistItem.create({
-    data: { weddingId, ...data },
+    data: { ...clean(data), weddingId },
   })
   revalidatePath("/dashboard/checklist")
   return item
 }
 
 export async function updateChecklistItem(id: string, data: any) {
+  const userId = await requireUserId()
   const item = await prisma.checklistItem.update({
-    where: { id },
-    data,
+    where: { id, wedding: editableBy(userId) },
+    data: clean(data),
   })
   revalidatePath("/dashboard/checklist")
   return item
 }
 
 export async function deleteChecklistItem(id: string) {
-  await prisma.checklistItem.delete({ where: { id } })
+  const userId = await requireUserId()
+  await prisma.checklistItem.delete({ where: { id, wedding: editableBy(userId) } })
   revalidatePath("/dashboard/checklist")
 }
 
 export async function deleteChecklistItems(ids: string[]) {
-  await prisma.checklistItem.deleteMany({ where: { id: { in: ids } } })
+  const userId = await requireUserId()
+  await prisma.checklistItem.deleteMany({ where: { id: { in: ids }, wedding: editableBy(userId) } })
   revalidatePath("/dashboard/checklist")
 }
 
@@ -222,6 +280,7 @@ export async function deleteChecklistItems(ids: string[]) {
 // ============================================
 
 export async function getVendors(weddingId: string) {
+  if (!(await canReadWedding(weddingId))) return []
   const vendors = await prisma.vendor.findMany({
     where: { weddingId },
     orderBy: { category: "asc" },
@@ -230,35 +289,40 @@ export async function getVendors(weddingId: string) {
 }
 
 export async function createVendor(weddingId: string, data: any) {
+  await requireWeddingAccess(weddingId, true)
   const vendor = await prisma.vendor.create({
-    data: { weddingId, ...data },
+    data: { ...clean(data), weddingId },
   })
   revalidatePath("/dashboard/vendors")
   return serializeDecimals(vendor)
 }
 
 export async function updateVendor(id: string, data: any) {
+  const userId = await requireUserId()
   const vendor = await prisma.vendor.update({
-    where: { id },
-    data,
+    where: { id, wedding: editableBy(userId) },
+    data: clean(data),
   })
   revalidatePath("/dashboard/vendors")
   return serializeDecimals(vendor)
 }
 
 export async function deleteVendor(id: string) {
-  await prisma.vendor.delete({ where: { id } })
+  const userId = await requireUserId()
+  await prisma.vendor.delete({ where: { id, wedding: editableBy(userId) } })
   revalidatePath("/dashboard/vendors")
 }
 
 export async function deleteVendors(ids: string[]) {
-  await prisma.vendor.deleteMany({ where: { id: { in: ids } } })
+  const userId = await requireUserId()
+  await prisma.vendor.deleteMany({ where: { id: { in: ids }, wedding: editableBy(userId) } })
   revalidatePath("/dashboard/vendors")
 }
 
 export async function insertVendors(weddingId: string, vendors: any[]) {
+  await requireWeddingAccess(weddingId, true)
   await prisma.vendor.createMany({
-    data: vendors.map((v: any) => ({ weddingId, ...v })),
+    data: vendors.map((v: any) => ({ ...clean(v), weddingId })),
   })
   revalidatePath("/dashboard/vendors")
 }
@@ -268,38 +332,39 @@ export async function insertVendors(weddingId: string, vendors: any[]) {
 // ============================================
 
 export async function getDirectoryVendors() {
-  const session = await auth()
-  if (!session?.user?.id) return []
+  const userId = await getSessionUserId()
+  if (!userId) return []
 
   const vendors = await prisma.directoryVendor.findMany({
-    where: { userId: session.user.id },
+    where: { userId },
     orderBy: { companyName: "asc" },
   })
   return serializeDecimals(vendors)
 }
 
 export async function createDirectoryVendor(data: any) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
+  const userId = await requireUserId()
 
   const vendor = await prisma.directoryVendor.create({
-    data: { userId: session.user.id, ...data },
+    data: { ...clean(data), userId },
   })
   revalidatePath("/dashboard/vendors")
   return serializeDecimals(vendor)
 }
 
 export async function updateDirectoryVendor(id: string, data: any) {
+  const userId = await requireUserId()
   const vendor = await prisma.directoryVendor.update({
-    where: { id },
-    data,
+    where: { id, userId },
+    data: clean(data),
   })
   revalidatePath("/dashboard/vendors")
   return vendor
 }
 
 export async function deleteDirectoryVendor(id: string) {
-  await prisma.directoryVendor.delete({ where: { id } })
+  const userId = await requireUserId()
+  await prisma.directoryVendor.delete({ where: { id, userId } })
   revalidatePath("/dashboard/vendors")
 }
 
@@ -308,6 +373,7 @@ export async function deleteDirectoryVendor(id: string) {
 // ============================================
 
 export async function getInventoryItems(weddingId: string) {
+  if (!(await canReadWedding(weddingId))) return []
   const items = await prisma.inventoryItem.findMany({
     where: { weddingId },
     orderBy: { category: "asc" },
@@ -316,24 +382,27 @@ export async function getInventoryItems(weddingId: string) {
 }
 
 export async function createInventoryItem(weddingId: string, data: any) {
+  await requireWeddingAccess(weddingId, true)
   const item = await prisma.inventoryItem.create({
-    data: { weddingId, ...data },
+    data: { ...clean(data), weddingId },
   })
   revalidatePath("/dashboard/inventory")
   return serializeDecimals(item)
 }
 
 export async function updateInventoryItem(id: string, data: any) {
+  const userId = await requireUserId()
   const item = await prisma.inventoryItem.update({
-    where: { id },
-    data,
+    where: { id, wedding: editableBy(userId) },
+    data: clean(data),
   })
   revalidatePath("/dashboard/inventory")
   return serializeDecimals(item)
 }
 
 export async function deleteInventoryItem(id: string) {
-  await prisma.inventoryItem.delete({ where: { id } })
+  const userId = await requireUserId()
+  await prisma.inventoryItem.delete({ where: { id, wedding: editableBy(userId) } })
   revalidatePath("/dashboard/inventory")
 }
 
@@ -342,6 +411,7 @@ export async function deleteInventoryItem(id: string) {
 // ============================================
 
 export async function getEvents(weddingId: string) {
+  if (!(await canReadWedding(weddingId))) return []
   return prisma.event.findMany({
     where: { weddingId },
     orderBy: { startTime: "asc" },
@@ -349,29 +419,33 @@ export async function getEvents(weddingId: string) {
 }
 
 export async function createEvent(weddingId: string, data: any) {
+  await requireWeddingAccess(weddingId, true)
   const event = await prisma.event.create({
-    data: { weddingId, ...data },
+    data: { ...clean(data), weddingId },
   })
   revalidatePath("/dashboard/itinerary")
   return event
 }
 
 export async function updateEvent(id: string, data: any) {
+  const userId = await requireUserId()
   const event = await prisma.event.update({
-    where: { id },
-    data,
+    where: { id, wedding: editableBy(userId) },
+    data: clean(data),
   })
   revalidatePath("/dashboard/itinerary")
   return event
 }
 
 export async function deleteEvent(id: string) {
-  await prisma.event.delete({ where: { id } })
+  const userId = await requireUserId()
+  await prisma.event.delete({ where: { id, wedding: editableBy(userId) } })
   revalidatePath("/dashboard/itinerary")
 }
 
 export async function deleteEvents(ids: string[]) {
-  await prisma.event.deleteMany({ where: { id: { in: ids } } })
+  const userId = await requireUserId()
+  await prisma.event.deleteMany({ where: { id: { in: ids }, wedding: editableBy(userId) } })
   revalidatePath("/dashboard/itinerary")
 }
 
@@ -380,52 +454,57 @@ export async function deleteEvents(ids: string[]) {
 // ============================================
 
 export async function getInvitations(weddingId: string) {
+  try {
+    await requireWeddingAccess(weddingId, true)
+  } catch {
+    return []
+  }
   return prisma.invitation.findMany({
     where: { weddingId },
     orderBy: { createdAt: "desc" },
   })
 }
 
-export async function createInvitation(weddingId: string, data: any) {
+export async function createInvitation(weddingId: string, data: { email?: string; role?: string; token?: string }) {
+  await requireWeddingAccess(weddingId, true)
+  // Invitations can never grant ownership, and the token is generated here so
+  // it is unguessable regardless of what the client sends.
+  const role = data.role === "viewer" ? "viewer" : "editor"
+  const token = randomBytes(24).toString("base64url")
+
   return prisma.invitation.create({
-    data: { weddingId, ...data },
+    data: { weddingId, email: data.email || null, role, token },
   })
 }
 
 export async function deleteInvitation(id: string) {
-  await prisma.invitation.delete({ where: { id } })
+  const userId = await requireUserId()
+  await prisma.invitation.delete({ where: { id, wedding: editableBy(userId) } })
 }
 
 export async function acceptInvitation(token: string) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
+  const userId = await requireUserId()
 
   const invitation = await prisma.invitation.findUnique({
     where: { token },
   })
-  if (!invitation) throw new Error("Invalid invitation")
+  if (!invitation || invitation.accepted) throw new Error("Invalid invitation")
 
-  // Add user as collaborator
-  await prisma.collaborator.upsert({
-    where: {
-      weddingId_userId: {
+  await prisma.$transaction([
+    prisma.collaborator.upsert({
+      where: { weddingId_userId: { weddingId: invitation.weddingId, userId } },
+      update: {},
+      create: {
         weddingId: invitation.weddingId,
-        userId: session.user.id,
+        userId,
+        role: invitation.role === "viewer" ? "viewer" : "editor",
       },
-    },
-    update: {},
-    create: {
-      weddingId: invitation.weddingId,
-      userId: session.user.id,
-      role: invitation.role || "editor",
-    },
-  })
-
-  // Mark invitation as accepted
-  await prisma.invitation.update({
-    where: { id: invitation.id },
-    data: { accepted: true },
-  })
+    }),
+    prisma.invitation.update({
+      where: { id: invitation.id },
+      data: { accepted: true },
+    }),
+  ])
 
   return { weddingId: invitation.weddingId }
 }
@@ -435,13 +514,12 @@ export async function acceptInvitation(token: string) {
 // ============================================
 
 export async function submitFeedback(message: string, rating?: number) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
+  const userId = await requireUserId()
 
   return prisma.feedback.create({
     data: {
-      userId: session.user.id,
-      message,
+      userId,
+      message: String(message).slice(0, 5000),
       rating,
     },
   })
@@ -456,22 +534,24 @@ export async function savePushSubscription(data: {
   p256dh: string
   auth: string
 }) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
+  const userId = await requireUserId()
 
   return prisma.pushSubscription.upsert({
     where: { endpoint: data.endpoint },
-    update: { p256dh: data.p256dh, auth: data.auth },
+    update: { userId, p256dh: data.p256dh, auth: data.auth },
     create: {
-      userId: session.user.id,
-      ...data,
+      userId,
+      endpoint: data.endpoint,
+      p256dh: data.p256dh,
+      auth: data.auth,
     },
   })
 }
 
 export async function deletePushSubscription(endpoint: string) {
+  const userId = await requireUserId()
   await prisma.pushSubscription.deleteMany({
-    where: { endpoint },
+    where: { endpoint, userId },
   })
 }
 
@@ -480,11 +560,11 @@ export async function deletePushSubscription(endpoint: string) {
 // ============================================
 
 export async function getClients() {
-  const session = await auth()
-  if (!session?.user?.id) return []
+  const userId = await getSessionUserId()
+  if (!userId) return []
 
   const clients = await prisma.client.findMany({
-    where: { plannerId: session.user.id },
+    where: { plannerId: userId },
     orderBy: { createdAt: "desc" },
     include: {
       wedding: {
@@ -500,30 +580,45 @@ export async function getClients() {
   return serializeDecimals(clients);
 }
 
+/** A client may only be linked to a wedding the planner collaborates on. */
+async function cleanClientData(userId: string, data: any) {
+  const { weddingId, ...rest } = data ?? {}
+  const cleaned = clean(rest)
+  if (weddingId) {
+    if (!(await getRoleFor(weddingId, userId))) throw new Error("You don't have access to this wedding")
+    cleaned.weddingId = weddingId
+  } else if (weddingId === null) {
+    cleaned.weddingId = null
+  }
+  return cleaned
+}
+
 export async function createClient(data: any) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
+  const userId = await requireUserId()
 
   const client = await prisma.client.create({
-    data: { plannerId: session.user.id, ...data },
+    data: { ...(await cleanClientData(userId, data)), plannerId: userId },
   })
   revalidatePath("/dashboard/clients")
   return serializeDecimals(client)
 }
 
 export async function updateClient(id: string, data: any) {
+  const userId = await requireUserId()
   const client = await prisma.client.update({
-    where: { id },
-    data,
+    where: { id, plannerId: userId },
+    data: await cleanClientData(userId, data),
   })
   revalidatePath("/dashboard/clients")
   return serializeDecimals(client)
 }
 
 export async function updateWedding(id: string, data: any) {
+  await requireWeddingAccess(id, true)
+  // Plan fields only change through the payment webhook
   const wedding = await prisma.wedding.update({
     where: { id },
-    data,
+    data: clean(data, ["tier", "premiumTrialEndsAt", "createdById", "createdBy", "collaborators"]),
   })
   revalidatePath("/dashboard/settings")
   revalidatePath("/dashboard")
@@ -535,8 +630,7 @@ export async function createClientWedding(clientData: {
   weddingDate?: string | null
   budget?: number
 }) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
+  const userId = await requireUserId()
 
   const nameParts = clientData.name.split(/ and | & /)
   const coupleName1 = nameParts[0]?.trim() || clientData.name
@@ -544,22 +638,14 @@ export async function createClientWedding(clientData: {
 
   const wedding = await prisma.wedding.create({
     data: {
-      createdById: session.user.id,
+      createdById: userId,
       coupleName1,
       coupleName2,
       weddingDate: clientData.weddingDate ? new Date(clientData.weddingDate) : null,
       estimatedBudget: clientData.budget || 0,
       currency: 'USD',
       tier: 'free',
-    },
-  })
-
-  // Add planner as owner collaborator
-  await prisma.collaborator.create({
-    data: {
-      weddingId: wedding.id,
-      userId: session.user.id,
-      role: 'owner',
+      collaborators: { create: { userId, role: 'owner' } },
     },
   })
 
@@ -571,60 +657,87 @@ export async function createClientWedding(clientData: {
 // ============================================
 
 export async function getDashboardStats(weddingId: string) {
-  const [guests, budgetItems, upcomingTasks, pendingPayments, pendingGuests, wedding] =
-    await Promise.all([
-      prisma.guest.findMany({
-        where: { weddingId },
-        select: { rsvpStatus: true, companionGuestCount: true },
-      }),
-      prisma.budgetItem.findMany({
-        where: { weddingId },
-        select: { estimatedCost: true },
-      }),
-      prisma.checklistItem.findMany({
-        where: { weddingId, isCompleted: false },
-        orderBy: { dueDate: "asc" },
-        take: 5,
-      }),
-      prisma.budgetItem.findMany({
-        where: { weddingId, paidAt: null },
-        orderBy: { dueDate: "asc" },
-        take: 5,
-      }),
-      prisma.guest.findMany({
-        where: { weddingId, rsvpStatus: "pending" },
-        take: 5,
-      }),
-      prisma.wedding.findUnique({
-        where: { id: weddingId },
-        select: { targetGuestCount: true, estimatedBudget: true, currency: true },
-      }),
-    ])
+  await requireWeddingAccess(weddingId)
 
-  const guestCount = guests.reduce(
-    (acc, g) => acc + 1 + (g.companionGuestCount || 0),
-    0
-  )
-  const confirmedGuest = guests
-    .filter((g) => g.rsvpStatus === "accepted")
-    .reduce((acc, g) => acc + 1 + (g.companionGuestCount || 0), 0)
-  const pendingGuestCount = guests
-    .filter((g) => g.rsvpStatus === "pending")
-    .reduce((acc, g) => acc + 1 + (g.companionGuestCount || 0), 0)
-  const totalBudget = budgetItems.reduce(
-    (acc, item) => acc + Number(item.estimatedCost),
-    0
-  )
+  // Aggregate in the database instead of pulling every guest and budget row
+  const [
+    guestGroups,
+    budgetTotals,
+    checklistGroups,
+    vendorGroups,
+    upcomingTasks,
+    pendingPayments,
+    pendingGuests,
+    wedding,
+  ] = await Promise.all([
+    prisma.guest.groupBy({
+      by: ["rsvpStatus"],
+      where: { weddingId },
+      _count: { _all: true },
+      _sum: { companionGuestCount: true },
+    }),
+    prisma.budgetItem.aggregate({
+      where: { weddingId },
+      _sum: { estimatedCost: true, paidAmount: true },
+    }),
+    prisma.checklistItem.groupBy({
+      by: ["isCompleted"],
+      where: { weddingId },
+      _count: { _all: true },
+    }),
+    prisma.vendor.groupBy({
+      by: ["status"],
+      where: { weddingId },
+      _count: { _all: true },
+    }),
+    prisma.checklistItem.findMany({
+      where: { weddingId, isCompleted: false },
+      orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }],
+      take: 5,
+    }),
+    prisma.budgetItem.findMany({
+      where: { weddingId, paidAt: null },
+      orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }],
+      take: 5,
+    }),
+    prisma.guest.findMany({
+      where: { weddingId, rsvpStatus: "pending" },
+      select: { id: true, name: true },
+      take: 5,
+    }),
+    prisma.wedding.findUnique({
+      where: { id: weddingId },
+      select: { targetGuestCount: true, estimatedBudget: true, currency: true },
+    }),
+  ])
+
+  const headcount = (status?: string) =>
+    guestGroups
+      .filter((g) => !status || g.rsvpStatus === status)
+      .reduce((acc, g) => acc + g._count._all + (g._sum.companionGuestCount || 0), 0)
+
+  const tasksDone = checklistGroups.find((g) => g.isCompleted)?._count._all || 0
+  const tasksTotal = checklistGroups.reduce((acc, g) => acc + g._count._all, 0)
+  const vendorsTotal = vendorGroups.reduce((acc, g) => acc + g._count._all, 0)
+  const vendorsBooked = vendorGroups
+    .filter((g) => g.status === "booked" || g.status === "paid")
+    .reduce((acc, g) => acc + g._count._all, 0)
 
   return serializeDecimals({
     stats: {
-      guestCount,
-      confirmedGuest,
-      pendingGuest: pendingGuestCount,
+      guestCount: headcount(),
+      confirmedGuest: headcount("accepted"),
+      declinedGuest: headcount("declined"),
+      pendingGuest: headcount("pending"),
       targetGuest: wedding?.targetGuestCount || 0,
-      totalBudget,
+      totalBudget: Number(budgetTotals._sum.estimatedCost || 0),
+      paidBudget: Number(budgetTotals._sum.paidAmount || 0),
       estBudget: Number(wedding?.estimatedBudget || 0),
       currency: wedding?.currency || "USD",
+      tasksDone,
+      tasksTotal,
+      vendorsBooked,
+      vendorsTotal,
     },
     upcomingTasks,
     pendingPayments,
@@ -636,21 +749,24 @@ export async function getDashboardStats(weddingId: string) {
 // USER PROFILE OPERATIONS (for planner settings)
 // ============================================
 
-export async function updateUserProfile(data: any) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
+const PROFILE_FIELDS = ["name", "image", "companyName", "logoUrl", "website", "signatureUrl", "brandingColor"] as const
 
+export async function updateUserProfile(data: any) {
+  const userId = await requireUserId()
+
+  const allowed = Object.fromEntries(
+    Object.entries(data ?? {}).filter(([k]) => (PROFILE_FIELDS as readonly string[]).includes(k))
+  )
   const user = await prisma.user.update({
-    where: { id: session.user.id },
-    data,
+    where: { id: userId },
+    data: allowed,
   })
   revalidatePath("/dashboard/settings")
   return user
 }
 
 export async function getUserIdFromSession() {
-  const session = await auth()
-  return session?.user?.id ?? null
+  return getSessionUserId()
 }
 
 // ============================================
@@ -658,6 +774,7 @@ export async function getUserIdFromSession() {
 // ============================================
 
 export async function getCollaborators(weddingId: string) {
+  if (!(await canReadWedding(weddingId))) return []
   return prisma.collaborator.findMany({
     where: { weddingId },
     include: {
@@ -674,8 +791,12 @@ export async function getCollaborators(weddingId: string) {
 }
 
 export async function deleteCollaborator(weddingId: string, userId: string) {
+  const { userId: callerId, role } = await requireWeddingAccess(weddingId)
+  // Owners can remove anyone else; everyone can remove themselves
+  if (role !== "owner" && callerId !== userId) throw new Error("Only the owner can remove members")
+
   await prisma.collaborator.deleteMany({
-    where: { weddingId, userId },
+    where: { weddingId, userId, role: { not: "owner" } },
   })
   revalidatePath("/dashboard/settings")
 }
@@ -685,14 +806,8 @@ export async function deleteCollaborator(weddingId: string, userId: string) {
 // ============================================
 
 export async function deleteWeddingCascade(weddingId: string) {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Unauthorized")
-
-  // Verify the user is the owner
-  const collab = await prisma.collaborator.findFirst({
-    where: { weddingId, userId: session.user.id, role: "owner" },
-  })
-  if (!collab) throw new Error("Only the wedding owner can delete it")
+  const { role } = await requireWeddingAccess(weddingId, true)
+  if (role !== "owner") throw new Error("Only the wedding owner can delete it")
 
   // Delete all related data in correct order
   await prisma.$transaction([
@@ -715,6 +830,7 @@ export async function deleteWeddingCascade(weddingId: string) {
 // ============================================
 
 export async function getVendorNames(weddingId: string) {
+  if (!(await canReadWedding(weddingId))) return []
   const vendors = await prisma.vendor.findMany({
     where: { weddingId },
     select: { companyName: true },
@@ -725,20 +841,9 @@ export async function getVendorNames(weddingId: string) {
 export type WeddingRole = 'owner' | 'editor' | 'viewer' | null;
 
 export async function checkWeddingPermission(weddingId: string): Promise<WeddingRole> {
-  const session = await auth();
-  if (!session?.user?.id) return null;
-
-  const collab = await prisma.collaborator.findUnique({
-    where: {
-      weddingId_userId: {
-        weddingId,
-        userId: session.user.id,
-      },
-    },
-    select: { role: true },
-  });
-
-  return (collab?.role as WeddingRole) || null;
+  const userId = await getSessionUserId()
+  if (!userId) return null
+  return getRoleFor(weddingId, userId)
 }
 
 type WeddingDetails = {
@@ -749,20 +854,106 @@ type WeddingDetails = {
 };
 
 export async function getUserWeddings(): Promise<WeddingDetails[]> {
-  const session = await auth();
-  console.log("DEBUG getUserWeddings Session:", JSON.stringify(session?.user || {}));
-  if (!session?.user?.id) return [];
+  const userId = await getSessionUserId()
+  if (!userId) return [];
 
   const collabs = await prisma.collaborator.findMany({
-    where: { userId: session.user.id },
-    include: { wedding: true },
+    where: { userId },
+    select: {
+      wedding: { select: { id: true, coupleName1: true, coupleName2: true, weddingDate: true } },
+    },
   });
-  console.log("DEBUG getUserWeddings Collabs:", collabs.length);
 
-  return collabs.map((c: any) => ({
+  return collabs.map((c) => ({
     id: c.wedding.id,
     coupleName1: c.wedding.coupleName1,
     coupleName2: c.wedding.coupleName2,
     weddingDate: c.wedding.weddingDate ? c.wedding.weddingDate.toISOString() : '',
   }));
+}
+
+// ============================================
+// SEARCH (command palette)
+// ============================================
+
+export type SearchHit = {
+  type: "guest" | "vendor" | "task" | "budget" | "event"
+  id: string
+  title: string
+  subtitle?: string
+  href: string
+}
+
+export async function searchWedding(weddingId: string, query: string): Promise<SearchHit[]> {
+  const q = query.trim()
+  if (q.length < 2 || !(await canReadWedding(weddingId))) return []
+
+  const contains = { contains: q, mode: "insensitive" as const }
+  const take = 5
+
+  const [guests, vendors, tasks, budget, events] = await Promise.all([
+    prisma.guest.findMany({
+      where: { weddingId, OR: [{ name: contains }, { email: contains }] },
+      select: { id: true, name: true, rsvpStatus: true, tableAssignment: true },
+      take,
+    }),
+    prisma.vendor.findMany({
+      where: { weddingId, OR: [{ companyName: contains }, { contactName: contains }, { category: contains }] },
+      select: { id: true, companyName: true, category: true, status: true },
+      take,
+    }),
+    prisma.checklistItem.findMany({
+      where: { weddingId, title: contains },
+      select: { id: true, title: true, isCompleted: true },
+      take,
+    }),
+    prisma.budgetItem.findMany({
+      where: { weddingId, OR: [{ name: contains }, { category: contains }] },
+      select: { id: true, name: true, category: true },
+      take,
+    }),
+    prisma.event.findMany({
+      where: { weddingId, OR: [{ title: contains }, { location: contains }] },
+      select: { id: true, title: true, location: true },
+      take,
+    }),
+  ])
+
+  return [
+    ...guests.map((g) => ({
+      type: "guest" as const,
+      id: g.id,
+      title: g.name,
+      subtitle: [g.rsvpStatus, g.tableAssignment && `Table ${g.tableAssignment}`].filter(Boolean).join(" · "),
+      href: "/dashboard/guests",
+    })),
+    ...vendors.map((v) => ({
+      type: "vendor" as const,
+      id: v.id,
+      title: v.companyName || "Untitled vendor",
+      subtitle: [v.category, v.status].filter(Boolean).join(" · "),
+      href: "/dashboard/vendors",
+    })),
+    ...tasks.map((t) => ({
+      type: "task" as const,
+      id: t.id,
+      title: t.title,
+      subtitle: t.isCompleted ? "Done" : "To do",
+      href: "/dashboard/checklist",
+    })),
+    ...budget.map((b) => ({
+      type: "budget" as const,
+      id: b.id,
+      title: b.name,
+      subtitle: b.category,
+      href: "/dashboard/budget",
+    })),
+    ...events.map((e) => ({
+      type: "event" as const,
+      id: e.id,
+      title: e.title,
+      subtitle: e.location || undefined,
+      href: "/dashboard/itinerary",
+    })),
+  ]
 }

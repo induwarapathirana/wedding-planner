@@ -8,6 +8,7 @@ import { formatLargeNumber, getNumberFontSize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { PlanComparisonModal } from "@/components/dashboard/plan-comparison-modal";
 import { useState } from "react";
+import { ReadinessCard } from "@/components/dashboard/ReadinessCard";
 
 type WeddingData = {
     id: string;
@@ -20,17 +21,25 @@ type WeddingData = {
     tier?: 'free' | 'premium';
 };
 
+export type DashboardStats = {
+    guestCount: number;
+    confirmedGuest: number;
+    declinedGuest?: number;
+    pendingGuest: number;
+    targetGuest: number;
+    totalBudget: number;
+    paidBudget?: number;
+    estBudget: number;
+    currency: string;
+    tasksDone?: number;
+    tasksTotal?: number;
+    vendorsBooked?: number;
+    vendorsTotal?: number;
+};
+
 type CoupleDashboardProps = {
     wedding: WeddingData;
-    stats: {
-        guestCount: number;
-        confirmedGuest: number;
-        pendingGuest: number;
-        targetGuest: number;
-        totalBudget: number;
-        estBudget: number;
-        currency: string;
-    };
+    stats: DashboardStats;
     upcomingTasks: any[];
     pendingPayments: any[];
     pendingGuests: any[];
@@ -39,7 +48,7 @@ type CoupleDashboardProps = {
 export function CoupleDashboard({ wedding, stats, upcomingTasks, pendingPayments, pendingGuests }: CoupleDashboardProps) {
     const router = useRouter();
     const [showPlanModal, setShowPlanModal] = useState(false);
-    const daysToGo = differenceInDays(parseISO(wedding.weddingDate), new Date());
+    const daysToGo = wedding.weddingDate ? differenceInDays(parseISO(wedding.weddingDate), new Date()) : null;
 
     return (
         <div className="space-y-6 md:space-y-8 pb-6">
@@ -57,6 +66,8 @@ export function CoupleDashboard({ wedding, stats, upcomingTasks, pendingPayments
                     + Add to Checklist
                 </button>
             </div>
+
+            <ReadinessCard stats={stats} daysToGo={daysToGo} />
 
             {/* Stat Cards */}
             <div className="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-3">
@@ -117,11 +128,15 @@ export function CoupleDashboard({ wedding, stats, upcomingTasks, pendingPayments
                         </div>
                         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide relative z-10 group-hover:text-purple-600 transition-colors">Days to Go</h3>
                         <div className="mt-3 relative z-10">
-                            <p className={cn("font-bold text-foreground leading-none", daysToGo > 99 ? "text-3xl md:text-4xl" : "text-4xl md:text-5xl")}>
-                                {daysToGo > 0 ? daysToGo : "🎉"}
+                            <p className={cn("font-bold text-foreground leading-none", daysToGo !== null && daysToGo > 99 ? "text-3xl md:text-4xl" : "text-4xl md:text-5xl")}>
+                                {daysToGo === null ? "—" : daysToGo > 0 ? daysToGo : "🎉"}
                             </p>
                             <p className="mt-2 text-xs md:text-sm text-muted-foreground font-medium">
-                                {daysToGo > 0 ? new Date(wedding.weddingDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : "Today's the day!"}
+                                {daysToGo === null
+                                    ? "Set your date in Settings"
+                                    : daysToGo > 0
+                                        ? new Date(wedding.weddingDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
+                                        : daysToGo === 0 ? "Today's the day!" : "Congratulations!"}
                             </p>
                         </div>
                     </div>

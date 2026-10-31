@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth as getSession } from '@/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
     try {
-        const { subscription, userId, weddingId } = await request.json();
+        // Always bind the subscription to the signed-in user, never a client-supplied id
+        const session = await getSession();
+        const userId = session?.user?.id;
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
 
-        if (!subscription || !userId || !weddingId) {
+        const { subscription } = await request.json();
+
+        if (!subscription?.endpoint || !subscription?.keys) {
             return NextResponse.json(
                 { error: 'Missing required fields' },
                 { status: 400 }
@@ -57,6 +65,12 @@ export async function POST(request: NextRequest) {
 // Delete subscription
 export async function DELETE(request: NextRequest) {
     try {
+        const session = await getSession();
+        const userId = session?.user?.id;
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const { endpoint } = await request.json();
 
         if (!endpoint) {
@@ -69,7 +83,7 @@ export async function DELETE(request: NextRequest) {
         try {
             const { prisma } = await import('@/lib/prisma');
             await prisma.pushSubscription.deleteMany({
-                where: { endpoint }
+                where: { endpoint, userId }
             });
             return NextResponse.json({ success: true });
         } catch (error) {

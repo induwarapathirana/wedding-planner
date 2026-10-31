@@ -572,16 +572,13 @@ function TeamMembers({ weddingId, tier }: { weddingId: string, tier: string }) {
         setSending(true);
         setGeneratedLink(null);
 
-        // Generate simple random token
-        const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-
         try {
-            await createInvitation(weddingId, {
+            // The server generates a secure token
+            const invitation = await createInvitation(weddingId, {
                 email: inviteEmail,
-                token: token,
                 role: inviteRole,
             });
-            setGeneratedLink(`${window.location.origin}/invite/${token}`);
+            setGeneratedLink(`${window.location.origin}/invite/${invitation.token}`);
             setInviteEmail("");
             fetchData();
         } catch (error: any) {

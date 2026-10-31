@@ -110,6 +110,8 @@ model Wedding {
   events        Event[]
   invitations   Invitation[]
   clients       Client[]
+
+  @@index([createdById])
 }
 
 model Collaborator {
@@ -122,6 +124,8 @@ model Collaborator {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([weddingId, userId])
+
+  @@index([userId])
 }
 
 model BudgetItem {
@@ -138,6 +142,8 @@ model BudgetItem {
   createdAt     DateTime  @default(now()) @db.Timestamptz()
 
   wedding       Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  @@index([weddingId, category])
 }
 
 model Guest {
@@ -156,6 +162,8 @@ model Guest {
   createdAt           DateTime @default(now()) @db.Timestamptz()
 
   wedding             Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  @@index([weddingId, rsvpStatus])
 }
 
 model ChecklistItem {
@@ -169,6 +177,8 @@ model ChecklistItem {
   createdAt   DateTime  @default(now()) @db.Timestamptz()
 
   wedding     Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  @@index([weddingId, isCompleted, dueDate])
 }
 
 model Vendor {
@@ -187,6 +197,8 @@ model Vendor {
   createdAt   DateTime  @default(now()) @db.Timestamptz()
 
   wedding     Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  @@index([weddingId, category])
 }
 
 model DirectoryVendor {
@@ -203,6 +215,8 @@ model DirectoryVendor {
   createdAt   DateTime  @default(now()) @db.Timestamptz()
 
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model InventoryItem {
@@ -218,6 +232,8 @@ model InventoryItem {
   createdAt   DateTime  @default(now()) @db.Timestamptz()
 
   wedding     Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  @@index([weddingId])
 }
 
 model Event {
@@ -233,6 +249,8 @@ model Event {
   createdAt   DateTime  @default(now()) @db.Timestamptz()
 
   wedding     Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  @@index([weddingId, startTime])
 }
 
 model Invitation {
@@ -245,6 +263,8 @@ model Invitation {
   createdAt   DateTime  @default(now()) @db.Timestamptz()
 
   wedding     Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  @@index([weddingId])
 }
 
 model Feedback {
@@ -266,6 +286,8 @@ model PushSubscription {
   createdAt DateTime @default(now()) @db.Timestamptz()
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Client {
@@ -285,4 +307,6 @@ model Client {
 
   planner     User      @relation("PlannerClients", fields: [plannerId], references: [id], onDelete: Cascade)
   wedding     Wedding?  @relation(fields: [weddingId], references: [id], onDelete: SetNull)
+
+  @@index([plannerId])
 }

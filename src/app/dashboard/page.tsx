@@ -3,22 +3,19 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { differenceInDays, parseISO } from "date-fns";
 import { PlanComparisonModal } from "@/components/dashboard/plan-comparison-modal";
-import { formatLargeNumber, getNumberFontSize } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import { PlannerWorkspace } from "@/components/dashboard/PlannerWorkspace";
 import { CoupleDashboard } from "@/components/dashboard/CoupleDashboard";
 import {
     getUserProfile,
-    getUserWeddingId,
     getUserWeddings,
     getWeddingById,
     getDashboardStats,
     updateUserRole,
     acceptInvitation,
 } from "@/app/actions/data";
-import { Heart, BookUser } from "lucide-react";
+import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
+import type { DashboardStats } from "@/components/dashboard/CoupleDashboard";
 
 type WeddingData = {
     id: string;
@@ -44,7 +41,7 @@ export default function DashboardPage() {
         totalBudget: 0,
         estBudget: 0,
         currency: 'USD'
-    });
+    } as DashboardStats);
     const [role, setRole] = useState<'couple' | 'planner' | null>(null);
 
     const [inviteCode, setInviteCode] = useState("");
@@ -73,54 +70,40 @@ export default function DashboardPage() {
         async function fetchWedding() {
             setLoading(true);
 
-            // Fetch Role
-            const profile = await getUserProfile();
+            // Role and wedding list are independent, so fetch them together
+            const [profile, myWeddings] = await Promise.all([getUserProfile(), getUserWeddings()]);
             if (profile) setRole(profile.role as any);
 
-            // Get the user's actual weddings to validate ownership
-            const myWeddings = await getUserWeddings();
+            // Priority 1: URL param, Priority 2: last-used wedding from localStorage
+            const params = new URLSearchParams(window.location.search);
+            let weddingId = params.get('weddingId') || localStorage.getItem("current_wedding_id");
 
-            // Priority 1: Check URL params for weddingId
-            let weddingId: string | null = null;
-            if (typeof window !== 'undefined') {
-                const params = new URLSearchParams(window.location.search);
-                weddingId = params.get('weddingId');
-                if (weddingId) {
-                    localStorage.setItem("current_wedding_id", weddingId);
-                }
+            // CRITICAL: only use a cached ID that belongs to the current user
+            if (weddingId && !myWeddings.some((w) => w.id === weddingId)) {
+                localStorage.removeItem("current_wedding_id");
+                weddingId = null;
             }
 
-            // Priority 2: Fall back to localStorage
-            if (!weddingId) {
-                weddingId = localStorage.getItem("current_wedding_id");
-            }
-
-            // CRITICAL: Validate that the cached wedding ID belongs to the current user
-            if (weddingId && myWeddings.length > 0) {
-                const ownsWedding = myWeddings.some((w: any) => w.id === weddingId);
-                if (!ownsWedding) {
-                    // Cached ID is from a different user session — clear it
-                    localStorage.removeItem("current_wedding_id");
-                    weddingId = null;
-                }
-            }
+            // Fall back to the first wedding the user collaborates on
+            weddingId = weddingId || myWeddings[0]?.id || null;
 
             if (!weddingId) {
-                // Try to find from collaborators
-                const foundId = await getUserWeddingId();
-                if (foundId) {
-                    localStorage.setItem("current_wedding_id", foundId);
-                    await fetchWeddingDetails(foundId);
-                } else {
-                    setLoading(false);
-                }
-            } else {
-                await fetchWeddingDetails(weddingId);
+                setLoading(false);
+                return;
             }
+
+            localStorage.setItem("current_wedding_id", weddingId);
+            await fetchWeddingDetails(weddingId);
         }
 
         async function fetchWeddingDetails(id: string) {
-            const weddingData = await getWeddingById(id);
+            const [weddingData, dashData] = await Promise.all([
+                getWeddingById(id),
+                getDashboardStats(id).catch((err) => {
+                    console.error("Dashboard Stats Error:", err);
+                    return null;
+                }),
+            ]);
 
             if (weddingData) {
                 // Map Prisma camelCase to component expectations
@@ -128,7 +111,7 @@ export default function DashboardPage() {
                     id: weddingData.id,
                     coupleName1: weddingData.coupleName1,
                     coupleName2: weddingData.coupleName2,
-                    weddingDate: weddingData.weddingDate?.toISOString() || '',
+                    weddingDate: weddingData.weddingDate ? new Date(weddingData.weddingDate).toISOString() : '',
                     currency: weddingData.currency || 'USD',
                     targetGuestCount: weddingData.targetGuestCount || undefined,
                     estimatedBudget: weddingData.estimatedBudget ? Number(weddingData.estimatedBudget) : undefined,
@@ -136,14 +119,11 @@ export default function DashboardPage() {
                 };
                 setWedding(mapped);
 
-                try {
-                    const dashData = await getDashboardStats(id);
+                if (dashData) {
                     setStats(dashData.stats);
                     setUpcomingTasks(dashData.upcomingTasks);
                     setPendingPayments(dashData.pendingPayments);
                     setPendingGuests(dashData.pendingGuests);
-                } catch (err) {
-                    console.error("Dashboard Stats Error:", err);
                 }
             } else {
                 localStorage.removeItem("current_wedding_id");
@@ -154,7 +134,7 @@ export default function DashboardPage() {
         fetchWedding();
     }, [router, session, status]);
 
-    if (loading) return <div className="p-10 text-center text-muted-foreground">Loading dashboard...</div>;
+    if (loading) return <DashboardSkeleton />;
 
     // Planner Dashboard Component
     function PlannerEmptyState({ router }: { router: any }) {
@@ -297,8 +277,6 @@ export default function DashboardPage() {
         );
     }
 
-    const daysToGo = differenceInDays(parseISO(wedding.weddingDate), new Date());
-
     // Role-based dashboard rendering
     if (role === 'planner') {
         return (
@@ -323,6 +301,7 @@ export default function DashboardPage() {
                 pendingPayments={pendingPayments}
                 pendingGuests={pendingGuests}
             />
+            <PlanComparisonModal isOpen={showPlanModal} onClose={() => setShowPlanModal(false)} />
         </div>
     );
 }

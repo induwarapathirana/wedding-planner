@@ -20,11 +20,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // On initial sign-in, `user` is available from the adapter
       if (user) {
         token.sub = user.id;
+        token.subVerified = false;
       }
 
       // If we have an email but sub doesn't match a DB user, resolve the correct ID
-      // This handles cases where the JWT sub gets out of sync with the database
-      if (token.email && token.sub) {
+      // This handles cases where the JWT sub gets out of sync with the database.
+      // Checked once per token rather than on every auth() call.
+      if (token.email && token.sub && !token.subVerified) {
         const dbUser = await prisma.user.findUnique({
           where: { email: token.email },
           select: { id: true },
@@ -33,6 +35,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           console.log(`[AUTH] Correcting JWT sub: ${token.sub} -> ${dbUser.id}`);
           token.sub = dbUser.id;
         }
+        token.subVerified = true;
       }
 
       return token;
