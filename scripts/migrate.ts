@@ -48,7 +48,8 @@ async function migrate() {
                     emailVerified: authUser.email_confirmed_at ? new Date(authUser.email_confirmed_at) : null,
                     createdAt: new Date(authUser.created_at),
                     // Map profile fields if they exist
-                    role: profile?.role || 'couple',
+                    // Supabase used 'vendor' and 'pro' for planners; the app now only knows 'planner'
+                    role: ['planner', 'vendor', 'pro'].includes(profile?.role) ? 'planner' : 'couple',
                     companyName: profile?.company_name || null,
                     logoUrl: profile?.logo_url || null,
                     website: profile?.website || null,

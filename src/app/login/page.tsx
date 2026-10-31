@@ -14,11 +14,21 @@ const GoogleIcon = () => (
     </svg>
 );
 
+// Error codes Auth.js appends to the sign-in page URL
+const SIGN_IN_ERRORS: Record<string, string> = {
+    OAuthAccountNotLinked: "This email is already linked to a different sign-in method. Sign in the way you did before.",
+    AccessDenied: "Google sign-in was cancelled or denied. Try again and allow access.",
+    Configuration: "Sign-in isn't set up correctly on our side. Please try again in a few minutes or contact support.",
+    AccountMissing: "We couldn't find your account after signing in. Please try again.",
+    Default: "Sign-in didn't complete. Please try again.",
+};
+
 export default function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [isSignUp, setIsSignUp] = useState(false);
     const [agreedToPolicy, setAgreedToPolicy] = useState(false);
     const [role, setRole] = useState<'couple' | 'planner'>('couple');
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -29,6 +39,10 @@ export default function LoginPage() {
         if (params.get('signup') === 'true') {
             setIsSignUp(true);
         }
+        const errorCode = params.get('error');
+        if (errorCode) {
+            setError(SIGN_IN_ERRORS[errorCode] ?? SIGN_IN_ERRORS.Default);
+        }
     }, []);
 
     const handleGoogleSignIn = async () => {
@@ -38,10 +52,21 @@ export default function LoginPage() {
         }
         setLoading(true);
 
-        // NextAuth handles the full OAuth flow.
-        // The Google consent screen will now show YOUR domain, not supabase.
+        // /auth/continue decides the landing page server-side (role, invite, onboarding)
+        const params = new URLSearchParams(window.location.search);
+        const continueParams = new URLSearchParams();
+        if (isSignUp) continueParams.set('role', role);
+        const inviteToken = params.get('invite_token') || localStorage.getItem('pending_invite_token');
+        if (inviteToken) {
+            continueParams.set('invite', inviteToken);
+            localStorage.removeItem('pending_invite_token');
+        }
+        // Set by the middleware when an unauthenticated user opened a protected page
+        const next = params.get('callbackUrl');
+        if (next) continueParams.set('next', next);
+
         await signIn("google", {
-            callbackUrl: "/dashboard",
+            callbackUrl: `/auth/continue?${continueParams.toString()}`,
         });
     };
 
@@ -98,6 +123,12 @@ export default function LoginPage() {
                             <label htmlFor="privacy-policy" className="text-sm text-muted-foreground">
                                 I agree to the <Link href="/privacy-policy" target="_blank" className="text-primary hover:underline">Privacy Policy</Link>
                             </label>
+                        </div>
+                    )}
+
+                    {error && (
+                        <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                            {error}
                         </div>
                     )}
 

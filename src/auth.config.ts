@@ -9,7 +9,12 @@ export const authConfig = {
       const isLoggedIn = !!auth?.user;
       const isOnDashboard = nextUrl.pathname.startsWith('/dashboard');
       const isOnboarding = nextUrl.pathname.startsWith('/onboarding');
-      
+
+      // Signed-in users never need the login page; route them to their home
+      if (isLoggedIn && nextUrl.pathname === '/login') {
+        return Response.redirect(new URL('/auth/continue', nextUrl));
+      }
+
       if (isOnDashboard) {
         if (isLoggedIn) return true;
         return false; // Redirect unauthenticated users to login page
