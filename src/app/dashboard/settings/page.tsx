@@ -44,7 +44,7 @@ function SettingsContent() {
     }
 
     // Default to Couple settings for couples (or fallback)
-    return <CoupleSettings />;
+    return <CoupleSettings weddingIdProp={weddingIdFromUrl ?? undefined} />;
 }
 
 export default function SettingsPage() {

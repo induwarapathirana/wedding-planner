@@ -103,6 +103,10 @@ export default function DashboardPage() {
             }
 
             localStorage.setItem("current_wedding_id", weddingId);
+            if (!params.get('weddingId')) {
+                params.set('weddingId', weddingId);
+                window.history.replaceState({}, '', `/dashboard?${params}`);
+            }
             await fetchWeddingDetails(weddingId);
         }
 
