@@ -1,299 +1,185 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getInventoryItems, deleteInventoryItem, updateInventoryItem, getWeddingById } from "@/app/actions/data";
-import { toInventoryRow } from "@/lib/legacy-rows";
-import { Plus, Package, Search, Pencil, Trash2 } from "lucide-react";
-import { InventoryItem, ItemStatus } from "@/types/inventory";
-import InventoryItemRow from "@/components/dashboard/inventory/InventoryItem";
-import InventoryForm from "@/components/dashboard/inventory/InventoryForm";
-import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { toast } from "sonner";
+import { ExternalLink, Package, Trash2 } from "lucide-react";
+import { createInventoryItem, deleteInventoryItem, getInventoryItems, getWeddingById, updateInventoryItem } from "@/app/actions/data";
+import { SheetGrid, type SheetColumn } from "@/components/sheet/SheetGrid";
+import { useWeddingId } from "@/hooks/use-wedding-id";
+import { useWeddingPermission } from "@/hooks/use-wedding-permission";
 import { CURRENCIES } from "@/lib/constants";
-import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
-import { getEffectiveTier } from "@/lib/trial";
-import { LimitModal } from "@/components/dashboard/limit-modal";
-import { TourGuide } from "@/components/dashboard/TourGuide";
-import { INVENTORY_STEPS } from "@/lib/tours";
+import { cn } from "@/lib/utils";
+
+type Item = Awaited<ReturnType<typeof getInventoryItems>>[number];
+
+const STATUSES = [
+    { value: "needed", label: "Needed" },
+    { value: "purchased", label: "Bought" },
+    { value: "rented", label: "Rented" },
+    { value: "borrowed", label: "Borrowed" },
+    { value: "packed", label: "Packed" },
+];
+const STATUS_STYLE: Record<string, string> = {
+    needed: "bg-amber-100 text-amber-800",
+    purchased: "bg-emerald-100 text-emerald-800",
+    rented: "bg-sky-100 text-sky-800",
+    borrowed: "bg-violet-100 text-violet-800",
+    packed: "bg-gray-200 text-gray-700",
+};
+
+const total = (i: Item) => (Number(i.unitPrice) || 0) * (i.quantity || 0);
+const safeUrl = (link?: string | null) => {
+    if (!link) return null;
+    const url = /^https?:\/\//i.test(link) ? link : `https://${link}`;
+    try {
+        return new URL(url).href;
+    } catch {
+        return null;
+    }
+};
 
 export default function InventoryPage() {
-    const [items, setItems] = useState<InventoryItem[]>([]);
+    const weddingId = useWeddingId();
+    const { canEdit } = useWeddingPermission(weddingId ?? null);
+    const [items, setItems] = useState<Item[]>([]);
+    const [currency, setCurrency] = useState("LKR");
     const [loading, setLoading] = useState(true);
-    const [showForm, setShowForm] = useState(false);
-    const [editingItem, setEditingItem] = useState<InventoryItem | undefined>(undefined);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [confirmState, setConfirmState] = useState<{ isOpen: boolean; id?: string }>({ isOpen: false });
-    const [weddingId, setWeddingId] = useState<string | null>(null);
-    const [currency, setCurrency] = useState('USD');
-    const [tier, setTier] = useState<PlanTier>('free');
-    const [showLimitModal, setShowLimitModal] = useState(false);
 
     useEffect(() => {
-        loadData();
+        if (weddingId === undefined) return;
+        if (weddingId === null) {
+            setLoading(false);
+            return;
+        }
+        Promise.all([getInventoryItems(weddingId), getWeddingById(weddingId)]).then(([list, wedding]) => {
+            setItems(list);
+            setCurrency(wedding?.currency || "LKR");
+            setLoading(false);
+        });
+    }, [weddingId]);
+
+    const symbol = CURRENCIES.find((c) => c.code === currency)?.symbol ?? currency;
+    const money = useCallback((n: number) => `${symbol} ${Math.round(n).toLocaleString()}`, [symbol]);
+
+    const categories = useMemo(() => [...new Set(items.map((i) => i.category).filter(Boolean))] as string[], [items]);
+
+    const save = useCallback(async (id: string, changes: Record<string, unknown>) => {
+        let previous: Item | undefined;
+        setItems((list) => list.map((i) => (i.id === id ? ((previous = i), { ...i, ...changes } as Item) : i)));
+        try {
+            const saved = await updateInventoryItem(id, changes);
+            setItems((list) => list.map((i) => (i.id === id ? saved : i)));
+        } catch (e) {
+            if (previous) setItems((list) => list.map((i) => (i.id === id ? previous! : i)));
+            toast.error((e as Error).message || "Couldn't save that change");
+        }
     }, []);
 
-    const loadData = async () => {
-        setLoading(true);
-        const wId = localStorage.getItem("current_wedding_id");
-        if (wId) {
-            setWeddingId(wId);
-            const weddingData = await getWeddingById(wId);
-            if (weddingData) {
-                setCurrency(weddingData.currency || 'USD');
-            }
-            const trialInfo = await getEffectiveTier(wId);
-            setTier(trialInfo.effectiveTier);
-            fetchItems(wId);
-        }
-        setLoading(false);
-    };
-
-    const fetchItems = async (wId: string) => {
-        const data = await getInventoryItems(wId);
-        if (data) {
-            setItems(data.map(toInventoryRow));
-        }
-    };
-
-    const confirmDelete = (id: string) => {
-        setConfirmState({ isOpen: true, id });
-    };
-
-    const executeDelete = async () => {
-        if (!confirmState.id) return;
+    const addItem = async () => {
+        if (!weddingId) return;
         try {
-            await deleteInventoryItem(confirmState.id);
-            if (weddingId) fetchItems(weddingId);
-        } catch (error: any) {
-            alert("Error deleting: " + error.message);
+            const created = await createInventoryItem(weddingId, { name: "New item", quantity: 1, status: "needed" });
+            setItems((list) => [...list, created]);
+            return created.id;
+        } catch (e) {
+            toast.error((e as Error).message);
         }
-        setConfirmState({ isOpen: false });
     };
 
-    const openEdit = (item: InventoryItem) => {
-        setEditingItem(item);
-        setShowForm(true);
-    };
-
-    const handleToggleStatus = async (item: InventoryItem) => {
-        const statuses: ItemStatus[] = ['needed', 'purchased', 'rented', 'borrowed', 'packed'];
-        const currentIndex = statuses.indexOf(item.status);
-        const nextStatus = statuses[(currentIndex + 1) % statuses.length];
-
+    const removeItem = async (item: Item) => {
+        setItems((list) => list.filter((i) => i.id !== item.id));
         try {
-            await updateInventoryItem(item.id, { status: nextStatus });
-            if (weddingId) fetchItems(weddingId);
-        } catch (error: any) {
-            alert("Error updating status: " + error.message);
+            await deleteInventoryItem(item.id);
+            toast.success(`Removed ${item.name}`);
+        } catch (e) {
+            setItems((list) => [...list, item]);
+            toast.error((e as Error).message);
         }
     };
 
-    const symbol = CURRENCIES.find(c => c.code === currency)?.symbol || '$';
-    const filteredItems = items.filter(item =>
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.category?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const columns: SheetColumn<Item>[] = [
+        { key: "name", label: "Item", type: "text", width: 220, sticky: true },
+        {
+            key: "status", label: "Status", type: "select", options: STATUSES, width: 110, summary: true,
+            render: (i) => <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", STATUS_STYLE[i.status] ?? STATUS_STYLE.needed)}>{STATUSES.find((s) => s.value === i.status)?.label ?? i.status}</span>,
+        },
+        { key: "quantity", label: "Qty", type: "number", width: 70, align: "right", summary: true },
+        { key: "unitPrice", label: "Unit cost", type: "money", width: 120, align: "right" },
+        { key: "total", label: "Total", type: "money", width: 120, align: "right", get: total, summary: true },
+        { key: "category", label: "Category", type: "text", width: 140, placeholder: categories[0] ?? "Décor" },
+        {
+            key: "link", label: "Link", type: "text", width: 200, placeholder: "Shop or product link",
+            render: (i) => {
+                const href = safeUrl(i.link);
+                return href ? (
+                    <a href={href} target="_blank" rel="noreferrer" onMouseDown={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 text-primary-foreground underline decoration-primary underline-offset-2">
+                        {new URL(href).hostname.replace(/^www\./, "")} <ExternalLink className="h-3 w-3" />
+                    </a>
+                ) : (
+                    <span className="text-muted-foreground/60">{i.link || "Shop or product link"}</span>
+                );
+            },
+        },
+        { key: "notes", label: "Notes", type: "text", width: 220, placeholder: "Who's bringing it" },
+    ];
 
-    const totalItems = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
-    const totalCost = items.reduce((sum, item) => sum + (item.unit_cost || 0) * (item.quantity || 1), 0);
-    const packedCount = items.filter(i => i.status === 'packed').length;
+    const needed = items.filter((i) => i.status === "needed");
+    const totals = { all: items.reduce((n, i) => n + total(i), 0), needed: needed.reduce((n, i) => n + total(i), 0) };
+
+    if (loading) {
+        return <div className="space-y-4 animate-pulse"><div className="h-9 w-48 rounded-lg bg-gray-200" /><div className="h-[50vh] rounded-2xl border border-border bg-white" /></div>;
+    }
+
+    if (!weddingId) {
+        return (
+            <div className="py-20 text-center">
+                <p className="text-muted-foreground">Create your wedding first.</p>
+                <Link href="/onboarding" className="mt-4 inline-block rounded-xl bg-primary px-5 py-2.5 font-medium text-white">Start planning</Link>
+            </div>
+        );
+    }
 
     return (
-        <>
-            <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                        <h2 className="font-serif text-3xl font-bold text-foreground">Inventory</h2>
-                        <p className="mt-1 text-muted-foreground">Track your decor, items, and supplies.</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <TourGuide steps={INVENTORY_STEPS} pageKey="inventory" />
-                        <button
-                            id="tour-add-inventory"
-                            onClick={() => {
-                                if (!checkLimit(tier, 'inventory_items', items.length)) {
-                                    setShowLimitModal(true);
-                                    return;
-                                }
-                                setEditingItem(undefined);
-                                setShowForm(true);
-                            }}
-                            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
-                        >
-                            <Plus className="w-4 h-4" />
-                            Add Item
-                        </button>
-                    </div>
+        <div className="space-y-4 pb-6">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h1 className="font-serif text-3xl font-bold">Inventory</h1>
+                    <p className="text-sm text-muted-foreground">Décor, favours and everything else to buy, rent or borrow.</p>
                 </div>
-
-                {/* Stats Cards */}
-                <div id="tour-inventory-stats" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                        <div className="text-sm text-gray-500 font-medium">Total Items</div>
-                        <div className="text-2xl font-bold text-gray-900 mt-1">{totalItems}</div>
-                    </div>
-                    <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                        <div className="text-sm text-gray-500 font-medium">Estimated Cost</div>
-                        <div className="text-2xl font-bold text-gray-900 mt-1">
-                            {symbol}{totalCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                        </div>
-                    </div>
-                    <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                        <div className="text-sm text-gray-500 font-medium">Packed / Ready</div>
-                        <div className="text-2xl font-bold text-gray-900 mt-1">
-                            {packedCount} <span className="text-sm text-gray-400 font-normal">/ {items.length} unique</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Search */}
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Search items..."
-                        className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 outline-none text-sm"
-                    />
-                </div>
-
-                {/* Content */}
-                {loading ? (
-                    <div className="text-center py-12">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                        <p className="text-gray-500">Loading inventory...</p>
-                    </div>
-                ) : items.length === 0 ? (
-                    <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
-                        <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Package className="w-8 h-8 text-gray-400" />
-                        </div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-1">Inventory is empty</h3>
-                        <p className="text-gray-500 mb-6">Start tracking your wedding items.</p>
-                        <button
-                            onClick={() => setShowForm(true)}
-                            className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 font-medium"
-                        >
-                            Add First Item
-                        </button>
-                    </div>
-                ) : (
-                    <div id="tour-inventory-list" className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                        {/* Desktop Table View */}
-                        <div className="hidden md:block overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider font-semibold border-b border-gray-100">
-                                    <tr>
-                                        <th className="px-6 py-3 w-1/3">Item</th>
-                                        <th className="px-6 py-3 hidden md:table-cell">Category</th>
-                                        <th className="px-6 py-3">Status</th>
-                                        <th className="px-6 py-3 text-center">Qty</th>
-                                        <th className="px-6 py-3 text-right">Cost</th>
-                                        <th className="px-6 py-3 text-right w-24">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {filteredItems.map((item) => (
-                                        <InventoryItemRow
-                                            key={item.id}
-                                            item={item}
-                                            onEdit={openEdit}
-                                            onDelete={confirmDelete}
-                                            onToggleStatus={handleToggleStatus}
-                                            currencySymbol={symbol}
-                                        />
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* Mobile Card View */}
-                        <div className="md:hidden divide-y divide-gray-100">
-                            {filteredItems.map((item) => (
-                                <div
-                                    key={item.id}
-                                    onClick={() => openEdit(item)}
-                                    className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
-                                >
-                                    <div className="flex justify-between items-start mb-2">
-                                        <div className="flex-1">
-                                            <h3 className="font-semibold text-gray-900">{item.name}</h3>
-                                            {item.category && (
-                                                <p className="text-xs text-gray-500 mt-0.5">{item.category}</p>
-                                            )}
-                                        </div>
-                                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${item.status === 'packed' ? 'bg-green-100 text-green-700' :
-                                            item.status === 'purchased' ? 'bg-blue-100 text-blue-700' :
-                                                item.status === 'rented' ? 'bg-orange-100 text-orange-700' :
-                                                    item.status === 'borrowed' ? 'bg-purple-100 text-purple-700' :
-                                                        'bg-gray-100 text-gray-600'
-                                            }`}>
-                                            {item.status || 'pending'}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-sm">
-                                        <span className="text-gray-500">Qty: {item.quantity || 1}</span>
-                                        <span className="font-semibold text-gray-900">
-                                            {symbol}{((item.unit_cost || 0) * (item.quantity || 1)).toLocaleString()}
-                                        </span>
-                                    </div>
-                                    <div className="flex gap-2 mt-3">
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                openEdit(item);
-                                            }}
-                                            className="p-2 text-gray-400 hover:text-primary bg-gray-50 rounded-lg"
-                                        >
-                                            <Pencil className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                confirmDelete(item.id);
-                                            }}
-                                            className="p-2 text-gray-400 hover:text-red-600 bg-gray-50 rounded-lg"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        {filteredItems.length === 0 && (
-                            <div className="text-center py-8 text-gray-500 text-sm">
-                                No items match your search.
-                            </div>
-                        )}
-                    </div>
+                {items.length > 0 && (
+                    <p className="text-sm text-muted-foreground tabular-nums">
+                        <b className="text-foreground">{needed.length}</b> still needed ({money(totals.needed)}) · <b className="text-foreground">{money(totals.all)}</b> in total
+                    </p>
                 )}
-
-                {showForm && weddingId && (
-                    <InventoryForm
-                        weddingId={weddingId}
-                        initialData={editingItem}
-                        onClose={() => setShowForm(false)}
-                        onSuccess={() => fetchItems(weddingId)}
-                    />
-                )}
-
-                <ConfirmDialog
-                    isOpen={confirmState.isOpen}
-                    onClose={() => setConfirmState({ isOpen: false })}
-                    onConfirm={executeDelete}
-                    title="Delete Item?"
-                    description="Are you sure you want to delete this item? This action cannot be undone."
-                    variant="danger"
-                />
-
-                <LimitModal
-                    isOpen={showLimitModal}
-                    onClose={() => setShowLimitModal(false)}
-                    feature="Inventory Items"
-                    limit={PLAN_LIMITS.free.inventory_items}
-                    tier={tier}
-                />
             </div>
-        </>
+
+            {items.length === 0 ? (
+                <div className="rounded-2xl border-2 border-dashed border-border bg-white px-6 py-16 text-center">
+                    <Package className="mx-auto h-10 w-10 text-muted-foreground" />
+                    <h2 className="mt-3 font-serif text-2xl font-bold">Keep track of the little things</h2>
+                    <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Oil lamp, guest book, favours, signage: note what you need, where to get it and who's bringing it.</p>
+                    {canEdit && <button onClick={addItem} className="mt-5 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow">Add the first item</button>}
+                </div>
+            ) : (
+                <SheetGrid
+                    rows={items}
+                    columns={columns}
+                    getRowId={(i) => i.id}
+                    onCommit={(row, key, value) => save(row.id, { [key]: value })}
+                    readOnly={!canEdit}
+                    formatMoney={money}
+                    onAddRow={canEdit ? addItem : undefined}
+                    addRowLabel="Add an item"
+                    rowActions={(i) =>
+                        canEdit ? (
+                            <button onClick={() => removeItem(i)} className="rounded-md p-1.5 text-muted-foreground hover:bg-rose-50 hover:text-rose-700" aria-label={`Remove ${i.name}`}>
+                                <Trash2 className="h-4 w-4" />
+                            </button>
+                        ) : null
+                    }
+                />
+            )}
+        </div>
     );
 }
