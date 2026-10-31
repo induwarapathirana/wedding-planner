@@ -12,7 +12,6 @@ import { getEffectiveTier } from "@/lib/trial";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { TourGuide } from "@/components/dashboard/TourGuide";
-import { TierGate } from "@/components/dashboard/TierGate";
 import { ITINERARY_STEPS } from "@/lib/tours";
 
 export default function ItineraryPage() {
@@ -100,7 +99,7 @@ export default function ItineraryPage() {
     };
 
     return (
-        <TierGate weddingId={weddingId} featureName="Itinerary">
+        <>
             <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
@@ -221,6 +220,6 @@ export default function ItineraryPage() {
                     tier={tier}
                 />
             </div>
-        </TierGate>
+        </>
     );
 }

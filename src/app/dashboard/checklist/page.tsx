@@ -15,7 +15,6 @@ import { useWeddingPermission } from "@/hooks/use-wedding-permission";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { ModeToggle } from "@/components/dashboard/mode-toggle";
 import { TourGuide } from "@/components/dashboard/TourGuide";
-import { TierGate } from "@/components/dashboard/TierGate";
 import { CHECKLIST_STEPS } from "@/lib/tours";
 
 type ChecklistItem = {
@@ -222,7 +221,7 @@ function ChecklistContent() {
     }
 
     return (
-        <TierGate weddingId={weddingId} featureName="Checklist">
+        <>
             <div className="space-y-8">
                 <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                     <div className="flex items-center gap-4">
@@ -525,7 +524,7 @@ function ChecklistContent() {
                     variant="danger"
                 />
             </div>
-        </TierGate>
+        </>
     );
 }
 

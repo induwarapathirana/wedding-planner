@@ -1,6 +1,9 @@
 "use server";
 
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+
+const PLANNER_ROLES = ["planner", "vendor", "pro"];
 
 export type PlanTier = 'free' | 'premium';
 
@@ -39,6 +42,7 @@ export async function getEffectiveTier(weddingId: string): Promise<TrialInfo> {
         };
     }
 
+    // 'premium' in the DB covers both PayHere payments and manual grants
     const isPaidPremium = wedding.tier === 'premium';
     const trialEndsAt = wedding.premiumTrialEndsAt;
 
@@ -54,17 +58,14 @@ export async function getEffectiveTier(weddingId: string): Promise<TrialInfo> {
         daysRemaining = Math.ceil(diff / (1000 * 60 * 60 * 24));
     }
 
-    // Determine effective tier
-    const effectiveTier: PlanTier = isPaidPremium || isInTrial ? 'premium' : 'free';
+    // Planners get premium features on every wedding they work on
+    const session = await auth();
+    const viewer = session?.user?.id
+        ? await prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true } })
+        : null;
+    const isPlanner = PLANNER_ROLES.includes(viewer?.role ?? '');
 
-    // AUTO-SYNC DB: If trial has expired and user hasn't paid, update tier to 'free' in DB
-    // This keeps the DB tier column in sync for admin visibility
-    if (!isPaidPremium && !isInTrial && wedding.tier === 'premium') {
-        await prisma.wedding.update({
-            where: { id: weddingId },
-            data: { tier: 'free' }
-        });
-    }
+    const effectiveTier: PlanTier = isPaidPremium || isInTrial || isPlanner ? 'premium' : 'free';
 
     return {
         effectiveTier,

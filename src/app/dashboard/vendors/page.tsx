@@ -16,10 +16,10 @@ import { LimitModal } from "@/components/dashboard/limit-modal";
 
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { TourGuide } from "@/components/dashboard/TourGuide";
-import { TierGate } from "@/components/dashboard/TierGate";
 import { VENDOR_STEPS } from "@/lib/tours";
 
 import { DirectoryImportModal } from "@/components/dashboard/vendors/DirectoryImportModal";
+import { toVendorRow, toDirectoryVendorRow } from "@/lib/legacy-rows";
 
 const CATEGORIES = [
     "Venue", "Catering", "Photography", "Videography",
@@ -91,10 +91,10 @@ export default function VendorsPage() {
     const fetchVendors = async (wId: string) => {
         setLoading(true);
         const vData = await getVendors(wId);
-        if (vData) setVendors(vData as any as Vendor[]);
+        if (vData) setVendors(vData.map(toVendorRow));
 
         const dData = await getDirectoryVendors();
-        if (dData) setDirectoryVendors(dData as any as DirectoryVendor[]);
+        if (dData) setDirectoryVendors(dData.map(toDirectoryVendorRow));
         setLoading(false);
     };
 
@@ -223,7 +223,7 @@ export default function VendorsPage() {
     });
 
     return (
-        <TierGate weddingId={weddingId} featureName="Vendors">
+        <>
             <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
@@ -645,6 +645,6 @@ export default function VendorsPage() {
                     tier={tier}
                 />
             </div>
-        </TierGate>
+        </>
     );
 }

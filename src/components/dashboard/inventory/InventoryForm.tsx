@@ -47,7 +47,7 @@ export default function InventoryForm({ weddingId, onClose, onSuccess, initialDa
                 name: formData.name,
                 category: formData.category,
                 quantity: formData.quantity,
-                unitCost: formData.unit_cost,
+                unitPrice: formData.unit_cost,
                 status: formData.status,
                 link: formData.link,
                 notes: formData.notes,

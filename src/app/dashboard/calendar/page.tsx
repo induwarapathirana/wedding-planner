@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getCalendarData } from "@/app/actions/data";
 import { CalendarMonthView } from "@/components/dashboard/calendar/CalendarMonthView";
 import { ScheduleView } from "@/components/dashboard/calendar/ScheduleView";
 import { Calendar as CalendarIcon, List, Loader2, Filter } from "lucide-react";
@@ -49,154 +49,11 @@ function CalendarContent() {
 
     async function fetchData() {
         setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        // 1. Determine Scope (Which weddings?)
-        let targetWeddingIds: string[] = [];
-        let weddingMap: Record<string, string> = {};
-
-        // We need wedding dates too
-        let weddingDates: Record<string, string> = {};
-
-        // Fetch user's weddings (Collaborator)
-        const { data: collaborations } = await supabase
-            .from('collaborators')
-            .select(`
-                wedding_id,
-                weddings (
-                    id,
-                    couple_name_1,
-                    couple_name_2,
-                    wedding_date
-                )
-            `)
-            .eq('user_id', user.id);
-
-        if (collaborations) {
-            const validCollabs = collaborations.filter(c => c.weddings);
-
-            // Process weddings data
-            const processedWeddings = validCollabs.map((c: any) => {
-                const w = Array.isArray(c.weddings) ? c.weddings[0] : c.weddings;
-                const coupleName = w.couple_name_1 && w.couple_name_2
-                    ? `${w.couple_name_1} & ${w.couple_name_2}`
-                    : w.couple_name_1 || "Unnamed Wedding";
-
-                return {
-                    id: c.wedding_id,
-                    couple_name: coupleName,
-                    wedding_date: w.wedding_date
-                };
-            });
-
-            setWeddings(processedWeddings.map(w => ({ id: w.id, couple_name: w.couple_name })));
-
-            processedWeddings.forEach(w => {
-                weddingMap[w.id] = w.couple_name;
-                if (w.wedding_date) {
-                    weddingDates[w.id] = w.wedding_date;
-                }
-            });
-
-            // Logic: If urlWeddingId matches one of our weddings, lock to it (Single Mode)
-            // If "all", show all.
-            if (urlWeddingId && weddingMap[urlWeddingId]) {
-                targetWeddingIds = [urlWeddingId];
-            } else if (selectedWeddingId !== "all") {
-                targetWeddingIds = [selectedWeddingId];
-            } else {
-                targetWeddingIds = processedWeddings.map(w => w.id);
-            }
-        }
-
-        if (targetWeddingIds.length === 0) {
-            setItems([]);
-            setLoading(false);
-            return;
-        }
-
-        // 2. Fetch Events
-        const { data: events } = await supabase
-            .from('events')
-            .select('*')
-            .in('wedding_id', targetWeddingIds);
-
-        // 3. Fetch Checklist Items (Tasks)
-        const { data: tasks } = await supabase
-            .from('checklist_items')
-            .select('*')
-            .in('wedding_id', targetWeddingIds)
-            .not('due_date', 'is', null);
-
-        // 4. Fetch Budget Items (Payments)
-        const { data: payments } = await supabase
-            .from('budget_items')
-            .select('*')
-            .in('wedding_id', targetWeddingIds)
-            .not('due_date', 'is', null);
-
-        // 5. Normalize Data
-        const normalizedItems: CalendarItem[] = [];
-
-        // Add Wedding Dates as special events
-        targetWeddingIds.forEach(wid => {
-            if (weddingDates[wid]) {
-                normalizedItems.push({
-                    id: `wed-${wid}`,
-                    title: `💍 Wedding Day: ${weddingMap[wid]}`,
-                    date: weddingDates[wid],
-                    type: 'wedding-date',
-                    weddingId: wid,
-                    weddingName: weddingMap[wid]
-                });
-            }
-        });
-
-        // Events
-        events?.forEach((e: any) => {
-            normalizedItems.push({
-                id: `evt-${e.id}`,
-                title: e.title,
-                date: e.start_time, // ISO
-                type: 'event',
-                weddingId: e.wedding_id,
-                weddingName: weddingMap[e.wedding_id],
-                time: e.start_time
-            });
-        });
-
-        // Tasks
-        tasks?.forEach((t: any) => {
-            if (t.due_date) {
-                normalizedItems.push({
-                    id: `tsk-${t.id}`,
-                    title: t.title,
-                    date: t.due_date,
-                    type: 'task',
-                    weddingId: t.wedding_id,
-                    weddingName: weddingMap[t.wedding_id],
-                    isCompleted: t.is_completed
-                });
-            }
-        });
-
-        // Payments
-        payments?.forEach((p: any) => {
-            if (p.due_date) {
-                normalizedItems.push({
-                    id: `pay-${p.id}`,
-                    title: `Payment: ${p.name}`,
-                    date: p.due_date,
-                    type: 'payment',
-                    weddingId: p.wedding_id,
-                    weddingName: weddingMap[p.wedding_id],
-                    isPaid: !!p.paid_at
-                });
-            }
-        });
-
-        setItems(normalizedItems);
+        // A weddingId in the URL locks the view to that wedding; otherwise use the filter
+        const scope = urlWeddingId || (selectedWeddingId !== "all" ? selectedWeddingId : null);
+        const data = await getCalendarData(scope);
+        setWeddings(data.weddings);
+        setItems(data.items);
         setLoading(false);
     }
 

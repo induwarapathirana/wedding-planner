@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getInventoryItems, deleteInventoryItem, updateInventoryItem, getWeddingById } from "@/app/actions/data";
+import { toInventoryRow } from "@/lib/legacy-rows";
 import { Plus, Package, Search, Pencil, Trash2 } from "lucide-react";
 import { InventoryItem, ItemStatus } from "@/types/inventory";
 import InventoryItemRow from "@/components/dashboard/inventory/InventoryItem";
@@ -12,7 +13,6 @@ import { PlanTier, checkLimit, PLAN_LIMITS } from "@/lib/limits";
 import { getEffectiveTier } from "@/lib/trial";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 import { TourGuide } from "@/components/dashboard/TourGuide";
-import { TierGate } from "@/components/dashboard/TierGate";
 import { INVENTORY_STEPS } from "@/lib/tours";
 
 export default function InventoryPage() {
@@ -50,7 +50,7 @@ export default function InventoryPage() {
     const fetchItems = async (wId: string) => {
         const data = await getInventoryItems(wId);
         if (data) {
-            setItems(data as any as InventoryItem[]);
+            setItems(data.map(toInventoryRow));
         }
     };
 
@@ -98,7 +98,7 @@ export default function InventoryPage() {
     const packedCount = items.filter(i => i.status === 'packed').length;
 
     return (
-        <TierGate weddingId={weddingId} featureName="Inventory">
+        <>
             <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
@@ -294,6 +294,6 @@ export default function InventoryPage() {
                     tier={tier}
                 />
             </div>
-        </TierGate>
+        </>
     );
 }

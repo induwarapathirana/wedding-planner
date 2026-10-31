@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getDirectoryVendors, getVendorNames, insertVendors } from "@/app/actions/data";
+import { toDirectoryVendorRow } from "@/lib/legacy-rows";
 import { Search, Plus, Check } from "lucide-react";
 import { DirectoryVendor } from "@/types/directory";
 import { VendorStatus } from "@/types/vendors";
@@ -39,7 +40,7 @@ export function DirectoryImportModal({ isOpen, onClose, weddingId, onImportSucce
         setLoading(true);
         const data = await getDirectoryVendors();
         if (data) {
-            setVendors(data as any as DirectoryVendor[]);
+            setVendors(data.map(toDirectoryVendorRow));
         }
         setLoading(false);
     };

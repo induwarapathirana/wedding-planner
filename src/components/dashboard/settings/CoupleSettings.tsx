@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 import { FeedbackModal } from "@/components/dashboard/FeedbackModal";
 import { getEffectiveTier, PlanTier } from "@/lib/trial";
+import { PLAN_LIMITS } from "@/lib/limits";
 
 type WeddingData = {
     id: string;
@@ -21,6 +22,7 @@ type WeddingData = {
     target_guest_count?: number;
     estimated_budget?: number; // Added
     tier?: 'free' | 'premium'; // Added
+    whatsapp_business_number?: string; // Enables WhatsApp RSVP confirmations
 };
 
 
@@ -88,6 +90,7 @@ export function CoupleSettings({ weddingIdProp }: { weddingIdProp?: string }) {
             location: data.location || '',
             currency: data.currency || 'USD',
             target_guest_count: data.targetGuestCount || 0,
+            whatsapp_business_number: data.whatsappBusinessNumber || '',
             estimated_budget: Number(data.estimatedBudget) || 0,
             tier: (data.tier as 'free' | 'premium') || 'free',
         });
@@ -123,6 +126,7 @@ export function CoupleSettings({ weddingIdProp }: { weddingIdProp?: string }) {
                 currency: wedding.currency,
                 targetGuestCount: wedding.target_guest_count,
                 estimatedBudget: wedding.estimated_budget,
+                whatsappBusinessNumber: wedding.whatsapp_business_number?.trim() || null,
             });
             alert('Wedding details updated successfully!');
             router.push('/dashboard');
@@ -230,6 +234,21 @@ export function CoupleSettings({ weddingIdProp }: { weddingIdProp?: string }) {
                                         placeholder="e.g. 20000"
                                     />
                                 </div>
+                            </div>
+
+                            <div>
+                                <label htmlFor="whatsapp-business-number" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                                    WhatsApp Business Number (Optional)
+                                </label>
+                                <input
+                                    id="whatsapp-business-number"
+                                    type="tel"
+                                    value={wedding?.whatsapp_business_number || ''}
+                                    onChange={(e) => setWedding(prev => prev ? { ...prev, whatsapp_business_number: e.target.value } : null)}
+                                    className="w-full px-4 h-11 md:h-12 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-base"
+                                    placeholder="e.g. +94771234567"
+                                />
+                                <p className="text-xs text-gray-400 mt-1.5 ml-1">When set, guests who RSVP get a confirmation message on WhatsApp.</p>
                             </div>
 
                             <div>
@@ -596,10 +615,10 @@ function TeamMembers({ weddingId, tier }: { weddingId: string, tier: string }) {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                 <h3 className="font-bold text-gray-900 mb-4">Invite Member</h3>
 
-                {tier === 'free' ? (
+                {tier === 'free' && collaborators.filter((c) => c.role !== 'owner').length + invitations.length >= PLAN_LIMITS.free.collaborators ? (
                     <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-100">
-                        <p className="text-sm text-gray-600 mb-2">Collaboration is a Premium feature.</p>
-                        <p className="text-xs text-muted-foreground">Upgrade your plan to invite your partner or team.</p>
+                        <p className="text-sm text-gray-600 mb-2">The free plan includes one collaborator, usually your partner.</p>
+                        <p className="text-xs text-muted-foreground">Upgrade to Premium to invite family and your planner too.</p>
                     </div>
                 ) : (
                     <form onSubmit={handleInvite} className="space-y-4">
@@ -745,7 +764,7 @@ See you there!`);
                 isOpen={showLimitModal}
                 onClose={() => setShowLimitModal(false)}
                 feature="Collaborators"
-                limit={0}
+                limit={PLAN_LIMITS.free.collaborators}
                 tier={tier}
             />
         </div>

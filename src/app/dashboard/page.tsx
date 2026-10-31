@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { PlanComparisonModal } from "@/components/dashboard/plan-comparison-modal";
 import { PlannerWorkspace } from "@/components/dashboard/PlannerWorkspace";
 import { CoupleDashboard } from "@/components/dashboard/CoupleDashboard";
+import { PlannerDashboard } from "@/components/dashboard/PlannerDashboard";
 import {
     getUserProfile,
     getUserWeddings,
@@ -27,6 +28,8 @@ type WeddingData = {
     estimatedBudget?: number;
     tier?: 'free' | 'premium';
 };
+
+const PLANNER_ROLES = ['planner', 'vendor', 'pro'];
 
 export default function DashboardPage() {
     const [wedding, setWedding] = useState<WeddingData | null>(null);
@@ -72,10 +75,17 @@ export default function DashboardPage() {
 
             // Role and wedding list are independent, so fetch them together
             const [profile, myWeddings] = await Promise.all([getUserProfile(), getUserWeddings()]);
-            if (profile) setRole(profile.role as any);
+            const isPlanner = PLANNER_ROLES.includes(profile?.role ?? '');
+            if (profile) setRole(isPlanner ? 'planner' : profile.role as any);
+
+            // Planners see their client overview unless a specific wedding is opened
+            const params = new URLSearchParams(window.location.search);
+            if (isPlanner && !params.get('weddingId')) {
+                setLoading(false);
+                return;
+            }
 
             // Priority 1: URL param, Priority 2: last-used wedding from localStorage
-            const params = new URLSearchParams(window.location.search);
             let weddingId = params.get('weddingId') || localStorage.getItem("current_wedding_id");
 
             // CRITICAL: only use a cached ID that belongs to the current user
@@ -135,35 +145,6 @@ export default function DashboardPage() {
     }, [router, session, status]);
 
     if (loading) return <DashboardSkeleton />;
-
-    // Planner Dashboard Component
-    function PlannerEmptyState({ router }: { router: any }) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
-                <div className="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 text-4xl mb-4">
-                    💼
-                </div>
-                <h2 className="font-serif text-3xl font-bold text-foreground">Welcome to your Pro Dashboard</h2>
-                <p className="text-muted-foreground max-w-md">
-                    Manage your clients, leads, and weddings all in one place.
-                </p>
-                <div className="flex gap-4">
-                    <button
-                        onClick={() => router.push('/dashboard/clients')}
-                        className="rounded-xl bg-gray-900 px-8 py-4 text-base font-medium text-white shadow-lg hover:bg-gray-800 transition-all hover:scale-105"
-                    >
-                        View Clients
-                    </button>
-                    <button
-                        onClick={() => router.push('/dashboard/clients?new=true')}
-                        className="rounded-xl bg-primary px-8 py-4 text-base font-medium text-white shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all hover:scale-105"
-                    >
-                        + Add New Client
-                    </button>
-                </div>
-            </div>
-        );
-    }
 
     // Role Selection Component
     function RoleSelectionScreen({ onSelect }: { onSelect: (role: 'couple' | 'planner') => void }) {
@@ -226,7 +207,7 @@ export default function DashboardPage() {
 
     if (!wedding) {
         if (role === 'planner') {
-            return <PlannerEmptyState router={router} />;
+            return <PlannerDashboard />;
         }
 
         return (

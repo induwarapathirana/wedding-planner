@@ -36,6 +36,7 @@ const navItems = [
     { name: "Vendors", href: "/dashboard/vendors", icon: HeartHandshake },
     { name: "Inventory", href: "/dashboard/inventory", icon: Package },
     { name: "Itinerary", href: "/dashboard/itinerary", icon: CalendarClock },
+    { name: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
 ];
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
@@ -57,8 +58,10 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
     async function checkUserRole() {
         const profile = await getUserProfile();
         if (profile) {
-            setRole(profile.role as any);
-            if (profile.role === 'couple') {
+            // Older accounts may still carry 'vendor' or 'pro'; both mean planner
+            const normalizedRole = ['planner', 'vendor', 'pro'].includes(profile.role) ? 'planner' : profile.role;
+            setRole(normalizedRole as any);
+            if (normalizedRole === 'couple') {
                 checkWeddings();
             } else {
                 setHasWeddings(true);

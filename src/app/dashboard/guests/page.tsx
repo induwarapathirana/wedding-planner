@@ -1,7 +1,7 @@
 "use client";
 
 import { useMode } from "@/context/mode-context";
-import { Users, UserPlus, Check, X, HelpCircle, Utensils, Armchair, Edit2, Trash2, CheckSquare, Square, LayoutGrid, Search, Download } from "lucide-react";
+import { Users, UserPlus, Check, X, HelpCircle, Utensils, Armchair, Edit2, Trash2, CheckSquare, Square, LayoutGrid, Search, Download, Link as LinkIcon } from "lucide-react";
 import { downloadCsv } from "@/lib/csv";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
@@ -57,6 +57,7 @@ export default function GuestPage() {
 
     // Companion Expansion State
     const [expandedGuestIds, setExpandedGuestIds] = useState<Set<string>>(new Set());
+    const [copiedGuestId, setCopiedGuestId] = useState<string | null>(null);
 
     // Check if over limit based on CURRENT tier
     const isOverLimit = guests.length > PLAN_LIMITS[tier].guests;
@@ -146,6 +147,7 @@ export default function GuestPage() {
             mealPreference: guestData.meal_preference,
             tableAssignment: guestData.table_assignment,
             plusOne: guestData.plus_one,
+            priority: guestData.priority,
             companionGuestCount: guestData.companion_guest_count,
             companionNames: guestData.companion_names ? JSON.stringify(guestData.companion_names) : null,
             selectedCompanions: guestData.selected_companions ? JSON.stringify(guestData.selected_companions) : null,
@@ -332,6 +334,18 @@ export default function GuestPage() {
 
     // Selected Headcount Calculation
     const selectedGuests = sortedGuests.filter((g) => selectedIds.has(g.id));
+
+    // Each guest's RSVP page lives at /invitation/<guest id>
+    async function copyInvitationLink(guestId: string) {
+        const link = `${window.location.origin}/invitation/${guestId}`;
+        try {
+            await navigator.clipboard.writeText(link);
+            setCopiedGuestId(guestId);
+            setTimeout(() => setCopiedGuestId((id) => (id === guestId ? null : id)), 2000);
+        } catch {
+            alert(`Copy this RSVP link: ${link}`);
+        }
+    }
 
     function exportGuests() {
         downloadCsv(
@@ -663,6 +677,9 @@ export default function GuestPage() {
                                                     </span>
                                                     {canEdit && (
                                                         <>
+                                                            <button onClick={(e) => { e.stopPropagation(); copyInvitationLink(guest.id); }} className="p-2 text-muted-foreground hover:text-primary transition-colors" title="Copy RSVP link" aria-label={`Copy RSVP link for ${guest.name}`}>
+                                                                {copiedGuestId === guest.id ? <Check className="w-4 h-4 text-green-600" /> : <LinkIcon className="w-4 h-4" />}
+                                                            </button>
                                                             <button onClick={() => handleOpenEdit(guest)} className="p-2 text-muted-foreground hover:text-primary transition-colors">
                                                                 <Edit2 className="w-4 h-4" />
                                                             </button>
@@ -750,6 +767,9 @@ export default function GuestPage() {
                                                 <div className="flex items-center gap-1">
                                                     {canEdit && (
                                                         <>
+                                                            <button onClick={(e) => { e.stopPropagation(); copyInvitationLink(guest.id); }} className="p-2 text-muted-foreground hover:text-primary transition-colors" title="Copy RSVP link" aria-label={`Copy RSVP link for ${guest.name}`}>
+                                                                {copiedGuestId === guest.id ? <Check className="w-4 h-4 text-green-600" /> : <LinkIcon className="w-4 h-4" />}
+                                                            </button>
                                                             <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(guest); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
                                                                 <Edit2 className="w-4 h-4" />
                                                             </button>
@@ -945,6 +965,9 @@ export default function GuestPage() {
                                                             <div className="flex items-center gap-2">
                                                                 {canEdit && (
                                                                     <>
+                                                                        <button onClick={(e) => { e.stopPropagation(); copyInvitationLink(guest.id); }} className="p-2 text-muted-foreground hover:text-primary transition-colors" title="Copy RSVP link" aria-label={`Copy RSVP link for ${guest.name}`}>
+                                                                            {copiedGuestId === guest.id ? <Check className="w-4 h-4 text-green-600" /> : <LinkIcon className="w-4 h-4" />}
+                                                                        </button>
                                                                         <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(guest); }} className="p-2 text-muted-foreground hover:text-primary transition-colors">
                                                                             <Edit2 className="w-4 h-4" />
                                                                         </button>

@@ -13,7 +13,6 @@ import { getEffectiveTier } from "@/lib/trial";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { TourGuide } from "@/components/dashboard/TourGuide";
-import { TierGate } from "@/components/dashboard/TierGate";
 import { BUDGET_STEPS } from "@/lib/tours";
 
 type BudgetItem = {
@@ -207,6 +206,8 @@ export default function BudgetPage() {
             name: item_name,
             category: rest.category,
             estimatedCost: rest.estimated_cost,
+            unitPrice: rest.unit_price || null,
+            units: rest.units || 1,
             actualCost: rest.actual_cost,
             paidAmount: rest.paid_amount,
             dueDate: rest.due_date ? new Date(rest.due_date) : null,
@@ -242,7 +243,7 @@ export default function BudgetPage() {
     }
 
     return (
-        <TierGate weddingId={weddingId} featureName="Budget Tracker">
+        <>
             <div className="space-y-6 md:space-y-8 pb-20 md:pb-0">
                 {/* Header */}
                 <div className="flex flex-col gap-4">
@@ -627,6 +628,6 @@ export default function BudgetPage() {
                     tier={tier}
                 />
             </div>
-        </TierGate>
+        </>
     );
 }

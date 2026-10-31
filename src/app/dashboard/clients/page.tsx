@@ -1,24 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getClients, createClientWedding, updateClient } from "@/app/actions/data";
+import { getClients, createClientWedding, updateClient, getUserIdFromSession } from "@/app/actions/data";
 import { Plus, Search, Calendar, Mail, Phone, MoreHorizontal, Users } from "lucide-react";
 import { Check, Loader2, Sparkles, FolderOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/format";
 import { AddClientModal } from "@/components/dashboard/clients/AddClientModal";
-// Note: We'll add the 'Add Client' Modal later, for now just the list.
+import { ClientDetailsModal } from "@/components/dashboard/clients/ClientDetailsModal";
+import { toClientRow, type ClientRow } from "@/lib/clients";
 
-type Client = {
-    id: string;
-    name: string;
-    email: string;
-    phone: string;
-    wedding_date: string;
-    budget: number;
-    status: 'lead' | 'active' | 'completed' | 'lost';
-    wedding_id?: string;
-};
+type Client = ClientRow;
 
 export default function ClientsPage() {
     const router = useRouter();
@@ -28,15 +20,30 @@ export default function ClientsPage() {
     const [search, setSearch] = useState('');
     const [isAddModalOpen, setIsAddModalOpen] = useState(false); // NEW STATE
     const [creatingWeddingFor, setCreatingWeddingFor] = useState<string | null>(null);
+    const [userId, setUserId] = useState<string | null>(null);
+    const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+    const [copied, setCopied] = useState(false);
 
     useEffect(() => {
         fetchClients();
+        getUserIdFromSession().then(setUserId);
     }, []);
+
+    async function copyInquiryLink() {
+        if (!userId) return;
+        try {
+            await navigator.clipboard.writeText(`${window.location.origin}/inquiry/${userId}`);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            alert(`Copy this link: ${window.location.origin}/inquiry/${userId}`);
+        }
+    }
 
     async function fetchClients() {
         setLoading(true);
         const data = await getClients();
-        if (data) setClients(data as any as Client[]);
+        if (data) setClients(data.map(toClientRow));
         setLoading(false);
     }
 
@@ -89,19 +96,37 @@ export default function ClientsPage() {
                 onClose={() => setIsAddModalOpen(false)}
                 onSuccess={fetchClients}
             />
+            <ClientDetailsModal
+                client={selectedClient}
+                isOpen={!!selectedClient}
+                onClose={() => setSelectedClient(null)}
+                onUpdate={fetchClients}
+            />
 
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <h1 className="font-serif text-3xl font-bold text-gray-900">Clients</h1>
                     <p className="text-muted-foreground mt-1">Manage your leads and active weddings.</p>
                 </div>
-                <button
-                    onClick={() => setIsAddModalOpen(true)}
-                    className="flex items-center justify-center gap-2 bg-gray-900 text-white px-5 py-2.5 rounded-xl hover:bg-gray-800 transition-all shadow-sm"
-                >
-                    <Plus className="w-4 h-4" />
-                    Add Client
-                </button>
+                <div className="flex gap-2">
+                    {userId && (
+                        <button
+                            onClick={copyInquiryLink}
+                            className="flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 px-5 py-2.5 rounded-xl hover:bg-gray-50 transition-all shadow-sm font-medium"
+                            title="Share this form so new couples can send you an inquiry"
+                        >
+                            {copied ? <Check className="w-4 h-4 text-green-600" /> : <Sparkles className="w-4 h-4 text-purple-600" />}
+                            {copied ? "Link copied" : "Copy inquiry form link"}
+                        </button>
+                    )}
+                    <button
+                        onClick={() => setIsAddModalOpen(true)}
+                        className="flex items-center justify-center gap-2 bg-gray-900 text-white px-5 py-2.5 rounded-xl hover:bg-gray-800 transition-all shadow-sm"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Add Client
+                    </button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -182,7 +207,11 @@ export default function ClientsPage() {
                                         </div>
                                     </div>
                                 </div>
-                                <button className="text-gray-400 hover:text-gray-600">
+                                <button
+                                    onClick={() => setSelectedClient(client)}
+                                    className="text-gray-400 hover:text-gray-600"
+                                    aria-label={`View details for ${client.name}`}
+                                >
                                     <MoreHorizontal className="w-5 h-5" />
                                 </button>
                             </div>

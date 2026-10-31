@@ -23,7 +23,7 @@ function safeNext(raw: string | null, origin: string): string | null {
 
 /**
  * Single place that decides where a user lands after signing in:
- * pending invite → the invite page, planners → their clients,
+ * pending invite → the invite page, planners → their client overview,
  * couples without a wedding → onboarding, everyone else → the dashboard.
  */
 export async function GET(request: NextRequest) {
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     const next = safeNext(url.searchParams.get("next"), url.origin);
     if (next) return go(next);
 
-    if (PLANNER_ROLES.has(role)) return go("/dashboard/clients");
+    if (PLANNER_ROLES.has(role)) return go("/dashboard"); // shows the planner overview
     if (user._count.collaborators === 0) return go("/onboarding");
     return go("/dashboard");
 }

@@ -1,66 +1,74 @@
 "use server";
 
-import { createClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+// Public, unauthenticated actions behind a planner's shareable inquiry link.
 
-function getAdminClient() {
-    if (!supabaseServiceKey) {
-        throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
-    }
-    return createClient(supabaseUrl, supabaseServiceKey);
-}
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PLANNER_ROLES = ["planner", "vendor", "pro"];
 
+/** Only the public parts of a planner's profile, and only for planner accounts. */
 export async function getPlannerDetails(plannerId: string) {
-    const supabase = getAdminClient();
+    if (!UUID.test(plannerId)) return null;
 
-    console.log(`Fetching planner details for: ${plannerId}`);
+    const planner = await prisma.user.findFirst({
+        where: { id: plannerId, role: { in: PLANNER_ROLES } },
+        select: { name: true, companyName: true, logoUrl: true },
+    });
+    if (!planner) return null;
 
-    // Fetch planner profile to show name/business name
-    // Using * to safeguard against missing optional columns like business_name
-    const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', plannerId)
-        .single();
-
-    if (error) {
-        console.error("Error fetching planner details:", error);
-        return null;
-    }
-
-    return data;
+    return {
+        company_name: planner.companyName,
+        full_name: planner.name,
+        logo_url: planner.logoUrl,
+    };
 }
 
-export async function submitInquiry(plannerId: string, formData: any) {
-    const supabase = getAdminClient();
+type InquiryForm = {
+    name?: unknown;
+    email?: unknown;
+    phone?: unknown;
+    date?: unknown;
+    budget?: unknown;
+    message?: unknown;
+};
 
-    console.log(`Submitting inquiry for planner: ${plannerId}`, formData);
+const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
-    // Validate required fields
-    if (!formData.name || !formData.email) {
-        return { success: false, error: "Name and Email are required." };
+export async function submitInquiry(plannerId: string, formData: InquiryForm) {
+    const name = text(formData.name, 200);
+    const email = text(formData.email, 200);
+    if (!name || !email) return { success: false, error: "Name and Email are required." };
+    if (!EMAIL.test(email)) return { success: false, error: "Please enter a valid email address." };
+
+    if (!(await getPlannerDetails(plannerId))) {
+        return { success: false, error: "This inquiry form is no longer available." };
     }
 
-    const { error } = await supabase
-        .from('clients')
-        .insert({
-            planner_id: plannerId,
-            name: formData.name,
-            email: formData.email,
-            phone: formData.phone || null,
-            wedding_date: formData.date || null,
-            budget: formData.budget ? parseFloat(formData.budget) : 0,
-            status: 'lead',
-            notes: formData.message || null, // Save the message as notes
-        });
+    const dateText = text(formData.date, 10);
+    const weddingDate = /^\d{4}-\d{2}-\d{2}$/.test(dateText) ? new Date(dateText) : null;
+    const budget = Number(text(formData.budget, 20));
 
-    if (error) {
+    try {
+        await prisma.client.create({
+            data: {
+                plannerId,
+                name,
+                email,
+                phone: text(formData.phone, 40) || null,
+                weddingDate,
+                budget: Number.isFinite(budget) && budget > 0 ? budget : 0,
+                status: "lead",
+                notes: text(formData.message, 5000) || null,
+            },
+        });
+    } catch (error) {
         console.error("Inquiry submission error:", error);
         return { success: false, error: "Failed to submit inquiry. Please try again." };
     }
 
+    revalidatePath("/dashboard/clients");
     return { success: true };
 }
