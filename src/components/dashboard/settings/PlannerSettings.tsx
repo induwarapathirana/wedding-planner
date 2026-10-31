@@ -102,7 +102,27 @@ export function PlannerSettings() {
                         <label className="block text-sm font-medium text-gray-700 mb-2">Company Logo URL</label>
                         <div className="flex gap-4 items-start">
                             {formData.logo_url && (
-                                <img src={formData.logo_url} alt="Logo" className="w-16 h-16 rounded-lg object-contain border border-gray-100 bg-gray-50" />
+                                <img
+                                    src={(() => {
+                                        // Improved Google Drive conversion
+                                        if (formData.logo_url.includes('drive.google.com') && formData.logo_url.includes('/file/d/')) {
+                                            const fileId = formData.logo_url.split('/file/d/')[1].split('/')[0];
+                                            return `https://lh3.googleusercontent.com/d/${fileId}`;
+                                        }
+                                        return formData.logo_url;
+                                    })()}
+                                    onError={(e) => {
+                                        // Fallback or error handling if link is broken
+                                        (e.target as HTMLImageElement).src = formData.logo_url; // try original as last resort or placeholder
+                                        (e.target as HTMLImageElement).style.display = 'none'; // hide if broken
+                                    }}
+                                    onLoad={(e) => {
+                                        (e.target as HTMLImageElement).style.display = 'block';
+                                    }}
+                                    referrerPolicy="no-referrer"
+                                    alt="Logo"
+                                    className="w-16 h-16 rounded-lg object-contain border border-gray-100 bg-gray-50"
+                                />
                             )}
                             <div className="flex-1">
                                 <input
