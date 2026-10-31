@@ -151,7 +151,8 @@ export function SheetGrid<T>({
     const [editing, setEditing] = useState<{ seed?: string } | null>(null);
     const history = useRef<{ id: string; key: string; old: unknown }[]>([]);
     const gridRef = useRef<HTMLDivElement>(null);
-    const pendingEdit = useRef<string | null>(null);
+    // Row to start editing once it shows up (set after onAddRow resolves)
+    const [pendingEdit, setPendingEdit] = useState<string | null>(null);
 
     const selectable = !!onSelectionChange;
 
@@ -180,13 +181,13 @@ export function SheetGrid<T>({
 
     // Start editing a freshly added row once it appears
     useEffect(() => {
-        if (pendingEdit.current && flat.some((r) => getRowId(r) === pendingEdit.current)) {
+        if (pendingEdit && flat.some((r) => getRowId(r) === pendingEdit)) {
             const firstEditable = columns.findIndex((c) => !c.get && c.type !== "checkbox");
-            setActive({ id: pendingEdit.current, col: Math.max(firstEditable, 0) });
+            setActive({ id: pendingEdit, col: Math.max(firstEditable, 0) });
             setEditing({});
-            pendingEdit.current = null;
+            setPendingEdit(null);
         }
-    }, [flat, columns, getRowId]);
+    }, [pendingEdit, flat, columns, getRowId]);
 
     const focusGrid = () => gridRef.current?.focus({ preventScroll: true });
 
@@ -204,7 +205,15 @@ export function SheetGrid<T>({
     useEffect(() => {
         if (!active) return;
         const el = gridRef.current?.querySelector<HTMLElement>(`[data-cell="${CSS.escape(active.id)}:${active.col}"]`);
-        el?.scrollIntoView({ block: "nearest", inline: "nearest" });
+        if (!el) return;
+        el.scrollIntoView({ block: "nearest", inline: "nearest" });
+        // Don't leave the cell hidden behind the frozen column
+        const frozen = el.parentElement?.querySelector<HTMLElement>("td.sticky");
+        const scroller = el.closest<HTMLElement>(".overflow-auto");
+        if (frozen && frozen !== el && scroller) {
+            const overlap = frozen.getBoundingClientRect().right - el.getBoundingClientRect().left;
+            if (overlap > 0) scroller.scrollLeft -= overlap;
+        }
     }, [active]);
 
     const commit = useCallback(
@@ -327,7 +336,7 @@ export function SheetGrid<T>({
     const addRow = async (groupKey?: string) => {
         if (!onAddRow) return;
         const id = await onAddRow(groupKey);
-        if (id) pendingEdit.current = id;
+        if (id) setPendingEdit(id);
     };
 
     const allVisibleSelected = selectable && flat.length > 0 && flat.every((r) => selectedIds?.has(getRowId(r)));
@@ -370,7 +379,12 @@ export function SheetGrid<T>({
                     tabIndex={0}
                     onKeyDown={onKeyDown}
                     onPaste={onPaste}
-                    className="outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    // The selected cell is the focus indicator; select one when tabbing in
+                    onFocus={() => {
+                        // Functional update: a click's own selection (queued first) wins
+                        if (flat.length) setActive((a) => a ?? { id: getRowId(flat[0]), col: 0 });
+                    }}
+                    className="outline-none"
                     role="grid"
                     aria-rowcount={flat.length}
                 >
@@ -397,7 +411,7 @@ export function SheetGrid<T>({
                                             className={cn(
                                                 "sticky top-0 z-10 border-b border-border bg-gray-50 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap",
                                                 col.align === "right" && "text-right",
-                                                col.sticky && "left-0 z-20",
+                                                col.sticky && "left-0 z-30",
                                                 ci === 0 && selectable && col.sticky && "left-10"
                                             )}
                                         >
@@ -478,9 +492,11 @@ export function SheetGrid<T>({
                                                                 ro ? "cursor-default text-foreground/80" : "cursor-cell",
                                                                 col.align === "right" && "text-right",
                                                                 col.align === "center" && "text-center",
-                                                                col.sticky && "sticky left-0 z-[1] bg-white group-hover/row:bg-gray-50",
+                                                                // Frozen cells sit above scrolled cells, including a selected one
+                                                                col.sticky && "sticky left-0 z-[4] bg-white group-hover/row:bg-gray-50",
                                                                 col.sticky && selectable && "left-10",
-                                                                isActive && "z-[2] shadow-[inset_0_0_0_2px_var(--primary)]",
+                                                                isActive && (col.sticky ? "z-[5]" : "z-[2]"),
+                                                                isActive && "shadow-[inset_0_0_0_2px_var(--primary)]",
                                                                 ro && isActive && "shadow-[inset_0_0_0_2px_var(--border)]"
                                                             )}
                                                         >
