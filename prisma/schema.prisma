@@ -91,6 +91,7 @@ model Wedding {
   estimatedBudget Decimal?
   tier            String    @default("free") // 'free', 'premium'
   premiumTrialEndsAt DateTime? @db.Timestamptz()
+  whatsappBusinessNumber String? // Enables WhatsApp RSVP confirmations
 
   // Extended fields from expand_weddings_schema
   name          String?
@@ -134,6 +135,8 @@ model BudgetItem {
   category      String
   name          String
   estimatedCost Decimal   @default(0)
+  unitPrice     Decimal?
+  units         Int       @default(1)
   actualCost    Decimal   @default(0)
   paidAmount    Decimal   @default(0)
   dueDate       DateTime? @db.Date
@@ -153,6 +156,8 @@ model Guest {
   email               String?
   groupCategory       String?
   rsvpStatus          String   @default("pending") // 'pending', 'accepted', 'declined'
+  priority            String   @default("B") // A/B/C invite list
+  whatsappNumber      String?
   mealPreference      String?
   plusOne             Boolean  @default(false)
   tableAssignment     String?
@@ -192,7 +197,10 @@ model Vendor {
   website     String?
   cost        Decimal?
   deposit     Decimal?
-  status      String    @default("pending") // 'pending', 'booked', 'paid'
+  priceEstimate Decimal?
+  pricingType String?   // 'flat_rate', 'per_person', 'hourly', 'per_item', 'package', 'tbd'
+  pricingUnit String?
+  status      String    @default("researching") // 'researching', 'contacted', 'hired', 'declined'
   notes       String?
   createdAt   DateTime  @default(now()) @db.Timestamptz()
 
@@ -212,6 +220,9 @@ model DirectoryVendor {
   website     String?
   notes       String?
   rating      Int?
+  priceEstimate Decimal?
+  pricingType String?
+  pricingUnit String?
   createdAt   DateTime  @default(now()) @db.Timestamptz()
 
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -227,7 +238,8 @@ model InventoryItem {
   quantity    Int       @default(1)
   unitPrice   Decimal?
   totalPrice  Decimal?
-  status      String    @default("needed") // 'needed', 'ordered', 'received'
+  status      String    @default("needed") // 'needed', 'purchased', 'rented', 'borrowed', 'packed'
+  link        String?
   notes       String?
   createdAt   DateTime  @default(now()) @db.Timestamptz()
 
