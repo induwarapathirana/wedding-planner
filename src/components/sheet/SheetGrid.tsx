@@ -734,11 +734,21 @@ function SheetCards<T>({
                                             {displayText(row, title, formatMoney) || <span className="text-muted-foreground">{title.placeholder ?? "Untitled"}</span>}
                                         </span>
                                         <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                                            {rest.filter((c) => c.summary).map((c) => (
-                                                <span key={c.key} className="inline-flex items-center gap-1">
-                                                    {c.render ? c.render(row) : displayText(row, c, formatMoney) || "—"}
-                                                </span>
-                                            ))}
+                                            {rest.filter((c) => c.summary).map((c) => {
+                                                // A ticked box reads as its label ("✓ Done"); an unticked one says nothing
+                                                if (c.type === "checkbox") {
+                                                    return cellValue(row, c) ? (
+                                                        <span key={c.key} className="inline-flex items-center gap-1 font-medium text-emerald-700">
+                                                            <Check className="h-3 w-3" /> {c.label}
+                                                        </span>
+                                                    ) : null;
+                                                }
+                                                return (
+                                                    <span key={c.key} className="inline-flex items-center gap-1">
+                                                        {c.render ? c.render(row) : displayText(row, c, formatMoney) || "—"}
+                                                    </span>
+                                                );
+                                            })}
                                         </span>
                                     </button>
                                     {rowActions && <div className="flex shrink-0 items-center">{rowActions(row)}</div>}
@@ -784,7 +794,7 @@ function CardField<T>({
 }) {
     const value = cellValue(row, col);
     const ro = isReadOnly(row, col, readOnly);
-    const wide = col.type === "text" || col.type === undefined;
+    const wide = col.type === "text" || col.type === undefined || col.type === "select";
     const input = "mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30";
 
     let control: ReactNode;
@@ -827,8 +837,8 @@ function CardField<T>({
 
     return (
         <label className={cn("block text-xs font-medium text-muted-foreground", wide && "col-span-2")}>
-            {col.label}
-            {control}
+            <span className="block">{col.label}</span>
+            <span className="block">{control}</span>
         </label>
     );
 }
