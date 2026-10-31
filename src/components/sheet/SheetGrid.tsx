@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, Check, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -28,6 +28,8 @@ export type SheetColumn<T> = {
     align?: "left" | "right" | "center";
     /** Keep the column visible while scrolling sideways. */
     sticky?: boolean;
+    /** Show on the collapsed card in the phone layout. */
+    summary?: boolean;
 };
 
 export type SheetGroup<T> = { key: string; label: string; rows: T[] };
@@ -58,6 +60,19 @@ type Props<T> = {
 type Active = { id: string; col: number };
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}/;
+
+/** True below 640px, where the sheet switches to cards. */
+function useNarrow() {
+    const [narrow, setNarrow] = useState(false);
+    useEffect(() => {
+        const mq = window.matchMedia("(max-width: 639px)");
+        const update = () => setNarrow(mq.matches);
+        update();
+        mq.addEventListener("change", update);
+        return () => mq.removeEventListener("change", update);
+    }, []);
+    return narrow;
+}
 
 export function toDateInput(v: unknown): string {
     if (!v) return "";
@@ -155,6 +170,7 @@ export function SheetGrid<T>({
     const [pendingEdit, setPendingEdit] = useState<string | null>(null);
 
     const selectable = !!onSelectionChange;
+    const narrow = useNarrow();
 
     const sorted = useMemo(() => {
         if (!sort) return rows;
@@ -181,13 +197,13 @@ export function SheetGrid<T>({
 
     // Start editing a freshly added row once it appears
     useEffect(() => {
-        if (pendingEdit && flat.some((r) => getRowId(r) === pendingEdit)) {
+        if (!narrow && pendingEdit && flat.some((r) => getRowId(r) === pendingEdit)) {
             const firstEditable = columns.findIndex((c) => !c.get && c.type !== "checkbox");
             setActive({ id: pendingEdit, col: Math.max(firstEditable, 0) });
             setEditing({});
             setPendingEdit(null);
         }
-    }, [pendingEdit, flat, columns, getRowId]);
+    }, [narrow, pendingEdit, flat, columns, getRowId]);
 
     const focusGrid = () => gridRef.current?.focus({ preventScroll: true });
 
@@ -338,6 +354,27 @@ export function SheetGrid<T>({
         const id = await onAddRow(groupKey);
         if (id) setPendingEdit(id);
     };
+
+    if (narrow) {
+        return (
+            <SheetCards
+                groups={groups}
+                grouped={!!groupBy}
+                columns={columns}
+                getRowId={getRowId}
+                commit={commit}
+                formatMoney={formatMoney}
+                readOnly={readOnly}
+                renderGroupHeader={renderGroupHeader}
+                onAddRow={onAddRow ? addRow : undefined}
+                addRowLabel={addRowLabel}
+                rowActions={rowActions}
+                emptyState={emptyState}
+                pendingEdit={pendingEdit}
+                clearPendingEdit={() => setPendingEdit(null)}
+            />
+        );
+    }
 
     const allVisibleSelected = selectable && flat.length > 0 && flat.every((r) => selectedIds?.has(getRowId(r)));
     const toggleAll = () => {
@@ -609,5 +646,189 @@ function CellEditor<T>({
             className={cn(base, (col.type === "number" || col.type === "money") && "text-right")}
             aria-label={col.label}
         />
+    );
+}
+
+/** Phone layout: one card per row; tap to edit every field. */
+function SheetCards<T>({
+    groups,
+    grouped,
+    columns,
+    getRowId,
+    commit,
+    formatMoney,
+    readOnly,
+    renderGroupHeader,
+    onAddRow,
+    addRowLabel,
+    rowActions,
+    emptyState,
+    pendingEdit,
+    clearPendingEdit,
+}: {
+    groups: SheetGroup<T>[];
+    grouped: boolean;
+    columns: SheetColumn<T>[];
+    getRowId: (row: T) => string;
+    commit: (row: T, col: SheetColumn<T>, value: unknown) => void;
+    formatMoney: (n: number) => string;
+    readOnly?: boolean;
+    renderGroupHeader?: (group: SheetGroup<T>) => ReactNode;
+    onAddRow?: (groupKey?: string) => void;
+    addRowLabel: string | ((groupKey?: string) => string);
+    rowActions?: (row: T) => ReactNode;
+    emptyState?: ReactNode;
+    pendingEdit: string | null;
+    clearPendingEdit: () => void;
+}) {
+    const [expanded, setExpanded] = useState<string | null>(null);
+    const [title, ...rest] = columns;
+
+    // A freshly added row opens expanded
+    useEffect(() => {
+        if (pendingEdit && groups.some((g) => g.rows.some((r) => getRowId(r) === pendingEdit))) {
+            setExpanded(pendingEdit);
+            clearPendingEdit();
+        }
+    }, [pendingEdit, groups, getRowId, clearPendingEdit]);
+
+    const label = (key?: string) => (typeof addRowLabel === "function" ? addRowLabel(key) : addRowLabel);
+    const total = groups.reduce((n, g) => n + g.rows.length, 0);
+
+    const addButton = (key?: string) =>
+        onAddRow && !readOnly ? (
+            <button
+                type="button"
+                onClick={() => onAddRow(key)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border py-3 text-sm font-medium text-muted-foreground"
+            >
+                <Plus className="h-4 w-4" /> {label(key)}
+            </button>
+        ) : null;
+
+    return (
+        <div className="space-y-3">
+            {total === 0 && !grouped && (
+                <p className="rounded-xl border border-border bg-white px-4 py-10 text-center text-sm text-muted-foreground">{emptyState ?? "Nothing here yet."}</p>
+            )}
+            {groups.map((group) => (
+                <section key={group.key || "all"} className="space-y-2">
+                    {grouped && (
+                        <div className="rounded-xl bg-gray-50 px-3 py-2">
+                            {renderGroupHeader ? renderGroupHeader(group) : <span className="font-semibold">{group.label}</span>}
+                        </div>
+                    )}
+                    {group.rows.map((row) => {
+                        const id = getRowId(row);
+                        const open = expanded === id;
+                        return (
+                            <article key={id} className="rounded-xl border border-border bg-white shadow-sm">
+                                <div className="flex items-start gap-2 p-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setExpanded(open ? null : id)}
+                                        aria-expanded={open}
+                                        className="min-w-0 flex-1 text-left"
+                                    >
+                                        <span className="block truncate font-semibold">
+                                            {displayText(row, title, formatMoney) || <span className="text-muted-foreground">{title.placeholder ?? "Untitled"}</span>}
+                                        </span>
+                                        <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                            {rest.filter((c) => c.summary).map((c) => (
+                                                <span key={c.key} className="inline-flex items-center gap-1">
+                                                    {c.render ? c.render(row) : displayText(row, c, formatMoney) || "—"}
+                                                </span>
+                                            ))}
+                                        </span>
+                                    </button>
+                                    {rowActions && <div className="flex shrink-0 items-center">{rowActions(row)}</div>}
+                                    <button
+                                        type="button"
+                                        onClick={() => setExpanded(open ? null : id)}
+                                        className="shrink-0 rounded-md p-1.5 text-muted-foreground"
+                                        aria-label={open ? "Collapse" : "Edit details"}
+                                    >
+                                        <ChevronDown className={cn("h-5 w-5 transition-transform", open && "rotate-180")} />
+                                    </button>
+                                </div>
+                                {open && (
+                                    <div className="grid grid-cols-2 gap-3 border-t border-border p-3">
+                                        {columns.map((col) => (
+                                            <CardField key={col.key} row={row} col={col} commit={commit} formatMoney={formatMoney} readOnly={readOnly} />
+                                        ))}
+                                    </div>
+                                )}
+                            </article>
+                        );
+                    })}
+                    {grouped && addButton(group.key)}
+                </section>
+            ))}
+            {!grouped && addButton()}
+        </div>
+    );
+}
+
+function CardField<T>({
+    row,
+    col,
+    commit,
+    formatMoney,
+    readOnly,
+}: {
+    row: T;
+    col: SheetColumn<T>;
+    commit: (row: T, col: SheetColumn<T>, value: unknown) => void;
+    formatMoney: (n: number) => string;
+    readOnly?: boolean;
+}) {
+    const value = cellValue(row, col);
+    const ro = isReadOnly(row, col, readOnly);
+    const wide = col.type === "text" || col.type === undefined;
+    const input = "mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30";
+
+    let control: ReactNode;
+    if (ro) {
+        control = <p className="mt-1 text-sm">{col.render ? col.render(row) : displayText(row, col, formatMoney) || "—"}</p>;
+    } else if (col.type === "checkbox") {
+        control = (
+            <button
+                type="button"
+                onClick={() => commit(row, col, !value)}
+                aria-pressed={!!value}
+                className={cn("mt-1 inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm", value ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-border")}
+            >
+                {value ? <Check className="h-4 w-4" /> : null}
+                {value ? "Yes" : "No"}
+            </button>
+        );
+    } else if (col.type === "select") {
+        control = (
+            <select value={(value as string) ?? ""} onChange={(e) => commit(row, col, e.target.value)} className={input}>
+                {(value === null || value === undefined || value === "") && <option value="">—</option>}
+                {col.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+        );
+    } else {
+        const initial = col.type === "date" ? toDateInput(value) : value === null || value === undefined ? "" : String(value);
+        control = (
+            <input
+                key={initial}
+                type={col.type === "date" ? "date" : "text"}
+                inputMode={col.type === "number" || col.type === "money" ? "decimal" : undefined}
+                defaultValue={initial}
+                placeholder={col.placeholder}
+                onBlur={(e) => commit(row, col, parseCellValue(col, e.target.value))}
+                onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                className={input}
+            />
+        );
+    }
+
+    return (
+        <label className={cn("block text-xs font-medium text-muted-foreground", wide && "col-span-2")}>
+            {col.label}
+            {control}
+        </label>
     );
 }

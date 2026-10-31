@@ -239,9 +239,9 @@ export default function GuestsPage() {
 
     const columns: SheetColumn<Guest>[] = [
         { key: "name", label: "Household", type: "text", width: 220, sticky: true, placeholder: "Name" },
-        { key: "side", label: "Side", type: "select", options: SIDES, width: 90 },
+        { key: "side", label: "Side", type: "select", options: SIDES, width: 90, summary: true },
         { key: "groupCategory", label: "Group", type: "text", width: 130 },
-        { key: "party", label: "Party", type: "number", width: 70, align: "right", get: party, readOnly: false },
+        { key: "party", label: "Party", type: "number", width: 70, align: "right", get: party, readOnly: false, summary: true },
         { key: "whatsappNumber", label: "WhatsApp", type: "text", width: 150 },
         {
             key: "inviteStatus", label: "Invite", type: "select", options: INVITE, width: 100,
@@ -252,7 +252,7 @@ export default function GuestsPage() {
             ),
         },
         {
-            key: "rsvpStatus", label: "RSVP", type: "select", options: RSVP, width: 110,
+            key: "rsvpStatus", label: "RSVP", type: "select", options: RSVP, width: 110, summary: true,
             render: (g) => (
                 <span
                     className={cn(
@@ -267,7 +267,7 @@ export default function GuestsPage() {
             ),
         },
         { key: "mealPreference", label: "Meal", type: "select", options: MEALS, width: 100 },
-        { key: "tableAssignment", label: "Table", type: "text", width: 70 },
+        { key: "tableAssignment", label: "Table", type: "text", width: 70, summary: true },
         {
             key: "priority", label: "List", type: "select", options: LISTS, width: 60, align: "center",
             render: (g) => (
