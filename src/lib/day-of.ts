@@ -1,5 +1,6 @@
 import "server-only"
 import { prisma } from "@/lib/prisma"
+import { getPlannerBrand } from "@/lib/brand"
 
 /** The run of show and vendor contacts for the shared day-of link, looked up by its secret token. */
 export async function getDayOf(token: string) {
@@ -9,7 +10,7 @@ export async function getDayOf(token: string) {
     select: { id: true, coupleName1: true, coupleName2: true, weddingDate: true, location: true },
   })
   if (!wedding) return null
-  const [events, vendors] = await Promise.all([
+  const [events, vendors, planner] = await Promise.all([
     prisma.event.findMany({
       where: { weddingId: wedding.id, startTime: { not: null } },
       orderBy: { startTime: "asc" },
@@ -20,6 +21,7 @@ export async function getDayOf(token: string) {
       orderBy: { category: "asc" },
       select: { id: true, companyName: true, contactName: true, category: true, phone: true },
     }),
+    getPlannerBrand(wedding.id),
   ])
   return {
     couple: [wedding.coupleName1, wedding.coupleName2].filter(Boolean).join(" & "),
@@ -27,5 +29,6 @@ export async function getDayOf(token: string) {
     location: wedding.location,
     events: events.map((e) => ({ ...e, startTime: e.startTime!.toISOString(), endTime: e.endTime?.toISOString() ?? null })),
     vendors,
+    planner,
   }
 }

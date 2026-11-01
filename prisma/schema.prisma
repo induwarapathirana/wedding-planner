@@ -53,6 +53,7 @@ model User {
   website       String?
   signatureUrl  String?
   brandingColor String    @default("#000000")
+  calendarToken String?   @unique // Secret for the all-weddings iCal feed
 
   accounts      Account[]
   sessions      Session[]
@@ -64,6 +65,7 @@ model User {
   feedbacks      Feedback[]
   pushSubscriptions PushSubscription[]
   directoryVendors  DirectoryVendor[]
+  templates         PlannerTemplate[]
 }
 
 model VerificationToken {
@@ -371,6 +373,20 @@ model PushSubscription {
   @@index([userId])
 }
 
+/// A planner's own reusable checklist, budget or run of show.
+model PlannerTemplate {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  plannerId String   @db.Uuid
+  kind      String   // 'checklist', 'budget', 'dayOf'
+  name      String
+  items     Json     // Shape depends on kind; see src/lib/planner-templates.ts
+  createdAt DateTime @default(now()) @db.Timestamptz()
+
+  planner   User     @relation(fields: [plannerId], references: [id], onDelete: Cascade)
+
+  @@index([plannerId, kind])
+}
+
 model Client {
   id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   plannerId   String    @db.Uuid
@@ -381,9 +397,14 @@ model Client {
   phone       String?
   weddingDate DateTime? @db.Date
   budget      Decimal?
-  status      String    @default("lead") // 'lead', 'active', 'completed'
+  status      String    @default("lead") // 'lead', 'contacted', 'proposal', 'active', 'completed', 'lost'
   notes       String?
   weddingId   String?   @db.Uuid
+  source      String?   // 'inquiry' (public form) or 'manual'
+  location    String?
+  guestCount  Int?
+  nextFollowUp DateTime? @db.Date
+  stageChangedAt DateTime? @db.Timestamptz()
   createdAt   DateTime  @default(now()) @db.Timestamptz()
 
   planner     User      @relation("PlannerClients", fields: [plannerId], references: [id], onDelete: Cascade)

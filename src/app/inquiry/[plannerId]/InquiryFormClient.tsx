@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { submitInquiry } from "./actions";
-import { Loader2, CheckCircle2, Calendar, DollarSign, Mail, Phone, User, MessageSquare } from "lucide-react";
+import { Loader2, CheckCircle2, Calendar, Wallet, Mail, Phone, User, MessageSquare, MapPin, Users } from "lucide-react";
 
-export function InquiryFormClient({ plannerId }: { plannerId: string }) {
+export function InquiryFormClient({ plannerId, brandColor }: { plannerId: string; brandColor?: string | null }) {
     const [submitted, setSubmitted] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
@@ -22,6 +22,8 @@ export function InquiryFormClient({ plannerId }: { plannerId: string }) {
             date: formData.get("date"),
             budget: formData.get("budget"),
             message: formData.get("message"),
+            location: formData.get("location"),
+            guests: formData.get("guests"),
         };
 
         const result = await submitInquiry(plannerId, data);
@@ -90,7 +92,7 @@ export function InquiryFormClient({ plannerId }: { plannerId: string }) {
                             name="phone"
                             type="tel"
                             className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
-                            placeholder="(555) 123-4567"
+                            placeholder="077 123 4567"
                         />
                     </div>
                 </div>
@@ -108,13 +110,39 @@ export function InquiryFormClient({ plannerId }: { plannerId: string }) {
                     </div>
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                            <DollarSign className="w-4 h-4 text-gray-400" /> Estimated Budget
+                            <Wallet className="w-4 h-4 text-gray-400" /> Estimated Budget
                         </label>
                         <input
                             name="budget"
                             type="number"
                             className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
-                            placeholder="e.g. 25000"
+                            placeholder="e.g. 3500000"
+                        />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-gray-400" /> City or venue
+                        </label>
+                        <input
+                            name="location"
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
+                            placeholder="Kandy"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                            <Users className="w-4 h-4 text-gray-400" /> Expected guests
+                        </label>
+                        <input
+                            name="guests"
+                            type="number"
+                            min={0}
+                            inputMode="numeric"
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
+                            placeholder="300"
                         />
                     </div>
                 </div>
@@ -135,6 +163,7 @@ export function InquiryFormClient({ plannerId }: { plannerId: string }) {
             <button
                 disabled={loading}
                 type="submit"
+                style={brandColor ? { backgroundColor: brandColor } : undefined}
                 className="w-full bg-gray-900 text-white font-semibold py-4 rounded-xl hover:bg-black transition-all shadow-lg hover:shadow-xl disabled:opacity-70 flex items-center justify-center gap-2"
             >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Send Inquiry"}

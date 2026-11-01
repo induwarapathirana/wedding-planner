@@ -22,11 +22,11 @@ import {
     Share2,
     MessageSquare,
     ArrowLeft,
-    Search, Armchair } from "lucide-react";
+    Search, Armchair, LayoutTemplate } from "lucide-react";
 import { openCommandPalette } from "./CommandPalette";
 import WeddingSelector from "./WeddingSelector";
 import { storedWeddingId, withWedding } from "@/lib/current-wedding";
-import { getUserProfile, getUserWeddingId } from "@/app/actions/data";
+import { getUserProfile, getUserWeddingId, getWeddingBrand } from "@/app/actions/data";
 
 const navItems = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -54,6 +54,16 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         setCoupleWeddingId(weddingId || storedWeddingId());
     }, [weddingId, pathname]);
     const [role, setRole] = useState<'couple' | 'planner' | 'vendor' | null>(null);
+    // A planner's branding on the weddings they plan, shown to the couple (and to the planner, as the couple sees it)
+    const [brand, setBrand] = useState<Awaited<ReturnType<typeof getWeddingBrand>>>(null);
+    const brandWeddingId = role === 'planner' ? weddingId : role === 'couple' ? coupleWeddingId : null;
+    useEffect(() => {
+        if (!brandWeddingId) {
+            setBrand(null);
+            return;
+        }
+        getWeddingBrand(brandWeddingId).then(setBrand).catch(() => setBrand(null));
+    }, [brandWeddingId]);
 
     useEffect(() => {
         if (session?.user) {
@@ -105,6 +115,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                     { name: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
                     // Planners might want a master directory
                     { name: "Vendor Library", href: "/dashboard/vendors", icon: HeartHandshake },
+                    { name: "Templates", href: "/dashboard/templates", icon: LayoutTemplate },
                     { name: "Settings", href: "/dashboard/settings", icon: Settings }, // NEW
                 ];
             }
@@ -118,19 +129,38 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
             <div className="flex h-full flex-col px-6 py-8">
                 {/* Brand */}
                 <div className="mb-10 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
-                            <span className="font-serif text-xl font-bold">V</span>
+                    {brand ? (
+                        <div className="flex min-w-0 items-center gap-3">
+                            {brand.logoUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={brand.logoUrl} alt="" referrerPolicy="no-referrer" className="h-10 w-10 shrink-0 rounded-xl object-cover ring-1 ring-border" />
+                            ) : (
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white" style={{ backgroundColor: brand.color ?? "var(--primary)" }}>
+                                    <span className="font-serif text-xl font-bold">{brand.name.charAt(0)}</span>
+                                </div>
+                            )}
+                            <div className="min-w-0">
+                                <h1 className="truncate font-serif text-lg font-bold text-foreground">{brand.name}</h1>
+                                <p className="text-xs text-muted-foreground">
+                                    {role === 'planner' ? 'How your clients see it' : 'Your wedding planner'}
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h1 className="font-serif text-xl font-bold text-foreground">
-                                Vow & Venue
-                            </h1>
-                            <p className="text-xs text-muted-foreground">
-                                {role === 'planner' ? 'Wedding Pro' : 'Planning made perfect'}
-                            </p>
+                    ) : (
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
+                                <span className="font-serif text-xl font-bold">V</span>
+                            </div>
+                            <div>
+                                <h1 className="font-serif text-xl font-bold text-foreground">
+                                    Vow & Venue
+                                </h1>
+                                <p className="text-xs text-muted-foreground">
+                                    {role === 'planner' ? 'Wedding Pro' : 'Planning made perfect'}
+                                </p>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
 
                 {/* Wedding Selector - Only for Couples (Planners select from Clients page usually, or a different switcher) */}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { MapPin, MessageCircle, Phone } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PlannerCredit } from "@/components/PlannerCredit";
 import type { getDayOf } from "@/lib/day-of";
 
 type Data = NonNullable<Awaited<ReturnType<typeof getDayOf>>>;
@@ -35,13 +36,18 @@ export default function DayOfClient({ data }: { data: Data }) {
 
     return (
         <div className="min-h-screen bg-[#FDFBF7] pb-12">
-            <header className="bg-[#1A1A1A] px-5 py-8 text-center text-white">
+            <header className="bg-[#1A1A1A] px-5 py-8 text-center text-white" style={data.planner?.color ? { backgroundColor: data.planner.color } : undefined}>
                 <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/60">Wedding day schedule</p>
                 <h1 className="mt-1 font-serif text-3xl">{data.couple}</h1>
                 {data.location && (
                     <a href={`https://maps.google.com/?q=${encodeURIComponent(data.location)}`} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm text-white/80 underline decoration-white/30 underline-offset-4">
                         <MapPin className="h-4 w-4" /> {data.location}
                     </a>
+                )}
+                {data.planner && (
+                    <div className="mt-3">
+                        <PlannerCredit planner={data.planner} tone="light" />
+                    </div>
                 )}
             </header>
 

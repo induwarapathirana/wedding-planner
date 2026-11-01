@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getClients, createClientWedding, updateClient } from "@/app/actions/data";
+import { getClients } from "@/app/actions/data";
+import { StartPlanningDialog } from "@/components/dashboard/clients/StartPlanningDialog";
 import { toClientRow, type ClientRow } from "@/lib/clients";
 import { useRouter } from "next/navigation";
-import { Users, Calendar, FolderOpen, Plus, TrendingUp, Sparkles, Loader2 } from "lucide-react";
+import { Users, Calendar, FolderOpen, Plus, TrendingUp, Sparkles } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { AddClientModal } from "@/components/dashboard/clients/AddClientModal";
 
@@ -20,7 +21,7 @@ export function PlannerDashboard() {
         upcomingWeddings: 0
     });
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-    const [creatingWeddingFor, setCreatingWeddingFor] = useState<string | null>(null);
+    const [starting, setStarting] = useState<Client | null>(null);
 
     useEffect(() => {
         fetchData();
@@ -36,7 +37,7 @@ export function PlannerDashboard() {
 
             // Calculate Stats
             const active = clientList.filter(c => c.status === 'active' && c.wedding_id).length;
-            const leads = clientList.filter(c => c.status === 'lead').length;
+            const leads = clientList.filter(c => ['lead', 'contacted', 'proposal'].includes(c.status)).length;
             const upcoming = clientList.filter(c => c.wedding_date && new Date(c.wedding_date) > new Date()).length;
 
             setStats({
@@ -48,27 +49,14 @@ export function PlannerDashboard() {
         setLoading(false);
     };
 
-    async function handleCreateWedding(client: Client) {
-        if (!confirm(`Create a new wedding workspace for ${client.name}?`)) return;
-
-        setCreatingWeddingFor(client.id);
-        try {
-            const wedding = await createClientWedding({
-                name: client.name,
-                weddingDate: client.wedding_date || null,
-                budget: client.budget || 0,
-            });
-            await updateClient(client.id, { weddingId: wedding.id, status: 'active' });
-        } catch (error: any) {
-            alert("Error creating wedding: " + error.message);
-        }
-
-        fetchData();
-        setCreatingWeddingFor(null);
-    }
-
     return (
         <div className="space-y-8">
+            {starting && (
+                <StartPlanningDialog
+                    client={{ id: starting.id, name: starting.name, weddingDate: starting.wedding_date || null }}
+                    onClose={() => setStarting(null)}
+                />
+            )}
             <AddClientModal
                 isOpen={isAddModalOpen}
                 onClose={() => setIsAddModalOpen(false)}
@@ -179,16 +167,11 @@ export function PlannerDashboard() {
                                         </button>
                                     ) : (
                                         <button
-                                            disabled={!!creatingWeddingFor}
-                                            onClick={() => handleCreateWedding(client)}
+                                            onClick={() => setStarting(client)}
                                             className="w-full flex items-center justify-center gap-2 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
                                         >
-                                            {creatingWeddingFor === client.id ? (
-                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                            ) : (
-                                                <Sparkles className="w-4 h-4" />
-                                            )}
-                                            Create Workspace
+                                            <Sparkles className="w-4 h-4" />
+                                            Start planning
                                         </button>
                                     )}
                                 </div>

@@ -54,21 +54,29 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
   const feed = await getCalendarFeed(token.replace(/\.ics$/, ""))
   if (!feed) return new Response("Not found", { status: 404 })
 
-  const { wedding, events, tasks, payments } = feed
-  const couple = [wedding.coupleName1, wedding.coupleName2].filter(Boolean).join(" & ")
+  const { name, multi, weddings, events, tasks, payments } = feed
   const now = stamp(new Date())
-  const money = (n: number) => `${wedding.currency} ${Math.round(n).toLocaleString("en")}`
+  const byId = new Map(weddings.map((w) => [w.id, w]))
+  const couple = (id: string) => {
+    const w = byId.get(id)
+    return w ? [w.coupleName1, w.coupleName2].filter(Boolean).join(" & ") : ""
+  }
+  // With several weddings in one calendar, say whose each entry is
+  const tag = (id: string) => (multi ? ` · ${couple(id)}` : "")
+  const money = (id: string, n: number) => `${byId.get(id)?.currency ?? ""} ${Math.round(n).toLocaleString("en")}`.trim()
 
   const entries: Entry[] = [
-    ...(wedding.weddingDate ? [{ uid: `wedding-${wedding.id}`, summary: `💍 ${couple}'s wedding`, allDay: wedding.weddingDate, location: wedding.location }] : []),
-    ...events.map((e) => ({ uid: `event-${e.id}`, summary: e.title, start: e.startTime!, end: e.endTime ?? undefined, location: e.location, description: e.description })),
+    ...weddings
+      .filter((w) => w.weddingDate)
+      .map((w) => ({ uid: `wedding-${w.id}`, summary: `💍 ${couple(w.id)}'s wedding`, allDay: w.weddingDate!, location: w.location })),
+    ...events.map((e) => ({ uid: `event-${e.id}`, summary: `${e.title}${tag(e.weddingId)}`, start: e.startTime!, end: e.endTime ?? undefined, location: e.location, description: e.description })),
     ...tasks.map((t) => ({
       uid: `task-${t.id}`,
-      summary: `☐ ${t.title}`,
+      summary: `☐ ${t.title}${tag(t.weddingId)}`,
       allDay: t.dueDate!,
       description: [t.assignee && `Who: ${t.assignee}`, t.notes].filter(Boolean).join("\n") || null,
     })),
-    ...payments.map((p) => ({ uid: `payment-${p.id}`, summary: `💸 Pay ${p.title}${p.amount ? `: ${money(p.amount)}` : ""}`, allDay: p.dueDate })),
+    ...payments.map((p) => ({ uid: `payment-${p.id}`, summary: `💸 Pay ${p.title}${p.amount ? `: ${money(p.weddingId, p.amount)}` : ""}${tag(p.weddingId)}`, allDay: p.dueDate })),
   ]
 
   const body = [
@@ -77,7 +85,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
     "PRODID:-//Wedding Planner//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    fold(`X-WR-CALNAME:${escape(`${couple} wedding`)}`),
+    fold(`X-WR-CALNAME:${escape(name)}`),
     "X-PUBLISHED-TTL:PT1H",
     "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
     ...entries.map((e) => vevent(e, now)),

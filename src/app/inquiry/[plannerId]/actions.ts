@@ -15,7 +15,7 @@ export async function getPlannerDetails(plannerId: string) {
 
     const planner = await prisma.user.findFirst({
         where: { id: plannerId, role: { in: PLANNER_ROLES } },
-        select: { name: true, companyName: true, logoUrl: true },
+        select: { name: true, companyName: true, logoUrl: true, brandingColor: true, website: true },
     });
     if (!planner) return null;
 
@@ -23,6 +23,8 @@ export async function getPlannerDetails(plannerId: string) {
         company_name: planner.companyName,
         full_name: planner.name,
         logo_url: planner.logoUrl,
+        branding_color: /^#[0-9a-f]{6}$/i.test(planner.brandingColor) ? planner.brandingColor : null,
+        website: planner.website,
     };
 }
 
@@ -33,6 +35,8 @@ type InquiryForm = {
     date?: unknown;
     budget?: unknown;
     message?: unknown;
+    location?: unknown;
+    guests?: unknown;
 };
 
 const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -50,6 +54,7 @@ export async function submitInquiry(plannerId: string, formData: InquiryForm) {
     const dateText = text(formData.date, 10);
     const weddingDate = /^\d{4}-\d{2}-\d{2}$/.test(dateText) ? new Date(dateText) : null;
     const budget = Number(text(formData.budget, 20));
+    const guests = Math.round(Number(text(formData.guests, 6)));
 
     try {
         await prisma.client.create({
@@ -62,6 +67,10 @@ export async function submitInquiry(plannerId: string, formData: InquiryForm) {
                 budget: Number.isFinite(budget) && budget > 0 ? budget : 0,
                 status: "lead",
                 notes: text(formData.message, 5000) || null,
+                location: text(formData.location, 200) || null,
+                guestCount: Number.isFinite(guests) && guests > 0 ? guests : null,
+                source: "inquiry",
+                stageChangedAt: new Date(),
             },
         });
     } catch (error) {
@@ -69,6 +78,31 @@ export async function submitInquiry(plannerId: string, formData: InquiryForm) {
         return { success: false, error: "Failed to submit inquiry. Please try again." };
     }
 
+    await notifyPlanner(plannerId, name, weddingDate);
     revalidatePath("/dashboard/clients");
     return { success: true };
+}
+
+/** Best effort: a push notification on the planner's devices. Never fails the inquiry. */
+async function notifyPlanner(plannerId: string, name: string, weddingDate: Date | null) {
+    if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return;
+    try {
+        const [{ sendPushNotification }, subscriptions] = await Promise.all([
+            import("@/lib/notifications"),
+            prisma.pushSubscription.findMany({ where: { userId: plannerId } }),
+        ]);
+        const when = weddingDate ? ` for ${weddingDate.toISOString().slice(0, 10)}` : "";
+        await Promise.allSettled(
+            subscriptions.map((s) =>
+                sendPushNotification(s.endpoint, s.p256dh, s.auth, {
+                    title: "New inquiry",
+                    body: `${name} sent an inquiry${when}.`,
+                    tag: "inquiry",
+                    data: { url: "/dashboard/clients" },
+                })
+            )
+        );
+    } catch (e) {
+        console.error("Inquiry notification failed:", e);
+    }
 }

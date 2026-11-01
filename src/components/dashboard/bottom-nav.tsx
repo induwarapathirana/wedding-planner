@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { currentWeddingId, withWedding } from "@/lib/current-wedding";
+import { getUserProfile } from "@/app/actions/data";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -13,7 +14,7 @@ import {
     HeartHandshake,
     Package,
     CalendarClock,
-    Settings, Armchair } from "lucide-react";
+    Settings, Armchair, CalendarDays, LayoutTemplate } from "lucide-react";
 
 const navItems = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -27,6 +28,16 @@ const navItems = [
     { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
+/** Planners outside a client's wedding get their business screens instead. */
+const plannerItems = [
+    { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+    { name: "Clients", href: "/dashboard/clients", icon: Users },
+    { name: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
+    { name: "Vendors", href: "/dashboard/vendors", icon: HeartHandshake },
+    { name: "Templates", href: "/dashboard/templates", icon: LayoutTemplate },
+    { name: "Settings", href: "/dashboard/settings", icon: Settings },
+];
+
 interface BottomNavProps {
     onMoreClick?: () => void; // Keep for backward compatibility but unused
 }
@@ -34,9 +45,16 @@ interface BottomNavProps {
 export function BottomNav({ onMoreClick }: BottomNavProps) {
     const pathname = usePathname();
     const [weddingId, setWeddingId] = useState<string | null>(null);
+    const [isPlanner, setIsPlanner] = useState(false);
+    const [inClientWedding, setInClientWedding] = useState(false);
     useEffect(() => {
         setWeddingId(currentWeddingId());
+        setInClientWedding(new URLSearchParams(window.location.search).has("weddingId"));
     }, [pathname]);
+    useEffect(() => {
+        getUserProfile().then((p) => setIsPlanner(["planner", "vendor", "pro"].includes(p?.role ?? "")));
+    }, []);
+    const items = isPlanner && !inClientWedding ? plannerItems : navItems;
 
     return (
         <nav className="fixed bottom-4 left-4 right-4 z-40 md:hidden">
@@ -47,13 +65,13 @@ export function BottomNav({ onMoreClick }: BottomNavProps) {
                     {/* Horizontally scrollable container */}
                     <div className="overflow-x-auto scrollbar-hide">
                         <div className="flex items-center gap-1 h-16 px-3 min-w-max">
-                            {navItems.map((item) => {
+                            {items.map((item) => {
                                 const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname?.startsWith(item.href));
 
                                 return (
                                     <Link
                                         key={item.href}
-                                        href={withWedding(item.href, weddingId)}
+                                        href={items === plannerItems ? item.href : withWedding(item.href, weddingId)}
                                         className={cn(
                                             "flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-2xl transition-all duration-200 min-w-[72px] group",
                                             "active:scale-95",

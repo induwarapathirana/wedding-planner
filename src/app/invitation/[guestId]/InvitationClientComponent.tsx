@@ -5,6 +5,7 @@ import { Calendar, Check, MapPin, X } from "lucide-react";
 import { saveHouseholdRsvp, type getInvitationData } from "./actions";
 import { LANGS, STRINGS, fill, formatDate, type Lang } from "@/lib/rsvp-i18n";
 import { cn } from "@/lib/utils";
+import { PlannerCredit } from "@/components/PlannerCredit";
 
 type InvitationData = NonNullable<Awaited<ReturnType<typeof getInvitationData>>>;
 
@@ -59,7 +60,7 @@ export default function InvitationClient({ data, initialLang }: { data: Invitati
             </div>
 
             <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-stone-100 bg-white shadow-2xl">
-                <div className="bg-[#1A1A1A] px-6 py-10 text-center md:py-14">
+                <div className="bg-[#1A1A1A] px-6 py-10 text-center md:py-14" style={data.planner?.color ? { backgroundColor: data.planner.color } : undefined}>
                     <p className={cn("mb-2 text-xs font-medium text-white/60", lang === "en" ? "uppercase tracking-[0.2em]" : "text-sm")}>{t.invitation}</p>
                     <h1 className="font-serif text-3xl font-medium text-white md:text-4xl">{couple}</h1>
                 </div>
@@ -173,6 +174,11 @@ export default function InvitationClient({ data, initialLang }: { data: Invitati
                     )}
                 </div>
             </div>
+            {data.planner && (
+                <footer className="mt-6">
+                    <PlannerCredit planner={data.planner} />
+                </footer>
+            )}
         </div>
     );
 }
