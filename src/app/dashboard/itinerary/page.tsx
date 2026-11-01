@@ -7,6 +7,7 @@ import { CalendarClock, Sparkles, Trash2 } from "lucide-react";
 import { applyTemplate, createEvent, deleteEvent, getEvents, getWeddingById, updateEvent } from "@/app/actions/data";
 import { SheetGrid, toDateInput, type SheetColumn, type SheetGroup } from "@/components/sheet/SheetGrid";
 import { ShareDayOfButton } from "@/components/dashboard/ShareDayOfButton";
+import { PrintButton } from "@/components/dashboard/PrintButton";
 import { useWeddingId } from "@/hooks/use-wedding-id";
 import { useWeddingPermission } from "@/hooks/use-wedding-permission";
 import { cn } from "@/lib/utils";
@@ -225,7 +226,12 @@ export default function ItineraryPage() {
                         Your run of show. Change a start time and the slot keeps its length; type a length to set the end.
                     </p>
                 </div>
-                {slots.length > 0 && weddingId && <ShareDayOfButton weddingId={weddingId} canReset={canEdit} />}
+                {slots.length > 0 && weddingId && (
+                    <div className="flex flex-wrap gap-2">
+                        <PrintButton kind="dayof" weddingId={weddingId} />
+                        <ShareDayOfButton weddingId={weddingId} canReset={canEdit} />
+                    </div>
+                )}
             </div>
 
             {slots.length === 0 ? (

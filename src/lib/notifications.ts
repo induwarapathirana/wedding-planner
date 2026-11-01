@@ -65,140 +65,101 @@ async function removeInvalidSubscription(endpoint: string) {
     console.log('Removed invalid subscription:', endpoint);
 }
 
+type Horizon = 'today' | 'tomorrow' | 'three_days';
+
+const DAY_MS = 86_400_000;
+const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+
 /**
- * Send notifications for upcoming due dates
+ * Daily reminder: for each wedding, one notification per collaborator's
+ * device listing what's due (payments and tasks), sent only to people on
+ * that wedding. With no `scheduleType` it covers today, tomorrow and three
+ * days out, plus anything that became overdue yesterday.
  */
-export async function sendDueDateNotifications(scheduleType?: 'today' | 'tomorrow' | 'three_days') {
-    // Get dates
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const threeDaysOut = new Date(today);
-    threeDaysOut.setDate(threeDaysOut.getDate() + 3);
+export async function sendDueDateNotifications(scheduleType?: Horizon) {
+    const now = new Date();
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const offsets: Record<Horizon, number> = { today: 0, tomorrow: 1, three_days: 3 };
+    const horizons = scheduleType ? [scheduleType] : (Object.keys(offsets) as Horizon[]);
+    const dates = horizons.map((h) => new Date(today.getTime() + offsets[h] * DAY_MS));
+    if (!scheduleType) dates.push(new Date(today.getTime() - DAY_MS)); // just became overdue
+    const label = (d: Date) => {
+        const diff = Math.round((d.getTime() - today.getTime()) / DAY_MS);
+        return diff < 0 ? 'overdue' : diff === 0 ? 'today' : diff === 1 ? 'tomorrow' : `in ${diff} days`;
+    };
 
-    const todayStr = today.toISOString().split('T')[0];
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
-    const threeDaysStr = threeDaysOut.toISOString().split('T')[0];
+    const [payments, unscheduled, tasks] = await Promise.all([
+        prisma.payment.findMany({
+            where: { paidAt: null, dueDate: { in: dates } },
+            select: { weddingId: true, label: true, amount: true, dueDate: true, budgetItem: { select: { name: true } } },
+        }),
+        prisma.budgetItem.findMany({
+            where: { paidAt: null, dueDate: { in: dates }, payments: { none: {} } },
+            select: { weddingId: true, name: true, estimatedCost: true, actualCost: true, paidAmount: true, dueDate: true },
+        }),
+        prisma.checklistItem.findMany({
+            where: { isCompleted: false, dueDate: { in: dates } },
+            select: { weddingId: true, title: true, dueDate: true },
+        }),
+    ]);
 
-    // Determine which dates to query
-    let targetDates: string[] = [];
-    if (scheduleType === 'today') {
-        targetDates = [todayStr];
-    } else if (scheduleType === 'tomorrow') {
-        targetDates = [tomorrowStr];
-    } else if (scheduleType === 'three_days') {
-        targetDates = [threeDaysStr];
-    } else {
-        targetDates = [todayStr, tomorrowStr, threeDaysStr];
+    type Line = { text: string; due: Date; isPayment: boolean };
+    const byWedding = new Map<string, Line[]>();
+    const add = (weddingId: string, line: Line) => byWedding.set(weddingId, [...(byWedding.get(weddingId) ?? []), line]);
+    const weddingIds = [...new Set([...payments, ...unscheduled, ...tasks].map((x) => x.weddingId))];
+    const weddings = await prisma.wedding.findMany({
+        where: { id: { in: weddingIds } },
+        select: { id: true, coupleName1: true, coupleName2: true, currency: true },
+    });
+    const info = new Map(weddings.map((w) => [w.id, w]));
+    const money = (weddingId: string, n: number) => `${info.get(weddingId)?.currency ?? ''} ${Math.round(n).toLocaleString('en')}`.trim();
+
+    for (const p of payments) add(p.weddingId, { text: `Pay ${p.budgetItem.name} (${p.label}) ${money(p.weddingId, Number(p.amount))}`, due: p.dueDate!, isPayment: true });
+    for (const b of unscheduled) {
+        const price = Number(b.actualCost) > 0 ? Number(b.actualCost) : Number(b.estimatedCost);
+        const left = Math.max(0, price - Number(b.paidAmount));
+        add(b.weddingId, { text: `Pay ${b.name}${left ? ` ${money(b.weddingId, left)}` : ''}`, due: b.dueDate!, isPayment: true });
     }
+    for (const t of tasks) add(t.weddingId, { text: t.title, due: t.dueDate!, isPayment: false });
 
-    // Query budget items with Prisma
-    const budgetItems = await prisma.budgetItem.findMany({
-        where: {
-            paidAt: null,
-            dueDate: { in: targetDates.map(d => new Date(d)) },
-        },
-        include: { wedding: { select: { id: true } } },
-    });
+    const results: { success: boolean }[] = [];
+    let notificationsBuilt = 0;
+    for (const [weddingId, lines] of byWedding) {
+        lines.sort((a, b) => a.due.getTime() - b.due.getTime());
+        const w = info.get(weddingId);
+        const couple = w ? [w.coupleName1, w.coupleName2].filter(Boolean).join(' & ') : 'your wedding';
+        const first = lines[0];
+        const groups = new Map<string, Line[]>();
+        for (const l of lines) groups.set(label(l.due), [...(groups.get(label(l.due)) ?? []), l]);
+        const body = [...groups]
+            .map(([when, ls]) => `${when[0].toUpperCase()}${when.slice(1)}: ${ls.slice(0, 3).map((l) => l.text).join(', ')}${ls.length > 3 ? ` +${ls.length - 3} more` : ''}`)
+            .join('\n');
+        const payload: NotificationPayload = {
+            title: `${lines.length} ${lines.length === 1 ? 'thing' : 'things'} due for ${couple}`,
+            body,
+            icon: '/icons/icon-192x192.png',
+            badge: '/icons/icon-192x192.png',
+            tag: `due-${weddingId}-${dayKey(today)}`,
+            data: { url: `/dashboard?weddingId=${weddingId}` },
+            requireInteraction: label(first.due) === 'overdue' || label(first.due) === 'today',
+        };
+        notificationsBuilt++;
 
-    // Query checklist items with Prisma
-    const checklistItems = await prisma.checklistItem.findMany({
-        where: {
-            isCompleted: false,
-            dueDate: { in: targetDates.map(d => new Date(d)) },
-        },
-        include: { wedding: { select: { id: true } } },
-    });
-
-    const notifications: Array<{
-        weddingId: string;
-        payload: NotificationPayload;
-    }> = [];
-
-    // Helper to format body based on due date
-    const getTimingText = (dueDate: Date | null) => {
-        if (!dueDate) return 'due soon';
-        const dueDateStr = dueDate.toISOString().split('T')[0];
-        if (dueDateStr === todayStr) return 'due today';
-        if (dueDateStr === tomorrowStr) return 'due tomorrow';
-        if (dueDateStr === threeDaysStr) return 'due in 3 days';
-        return 'due soon';
-    };
-
-    const getTitleText = (dueDate: Date | null) => {
-        if (!dueDate) return 'Upcoming Deadline';
-        const dueDateStr = dueDate.toISOString().split('T')[0];
-        if (dueDateStr === todayStr) return 'Due Today! 🚨';
-        if (dueDateStr === tomorrowStr) return 'Due Tomorrow ⏰';
-        if (dueDateStr === threeDaysStr) return 'Head\'s Up (3 Days) 📅';
-        return 'Upcoming Deadline';
-    };
-
-    // Create notifications for budget items
-    budgetItems.forEach((item) => {
-        notifications.push({
-            weddingId: item.weddingId,
-            payload: {
-                title: `💰 Payment ${getTitleText(item.dueDate)}`,
-                body: `${item.name} ($${item.estimatedCost}) is ${getTimingText(item.dueDate)}.`,
-                icon: '/icons/icon-192x192.png',
-                badge: '/icons/icon-192x192.png',
-                tag: `budget-${item.id}`,
-                data: { url: '/dashboard/budget' },
-            },
+        // Only the people on this wedding
+        const subscriptions = await prisma.pushSubscription.findMany({
+            where: { user: { collaborators: { some: { weddingId } } } },
         });
-    });
-
-    // Create notifications for checklist items
-    checklistItems.forEach((item) => {
-        notifications.push({
-            weddingId: item.weddingId,
-            payload: {
-                title: `✅ Task ${getTitleText(item.dueDate)}`,
-                body: `${item.title} is ${getTimingText(item.dueDate)}.`,
-                icon: '/icons/icon-192x192.png',
-                badge: '/icons/icon-192x192.png',
-                tag: `checklist-${item.id}`,
-                data: { url: '/dashboard/checklist' },
-            },
-        });
-    });
-
-    // Get all subscriptions for affected weddings
-    const weddingIds = [...new Set(notifications.map((n) => n.weddingId))];
-    const subscriptions = await prisma.pushSubscription.findMany({
-        where: {
-            user: {
-                collaborators: {
-                    some: { weddingId: { in: weddingIds } },
-                },
-            },
-        },
-    });
-
-    // Send notifications
-    const results = [];
-    for (const notification of notifications) {
         for (const sub of subscriptions) {
-            const result = await sendPushNotification(
-                sub.endpoint,
-                sub.p256dh,
-                sub.auth,
-                notification.payload
-            );
-            results.push(result);
+            results.push(await sendPushNotification(sub.endpoint, sub.p256dh, sub.auth, payload));
         }
     }
 
     return {
         scheduleType: scheduleType || 'all',
-        queriedDates: { today: todayStr, tomorrow: tomorrowStr, threeDaysOut: threeDaysStr },
-        foundItems: budgetItems.length + checklistItems.length,
-        budgetItemsCount: budgetItems.length,
-        checklistItemsCount: checklistItems.length,
-        subscriptionsCount: subscriptions.length,
+        dates: dates.map(dayKey),
+        weddings: notificationsBuilt,
+        foundItems: payments.length + unscheduled.length + tasks.length,
         sent: results.filter((r) => r.success).length,
         failed: results.filter((r) => !r.success).length,
-        total: results.length,
     };
 }

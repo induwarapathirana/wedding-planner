@@ -1618,6 +1618,43 @@ type WeddingDetails = {
   weddingDate: string;
 };
 
+/**
+ * Every wedding a planner works on, whether it came through their pipeline,
+ * they were invited to it, or they made it before switching to a planner
+ * account, with the matching client record when there is one.
+ */
+export async function getPlannerWorkspaces() {
+  const userId = await getSessionUserId()
+  if (!userId) return []
+  const [collabs, clients] = await Promise.all([
+    prisma.collaborator.findMany({
+      where: { userId },
+      select: {
+        role: true,
+        wedding: {
+          select: {
+            id: true, coupleName1: true, coupleName2: true, weddingDate: true, location: true, createdById: true,
+            _count: { select: { guests: true, checklistItems: { where: { isCompleted: false } } } },
+          },
+        },
+      },
+    }),
+    prisma.client.findMany({ where: { plannerId: userId, weddingId: { not: null } }, select: { id: true, weddingId: true, status: true } }),
+  ])
+  const byWedding = new Map(clients.map((c) => [c.weddingId!, c]))
+  return collabs.map(({ role, wedding: w }) => ({
+    id: w.id,
+    couple: [w.coupleName1, w.coupleName2].filter(Boolean).join(" & ") || "Unnamed wedding",
+    weddingDate: w.weddingDate ? w.weddingDate.toISOString().slice(0, 10) : null,
+    location: w.location,
+    role,
+    createdByMe: w.createdById === userId,
+    guests: w._count.guests,
+    openTasks: w._count.checklistItems,
+    client: byWedding.get(w.id) ?? null,
+  }))
+}
+
 export async function getUserWeddings(): Promise<WeddingDetails[]> {
   const userId = await getSessionUserId()
   if (!userId) return [];
