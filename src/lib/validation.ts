@@ -61,12 +61,15 @@ export const guestCreate = z.object({
     address: text(500),
     inviteStatus: z.enum(["not_sent", "sent"]).optional(),
     notes: text(5000),
+    attendingCount: integer(0),
+    language: z.preprocess(blankToNull, z.enum(["en", "si", "ta"]).nullable()).optional(),
+    remindedAt: date,
 });
 export const guestUpdate = guestCreate.partial();
 
 /** Bulk edits from the guest sheet's selection bar. */
 export const guestBulkUpdate = guestCreate
-    .pick({ rsvpStatus: true, tableAssignment: true, side: true, inviteStatus: true, priority: true, groupCategory: true, mealPreference: true })
+    .pick({ rsvpStatus: true, tableAssignment: true, side: true, inviteStatus: true, priority: true, groupCategory: true, mealPreference: true, language: true, remindedAt: true })
     .partial();
 
 export const budgetItemCreate = z.object({
@@ -221,3 +224,9 @@ export function validate<S extends z.ZodTypeAny>(schema: S, data: unknown): z.ou
     }
     return result.data;
 }
+
+export const seatingTableCreate = z.object({
+    name: required(50),
+    capacity: integer(1).transform((v) => v ?? 10),
+});
+export const seatingTableUpdate = seatingTableCreate.partial();

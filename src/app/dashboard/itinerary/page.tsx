@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { CalendarClock, Sparkles, Trash2 } from "lucide-react";
 import { applyTemplate, createEvent, deleteEvent, getEvents, getWeddingById, updateEvent } from "@/app/actions/data";
 import { SheetGrid, toDateInput, type SheetColumn, type SheetGroup } from "@/components/sheet/SheetGrid";
+import { ShareDayOfButton } from "@/components/dashboard/ShareDayOfButton";
 import { useWeddingId } from "@/hooks/use-wedding-id";
 import { useWeddingPermission } from "@/hooks/use-wedding-permission";
 import { cn } from "@/lib/utils";
@@ -217,11 +218,14 @@ export default function ItineraryPage() {
 
     return (
         <div className="space-y-4 pb-6">
-            <div>
-                <h1 className="font-serif text-3xl font-bold">Itinerary</h1>
-                <p className="text-sm text-muted-foreground">
-                    Your run of show. Change a start time and the slot keeps its length; type a length to set the end.
-                </p>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h1 className="font-serif text-3xl font-bold">Itinerary</h1>
+                    <p className="text-sm text-muted-foreground">
+                        Your run of show. Change a start time and the slot keeps its length; type a length to set the end.
+                    </p>
+                </div>
+                {slots.length > 0 && weddingId && <ShareDayOfButton weddingId={weddingId} canReset={canEdit} />}
             </div>
 
             {slots.length === 0 ? (

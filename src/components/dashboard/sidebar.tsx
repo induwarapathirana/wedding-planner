@@ -22,8 +22,7 @@ import {
     Share2,
     MessageSquare,
     ArrowLeft,
-    Search
-} from "lucide-react";
+    Search, Armchair } from "lucide-react";
 import { openCommandPalette } from "./CommandPalette";
 import WeddingSelector from "./WeddingSelector";
 import { storedWeddingId, withWedding } from "@/lib/current-wedding";
@@ -34,6 +33,7 @@ const navItems = [
     { name: "Budget", href: "/dashboard/budget", icon: DollarSign },
     { name: "Checklist", href: "/dashboard/checklist", icon: CheckSquare },
     { name: "Guest List", href: "/dashboard/guests", icon: Users },
+    { name: "Seating", href: "/dashboard/seating", icon: Armchair },
     { name: "Vendors", href: "/dashboard/vendors", icon: HeartHandshake },
     { name: "Inventory", href: "/dashboard/inventory", icon: Package },
     { name: "Itinerary", href: "/dashboard/itinerary", icon: CalendarClock },

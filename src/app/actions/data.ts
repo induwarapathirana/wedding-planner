@@ -18,6 +18,7 @@ import {
   clientUpdate, weddingUpdate,
   guestBulkUpdate, budgetCategoryCreate, budgetCategoryUpdate, weddingSetup,
   paymentCreate, paymentUpdate, vendorBooking,
+  seatingTableCreate, seatingTableUpdate,
 } from "@/lib/validation"
 import {
   BUDGET_TEMPLATE, DAY_OF_TEMPLATE, checklistFor, dueDateFor, timeframeFor, type Tradition,
@@ -328,6 +329,89 @@ export async function deleteGuests(ids: string[]) {
   const userId = await requireUserId()
   await prisma.guest.deleteMany({ where: { id: { in: ids }, wedding: editableBy(userId) } })
   revalidatePath("/dashboard/guests")
+}
+
+// ============================================
+// SEATING
+// ============================================
+
+export async function getSeatingTables(weddingId: string) {
+  if (!(await canReadWedding(weddingId))) return []
+  return prisma.seatingTable.findMany({ where: { weddingId }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] })
+}
+
+/** Adds one table, or `count` numbered tables after the existing ones. */
+export async function createSeatingTables(weddingId: string, data: unknown, count = 1) {
+  await requireWeddingAccess(weddingId, true)
+  const parsed = validate(seatingTableCreate, data)
+  const existing = await prisma.seatingTable.findMany({ where: { weddingId }, select: { name: true } })
+  const taken = new Set(existing.map((t) => t.name.toLowerCase()))
+  const n = Math.min(Math.max(1, Math.round(count)), 60)
+  const names: string[] = []
+  if (n === 1 && !taken.has(parsed.name.toLowerCase())) names.push(parsed.name)
+  else {
+    for (let i = 1; names.length < n && i < 500; i++) {
+      const name = `Table ${i}`
+      if (!taken.has(name.toLowerCase())) names.push(name)
+    }
+  }
+  await prisma.seatingTable.createMany({
+    data: names.map((name, i) => ({ weddingId, name, capacity: parsed.capacity, sortOrder: existing.length + i })),
+    skipDuplicates: true,
+  })
+  revalidatePath("/dashboard/seating")
+  return getSeatingTables(weddingId)
+}
+
+export async function updateSeatingTable(id: string, data: unknown) {
+  const userId = await requireUserId()
+  const parsed = validate(seatingTableUpdate, data)
+  const existing = await prisma.seatingTable.findFirst({ where: { id, wedding: editableBy(userId) } })
+  if (!existing) throw new Error("Table not found")
+  const table = await prisma.$transaction(async (tx) => {
+    // Renaming carries the seated guests along
+    if (parsed.name && parsed.name !== existing.name) {
+      await tx.guest.updateMany({ where: { weddingId: existing.weddingId, tableAssignment: existing.name }, data: { tableAssignment: parsed.name } })
+    }
+    return tx.seatingTable.update({ where: { id }, data: parsed })
+  })
+  revalidatePath("/dashboard/seating")
+  revalidatePath("/dashboard/guests")
+  return table
+}
+
+/** Deletes a table; its guests go back to unseated. */
+export async function deleteSeatingTable(id: string) {
+  const userId = await requireUserId()
+  const existing = await prisma.seatingTable.findFirst({ where: { id, wedding: editableBy(userId) } })
+  if (!existing) throw new Error("Table not found")
+  await prisma.$transaction([
+    prisma.guest.updateMany({ where: { weddingId: existing.weddingId, tableAssignment: existing.name }, data: { tableAssignment: null } }),
+    prisma.seatingTable.delete({ where: { id } }),
+  ])
+  revalidatePath("/dashboard/seating")
+  revalidatePath("/dashboard/guests")
+}
+
+// ============================================
+// SHARED DAY-OF LINK
+// ============================================
+
+/** The wedding's private day-of link token, created on first use. */
+export async function getDayOfToken(weddingId: string) {
+  await requireWeddingAccess(weddingId)
+  const wedding = await prisma.wedding.findUnique({ where: { id: weddingId }, select: { dayOfToken: true } })
+  if (wedding?.dayOfToken) return wedding.dayOfToken
+  const token = randomBytes(18).toString("base64url")
+  await prisma.wedding.update({ where: { id: weddingId }, data: { dayOfToken: token } })
+  return token
+}
+
+export async function resetDayOfToken(weddingId: string) {
+  await requireWeddingAccess(weddingId, true)
+  const token = randomBytes(18).toString("base64url")
+  await prisma.wedding.update({ where: { id: weddingId }, data: { dayOfToken: token } })
+  return token
 }
 
 // ============================================
@@ -1060,6 +1144,7 @@ export async function getDashboardStats(weddingId: string) {
     vendorGroups,
     pendingGuests,
     wedding,
+    replied,
   ] = await Promise.all([
     prisma.guest.groupBy({
       by: ["rsvpStatus"],
@@ -1090,6 +1175,12 @@ export async function getDashboardStats(weddingId: string) {
       where: { id: weddingId },
       select: { targetGuestCount: true, estimatedBudget: true, currency: true },
     }),
+    // Households that confirmed fewer seats than they were invited with
+    prisma.guest.aggregate({
+      where: { weddingId, rsvpStatus: "accepted", attendingCount: { not: null } },
+      _count: { _all: true },
+      _sum: { attendingCount: true, companionGuestCount: true },
+    }),
   ])
 
   const headcount = (status?: string) =>
@@ -1107,7 +1198,10 @@ export async function getDashboardStats(weddingId: string) {
   return serializeDecimals({
     stats: {
       guestCount: headcount(),
-      confirmedGuest: headcount("accepted"),
+      confirmedGuest:
+        headcount("accepted") -
+        (replied._count._all + (replied._sum.companionGuestCount || 0)) +
+        (replied._sum.attendingCount || 0),
       declinedGuest: headcount("declined"),
       pendingGuest: headcount("pending"),
       targetGuest: wedding?.targetGuestCount || 0,

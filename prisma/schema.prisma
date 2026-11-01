@@ -93,6 +93,7 @@ model Wedding {
   premiumTrialEndsAt DateTime? @db.Timestamptz()
   whatsappBusinessNumber String? // Enables WhatsApp RSVP confirmations
   calendarToken String? @unique // Secret for the iCal subscribe feed
+  dayOfToken    String? @unique // Secret for the shared day-of run of show
 
   // Extended fields from expand_weddings_schema
   name          String?
@@ -114,6 +115,7 @@ model Wedding {
   invitations   Invitation[]
   clients       Client[]
   payments      Payment[]
+  seatingTables SeatingTable[]
 
   @@index([createdById])
 }
@@ -207,6 +209,9 @@ model Guest {
   companionGuestCount Int      @default(0)
   companionNames      String?
   selectedCompanions  String?
+  attendingCount      Int?     // Seats confirmed on the RSVP; null until they reply
+  language            String?  // 'en', 'si', 'ta': RSVP page and WhatsApp message language
+  remindedAt          DateTime? @db.Timestamptz()
   createdAt           DateTime @default(now()) @db.Timestamptz()
 
   wedding             Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
@@ -295,6 +300,21 @@ model InventoryItem {
   wedding     Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
 
   @@index([weddingId])
+}
+
+/// A reception table. Guests are seated by name through Guest.tableAssignment,
+/// so renaming a table carries its guests along.
+model SeatingTable {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  weddingId String   @db.Uuid
+  name      String
+  capacity  Int      @default(10)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz()
+
+  wedding   Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  @@unique([weddingId, name])
 }
 
 model Event {
