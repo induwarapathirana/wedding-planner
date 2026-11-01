@@ -27,6 +27,12 @@ export default function Home() {
             Get <span className="text-foreground font-bold">2 weeks of unlimited premium features</span> free.
             Plan weddings, manage vendors, and track budgets with elegance and ease. No credit card required.
           </p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Wedding planner?{" "}
+            <Link href="/login?signup=true&role=planner" className="font-semibold text-foreground underline underline-offset-4">
+              Sign up as a planner
+            </Link>
+          </p>
 
           <div className="mt-10 flex flex-wrap justify-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300">
             <Link

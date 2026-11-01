@@ -12,7 +12,11 @@ export const authConfig = {
 
       // Signed-in users never need the login page; route them to their home
       if (isLoggedIn && nextUrl.pathname === '/login') {
-        return Response.redirect(new URL('/auth/continue', nextUrl));
+        const target = new URL('/auth/continue', nextUrl);
+        // Keep a sign-up choice (e.g. "Wedding Pro") so it still applies to a fresh account
+        const role = nextUrl.searchParams.get('role');
+        if (role === 'couple' || role === 'planner') target.searchParams.set('role', role);
+        return Response.redirect(target);
       }
 
       if (isOnDashboard) {
