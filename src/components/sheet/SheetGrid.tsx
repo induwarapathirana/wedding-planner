@@ -16,7 +16,7 @@ export type SheetOption = { value: string; label: string };
 export type SheetColumn<T> = {
     key: string;
     label: string;
-    type?: "text" | "number" | "money" | "select" | "date" | "checkbox";
+    type?: "text" | "number" | "money" | "select" | "date" | "datetime" | "checkbox";
     options?: SheetOption[];
     width?: number;
     /** Computed value for display, sorting and copying (also makes the cell read-only unless `readOnly` is false). */
@@ -81,6 +81,15 @@ export function toDateInput(v: unknown): string {
     return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
 }
 
+/** Local "YYYY-MM-DDTHH:mm" for datetime-local inputs. */
+export function toDateTimeInput(v: unknown): string {
+    if (!v) return "";
+    const d = new Date(v as string);
+    if (isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 /** Turn typed or pasted text into a value for the column, or `undefined` if it can't be parsed. */
 export function parseCellValue<T>(col: SheetColumn<T>, raw: string): unknown {
     const text = raw.trim();
@@ -103,6 +112,11 @@ export function parseCellValue<T>(col: SheetColumn<T>, raw: string): unknown {
             if (!text) return null;
             const d = new Date(text);
             return isNaN(d.getTime()) ? undefined : toDateInput(d);
+        }
+        case "datetime": {
+            if (!text) return null;
+            const d = new Date(text);
+            return isNaN(d.getTime()) ? undefined : d;
         }
         case "checkbox":
             return /^(y|yes|true|1|x|✓|paid|done)$/i.test(text);
@@ -135,6 +149,10 @@ function displayText<T>(row: T, col: SheetColumn<T>, formatMoney: (n: number) =>
         case "date": {
             const d = toDateInput(v);
             return d ? new Date(d + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "";
+        }
+        case "datetime": {
+            const d = new Date(v as string);
+            return isNaN(d.getTime()) ? "" : d.toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
         }
         case "checkbox":
             return v ? "Yes" : "No";
@@ -236,7 +254,12 @@ export function SheetGrid<T>({
         (row: T, col: SheetColumn<T>, value: unknown) => {
             if (value === undefined) return;
             const old = cellValue(row, col);
-            const same = col.type === "date" ? toDateInput(old) === toDateInput(value) : old === value || (old == null && (value === "" || value === null));
+            const same =
+                col.type === "date"
+                    ? toDateInput(old) === toDateInput(value)
+                    : col.type === "datetime"
+                      ? toDateTimeInput(old) === toDateTimeInput(value)
+                      : old === value || (old == null && (value === "" || value === null));
             if (same) return;
             history.current.push({ id: getRowId(row), key: col.key, old });
             onCommit(row, col.key, value);
@@ -631,15 +654,23 @@ function CellEditor<T>({
     }
 
     const initial =
-        seed !== undefined ? seed : col.type === "date" ? toDateInput(value) : value === null || value === undefined ? "" : String(value);
+        seed !== undefined
+            ? seed
+            : col.type === "date"
+              ? toDateInput(value)
+              : col.type === "datetime"
+                ? toDateTimeInput(value)
+                : value === null || value === undefined
+                  ? ""
+                  : String(value);
 
     return (
         <input
             autoFocus
-            type={col.type === "date" ? "date" : "text"}
+            type={col.type === "date" ? "date" : col.type === "datetime" ? "datetime-local" : "text"}
             inputMode={col.type === "number" || col.type === "money" ? "decimal" : undefined}
             defaultValue={initial}
-            onFocus={(e) => { if (seed === undefined && col.type !== "date") e.currentTarget.select(); }}
+            onFocus={(e) => { if (seed === undefined && col.type !== "date" && col.type !== "datetime") e.currentTarget.select(); }}
             onBlur={(e) => finish(e.target.value)}
             onKeyDown={keys}
             placeholder={col.placeholder}
@@ -820,11 +851,12 @@ function CardField<T>({
             </select>
         );
     } else {
-        const initial = col.type === "date" ? toDateInput(value) : value === null || value === undefined ? "" : String(value);
+        const initial =
+            col.type === "date" ? toDateInput(value) : col.type === "datetime" ? toDateTimeInput(value) : value === null || value === undefined ? "" : String(value);
         control = (
             <input
                 key={initial}
-                type={col.type === "date" ? "date" : "text"}
+                type={col.type === "date" ? "date" : col.type === "datetime" ? "datetime-local" : "text"}
                 inputMode={col.type === "number" || col.type === "money" ? "decimal" : undefined}
                 defaultValue={initial}
                 placeholder={col.placeholder}

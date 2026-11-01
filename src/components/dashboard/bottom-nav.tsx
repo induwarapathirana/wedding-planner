@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { currentWeddingId, withWedding } from "@/lib/current-wedding";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -31,6 +33,10 @@ interface BottomNavProps {
 
 export function BottomNav({ onMoreClick }: BottomNavProps) {
     const pathname = usePathname();
+    const [weddingId, setWeddingId] = useState<string | null>(null);
+    useEffect(() => {
+        setWeddingId(currentWeddingId());
+    }, [pathname]);
 
     return (
         <nav className="fixed bottom-4 left-4 right-4 z-40 md:hidden">
@@ -47,7 +53,7 @@ export function BottomNav({ onMoreClick }: BottomNavProps) {
                                 return (
                                     <Link
                                         key={item.href}
-                                        href={item.href}
+                                        href={withWedding(item.href, weddingId)}
                                         className={cn(
                                             "flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-2xl transition-all duration-200 min-w-[72px] group",
                                             "active:scale-95",

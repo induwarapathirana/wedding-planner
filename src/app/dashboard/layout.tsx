@@ -7,7 +7,6 @@ import { Sidebar } from "@/components/dashboard/sidebar";
 import { BottomNav } from "@/components/dashboard/bottom-nav";
 import { InstallPrompt } from "@/components/dashboard/install-prompt";
 import { NotificationPrompt } from "@/components/dashboard/notification-prompt";
-import { ModeProvider } from "@/context/mode-context";
 import { CommandPalette } from "@/components/dashboard/CommandPalette";
 import { Menu, X } from "lucide-react";
 import { registerServiceWorker } from "@/lib/registerServiceWorker";
@@ -39,7 +38,7 @@ export default function DashboardLayout({
     }, [session]);
 
     return (
-        <ModeProvider>
+        <>
             <div className="min-h-screen bg-background text-foreground selection:bg-primary/20">
 
                 {/* Mobile Header - Only show branding on overview page */}
@@ -111,6 +110,6 @@ export default function DashboardLayout({
                     <NotificationPrompt userId={session.user.id} weddingId={weddingId} />
                 )}
             </div>
-        </ModeProvider>
+        </>
     );
 }

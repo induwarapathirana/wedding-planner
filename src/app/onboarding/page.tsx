@@ -51,7 +51,7 @@ export default function OnboardingPage() {
             try {
                 localStorage.setItem("current_wedding_id", wedding.id);
             } catch {}
-            router.push("/dashboard?welcome=true");
+            router.push(`/dashboard?weddingId=${wedding.id}&welcome=true`);
         } catch (e) {
             toast.error((e as Error).message || "Couldn't create your wedding. Please try again.");
             setSaving(false);

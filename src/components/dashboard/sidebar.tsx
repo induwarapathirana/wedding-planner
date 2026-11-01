@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { openCommandPalette } from "./CommandPalette";
 import WeddingSelector from "./WeddingSelector";
+import { storedWeddingId, withWedding } from "@/lib/current-wedding";
 import { getUserProfile, getUserWeddingId } from "@/app/actions/data";
 
 const navItems = [
@@ -47,6 +48,11 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
     const { data: session } = useSession();
 
     const [hasWeddings, setHasWeddings] = useState(false);
+    // The wedding couples are working on: from the URL, else the last one used
+    const [coupleWeddingId, setCoupleWeddingId] = useState<string | null>(null);
+    useEffect(() => {
+        setCoupleWeddingId(weddingId || storedWeddingId());
+    }, [weddingId, pathname]);
     const [role, setRole] = useState<'couple' | 'planner' | 'vendor' | null>(null);
 
     useEffect(() => {
@@ -103,7 +109,8 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                 ];
             }
         }
-        return navItems;
+        // Couples: keep the current wedding in every link so URLs can be shared
+        return navItems.map(item => ({ ...item, href: withWedding(item.href, coupleWeddingId) }));
     })();
 
     return (
@@ -182,7 +189,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                 <div className="border-t border-border pt-6 mt-auto">
                     {hasWeddings && (
                         <Link
-                            href={role === 'planner' && weddingId ? `/dashboard/settings?weddingId=${weddingId}` : "/dashboard/settings"}
+                            href={role === 'planner' ? withWedding("/dashboard/settings", weddingId) : withWedding("/dashboard/settings", coupleWeddingId)}
                             onClick={onClose}
                             className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                         >

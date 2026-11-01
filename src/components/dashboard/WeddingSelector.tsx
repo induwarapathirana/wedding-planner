@@ -1,6 +1,7 @@
 // Wedding selection dropdown component
 "use client";
 
+import { currentWeddingId, rememberWedding, withWedding } from "@/lib/current-wedding";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -30,20 +31,21 @@ export default function WeddingSelector() {
         const weddingList = await getUserWeddings();
         setWeddings(weddingList);
 
-        const savedWeddingId = localStorage.getItem("current_wedding_id");
+        const savedWeddingId = currentWeddingId();
         const selected = weddingList.find((w: Wedding) => w.id === savedWeddingId) || weddingList[0];
 
         if (selected) {
             setCurrentWedding(selected);
-            localStorage.setItem("current_wedding_id", selected.id);
+            rememberWedding(selected.id);
         }
     }
 
     function selectWedding(wedding: Wedding) {
         setCurrentWedding(wedding);
-        localStorage.setItem("current_wedding_id", wedding.id);
+        rememberWedding(wedding.id);
         setIsOpen(false);
-        window.location.reload();
+        // Same page, other wedding
+        window.location.href = withWedding(window.location.pathname + window.location.search, wedding.id);
     }
 
     const [showJoinInput, setShowJoinInput] = useState(false);
