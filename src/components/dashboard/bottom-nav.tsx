@@ -13,13 +13,13 @@ import {
     HeartHandshake,
     Package,
     CalendarClock,
-    Settings
-} from "lucide-react";
+    Settings, Armchair } from "lucide-react";
 
 const navItems = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
     { name: "Budget", href: "/dashboard/budget", icon: DollarSign },
     { name: "Guests", href: "/dashboard/guests", icon: Users },
+    { name: "Seating", href: "/dashboard/seating", icon: Armchair },
     { name: "Checklist", href: "/dashboard/checklist", icon: CheckSquare },
     { name: "Vendors", href: "/dashboard/vendors", icon: HeartHandshake },
     { name: "Inventory", href: "/dashboard/inventory", icon: Package },

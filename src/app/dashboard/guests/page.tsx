@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Check, Download, FileUp, Link as LinkIcon, Search, Trash2, Users } from "lucide-react";
+import { Check, Download, FileUp, Link as LinkIcon, MessageCircle, Search, Trash2, Users } from "lucide-react";
 import {
     createGuest,
     createGuests,
@@ -16,6 +16,8 @@ import {
 } from "@/app/actions/data";
 import { SheetGrid, type SheetColumn } from "@/components/sheet/SheetGrid";
 import { ImportGuestsDialog } from "@/components/dashboard/guests/ImportGuestsDialog";
+import { WhatsAppQueue, rsvpLink, waNumber, whatsappUrl, type WeddingInfo } from "@/components/dashboard/guests/WhatsAppQueue";
+import { LANGS, isLang } from "@/lib/rsvp-i18n";
 import { useWeddingId } from "@/hooks/use-wedding-id";
 import { useWeddingPermission } from "@/hooks/use-wedding-permission";
 import { downloadCsv } from "@/lib/csv";
@@ -42,7 +44,11 @@ const MEALS = ["Non-veg", "Veg", "Vegan", "Halal", "Kids"].map((m) => ({ value: 
 const LISTS = ["A", "B", "C"].map((l) => ({ value: l, label: l }));
 
 const party = (g: Guest) => 1 + (g.companionGuestCount || 0);
+/** Seats a household takes: what they confirmed once they reply, otherwise everyone invited. */
+const seats = (g: Guest) => (g.rsvpStatus === "accepted" && g.attendingCount !== null ? g.attendingCount : party(g));
 const headcount = (list: Guest[]) => list.reduce((n, g) => n + party(g), 0);
+const seatCount = (list: Guest[]) => list.reduce((n, g) => n + seats(g), 0);
+const LANGUAGE_OPTIONS = LANGS.map((l) => ({ value: l.value, label: l.label }));
 
 function companions(g: Guest): string[] {
     if (!g.companionNames) return [];
@@ -84,6 +90,8 @@ export default function GuestsPage() {
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [importOpen, setImportOpen] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [wedding, setWedding] = useState<WeddingInfo>({ couple: "", date: null, place: null });
+    const [queueOpen, setQueueOpen] = useState(false);
 
     useEffect(() => {
         if (weddingId === undefined) return;
@@ -91,9 +99,16 @@ export default function GuestsPage() {
             setLoading(false);
             return;
         }
-        Promise.all([getGuests(weddingId), getWeddingById(weddingId)]).then(([list, wedding]) => {
+        Promise.all([getGuests(weddingId), getWeddingById(weddingId)]).then(([list, w]) => {
             setGuests(list);
-            setTarget(wedding?.targetGuestCount ?? 0);
+            setTarget(w?.targetGuestCount ?? 0);
+            if (w) {
+                setWedding({
+                    couple: [w.coupleName1, w.coupleName2].filter(Boolean).join(" & "),
+                    date: w.weddingDate ? new Date(w.weddingDate).toISOString().slice(0, 10) : null,
+                    place: w.location,
+                });
+            }
             setLoading(false);
         });
     }, [weddingId]);
@@ -215,7 +230,7 @@ export default function GuestsPage() {
     };
 
     const copyLink = async (g: Guest) => {
-        const link = `${window.location.origin}/invitation/${g.id}`;
+        const link = rsvpLink(g.id, isLang(g.language) ? g.language : "en");
         try {
             await navigator.clipboard.writeText(link);
             setCopiedId(g.id);
@@ -224,6 +239,15 @@ export default function GuestsPage() {
         } catch {
             toast.message("Copy this RSVP link", { description: link });
         }
+    };
+
+    const markSent = (g: { id: string }, kind: "invite" | "reminder") =>
+        saveChanges(g.id, kind === "invite" ? { inviteStatus: "sent" } : { remindedAt: new Date() });
+
+    const sendWhatsApp = (g: Guest) => {
+        const kind = g.inviteStatus === "sent" ? "reminder" : "invite";
+        window.open(whatsappUrl(g, kind, wedding, "en"), "_blank", "noopener");
+        markSent(g, kind);
     };
 
     const exportCsv = () =>
@@ -242,6 +266,17 @@ export default function GuestsPage() {
         { key: "side", label: "Side", type: "select", options: SIDES, width: 90, summary: true },
         { key: "groupCategory", label: "Group", type: "text", width: 130 },
         { key: "party", label: "Party", type: "number", width: 70, align: "right", get: party, readOnly: false, summary: true },
+        {
+            key: "attendingCount", label: "Coming", type: "number", width: 80, align: "right", placeholder: "—",
+            render: (g) =>
+                g.rsvpStatus === "accepted" ? (
+                    <span className={cn("tabular-nums", seats(g) < party(g) && "font-semibold text-amber-700")}>{seats(g)}</span>
+                ) : g.rsvpStatus === "declined" ? (
+                    <span className="text-muted-foreground">0</span>
+                ) : (
+                    <span className="text-muted-foreground/60">—</span>
+                ),
+        },
         { key: "whatsappNumber", label: "WhatsApp", type: "text", width: 150 },
         {
             key: "inviteStatus", label: "Invite", type: "select", options: INVITE, width: 100,
@@ -267,6 +302,7 @@ export default function GuestsPage() {
             ),
         },
         { key: "mealPreference", label: "Meal", type: "select", options: MEALS, width: 100 },
+        { key: "language", label: "Language", type: "select", options: LANGUAGE_OPTIONS, width: 100, placeholder: "English" },
         { key: "tableAssignment", label: "Table", type: "text", width: 70, summary: true },
         {
             key: "priority", label: "List", type: "select", options: LISTS, width: 60, align: "center",
@@ -286,7 +322,7 @@ export default function GuestsPage() {
     const stats = {
         households: guests.length,
         guests: headcount(guests),
-        attending: headcount(attending),
+        attending: seatCount(attending),
         waiting: headcount(guests.filter((g) => g.rsvpStatus === "pending")),
         declined: headcount(guests.filter((g) => g.rsvpStatus === "declined")),
         veg: headcount(attending.filter((g) => g.mealPreference === "Veg" || g.mealPreference === "Vegan")),
@@ -317,6 +353,11 @@ export default function GuestsPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    {canEdit && guests.length > 0 && (
+                        <button onClick={() => setQueueOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">
+                            <MessageCircle className="h-4 w-4" /> WhatsApp invites
+                        </button>
+                    )}
                     {canEdit && (
                         <button onClick={() => setImportOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50">
                             <FileUp className="h-4 w-4" /> Import
@@ -419,6 +460,16 @@ export default function GuestsPage() {
                     emptyState="No guests match this view."
                     rowActions={(g) => (
                         <>
+                            {canEdit && waNumber(g.whatsappNumber) && g.rsvpStatus === "pending" && (
+                                <button
+                                    onClick={() => sendWhatsApp(g)}
+                                    className="rounded-md p-1.5 text-muted-foreground hover:bg-emerald-50 hover:text-emerald-700"
+                                    title={g.inviteStatus === "sent" ? "Send a reminder on WhatsApp" : "Send the invite on WhatsApp"}
+                                    aria-label={`${g.inviteStatus === "sent" ? "Remind" : "Invite"} ${g.name} on WhatsApp`}
+                                >
+                                    <MessageCircle className="h-4 w-4" />
+                                </button>
+                            )}
                             <button onClick={() => copyLink(g)} className="rounded-md p-1.5 text-muted-foreground hover:bg-gray-100 hover:text-foreground" title="Copy RSVP link" aria-label={`Copy RSVP link for ${g.name}`}>
                                 {copiedId === g.id ? <Check className="h-4 w-4 text-emerald-600" /> : <LinkIcon className="h-4 w-4" />}
                             </button>
@@ -442,6 +493,8 @@ export default function GuestsPage() {
                     {canEdit && <span className="ml-auto hidden md:inline">Tip: paste rows from Excel straight into the sheet</span>}
                 </div>
             )}
+
+            {queueOpen && <WhatsAppQueue guests={guests} wedding={wedding} onClose={() => setQueueOpen(false)} onSent={markSent} />}
 
             <ImportGuestsDialog open={importOpen} onClose={() => setImportOpen(false)} onImport={addMany} />
         </div>

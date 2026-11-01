@@ -1,9 +1,17 @@
 import { getInvitationData } from "./actions";
 import InvitationClient from "./InvitationClientComponent";
 import { X } from "lucide-react";
+import { isLang } from "@/lib/rsvp-i18n";
 
-export default async function InvitationPage({ params }: { params: Promise<{ guestId: string }> }) {
+export default async function InvitationPage({
+    params,
+    searchParams,
+}: {
+    params: Promise<{ guestId: string }>;
+    searchParams: Promise<{ lang?: string }>;
+}) {
     const { guestId } = await params;
+    const { lang } = await searchParams;
     const data = await getInvitationData(guestId);
 
     if (!data) {
@@ -22,5 +30,5 @@ export default async function InvitationPage({ params }: { params: Promise<{ gue
         );
     }
 
-    return <InvitationClient data={data} />;
+    return <InvitationClient data={data} initialLang={isLang(lang) ? lang : data.guest.language ?? "en"} />;
 }
