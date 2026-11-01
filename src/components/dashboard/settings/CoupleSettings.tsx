@@ -5,7 +5,7 @@ import { getWeddingById, getUserWeddingId, updateWedding, deleteWeddingCascade, 
 import { useRouter } from "next/navigation";
 import { Save, ArrowLeft, Trash2, UserPlus, X, Bell, BellOff, Settings, MessageSquare, LifeBuoy } from "lucide-react";
 import Link from "next/link";
-import { PayHereButton } from "@/components/payhere-button";
+import { CheckoutButton } from "@/components/CheckoutButton";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { LimitModal } from "@/components/dashboard/limit-modal";
 import { FeedbackModal } from "@/components/dashboard/FeedbackModal";
@@ -309,12 +309,19 @@ export function CoupleSettings({ weddingIdProp }: { weddingIdProp?: string }) {
                                 <p className="text-sm text-purple-700/80 leading-relaxed">
                                     {wedding?.tier === 'premium'
                                         ? "You have access to all premium features."
-                                        : "Upgrade to unlock unlimited guests, budget items, and more."}
+                                        : "One payment for this wedding: invite more people to plan with you, WhatsApp RSVP confirmations, and more."}
                                 </p>
                             </div>
                             {wedding?.tier !== 'premium' && (
                                 <div className="shrink-0 w-full md:w-auto">
-                                    {/* PayHere Button Logic */}
+                                    {wedding?.id && (
+                                        <CheckoutButton
+                                            kind="wedding_premium"
+                                            weddingId={wedding.id}
+                                            label="Upgrade for LKR 990"
+                                            className="w-full rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-purple-700 md:w-auto"
+                                        />
+                                    )}
                                 </div>
                             )}
                         </div>

@@ -1,5 +1,6 @@
 import "server-only"
 import { prisma } from "@/lib/prisma"
+import { planFor } from "@/lib/billing"
 
 export type PlannerBrand = { name: string; logoUrl: string | null; color: string | null; website: string | null }
 
@@ -20,7 +21,10 @@ export function imageUrl(url: string | null) {
  * collaborating on it. Null for weddings couples plan on their own.
  */
 export async function getPlannerBrand(weddingId: string): Promise<PlannerBrand | null> {
-  const select = { companyName: true, name: true, logoUrl: true, brandingColor: true, website: true, role: true }
+  const select = {
+    companyName: true, name: true, logoUrl: true, brandingColor: true, website: true, role: true,
+    plan: true, planStatus: true, planInterval: true, proUntil: true, proTrialEndsAt: true,
+  }
   const viaClient = await prisma.client.findFirst({ where: { weddingId }, select: { planner: { select } }, orderBy: { createdAt: "asc" } })
   let planner = viaClient?.planner && PLANNER_ROLES.includes(viaClient.planner.role) ? viaClient.planner : null
   if (!planner) {
@@ -30,7 +34,8 @@ export async function getPlannerBrand(weddingId: string): Promise<PlannerBrand |
     })
     planner = collab?.user ?? null
   }
-  if (!planner) return null
+  // Branding on clients' pages is a Planner Pro feature
+  if (!planner || !planFor(planner).isPro) return null
   const name = planner.companyName || planner.name
   if (!name) return null
   return {

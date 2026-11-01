@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { startTrialIfNeeded } from "@/lib/billing";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
     if ((requestedRole === "couple" || requestedRole === "planner") && isFresh && requestedRole !== role) {
         await prisma.user.update({ where: { id: userId }, data: { role: requestedRole } });
         role = requestedRole;
+        if (role === "planner") await startTrialIfNeeded(userId);
     }
 
     const next = safeNext(url.searchParams.get("next"), url.origin);

@@ -21,8 +21,9 @@ export async function GET(request: NextRequest) {
         const type = searchParams.get('type') as 'today' | 'tomorrow' | 'three_days' | null;
 
         console.log(`[Cron] Running notification check for type: ${type || 'all'}...`);
-        const { sendDueDateNotifications } = await import('@/lib/notifications');
+        const { sendDueDateNotifications, sendBillingReminders } = await import('@/lib/notifications');
         const results = await sendDueDateNotifications(type || undefined);
+        const billing = type ? null : await sendBillingReminders();
 
         console.log('[Cron] Notification results:', results);
 
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
             success: true,
             message: 'Notifications sent successfully',
             results,
+            billing,
         });
     } catch (error) {
         console.error('[Cron] Error sending notifications:', error);

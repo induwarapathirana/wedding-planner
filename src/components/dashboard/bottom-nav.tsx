@@ -14,7 +14,7 @@ import {
     HeartHandshake,
     Package,
     CalendarClock,
-    Settings, Armchair, CalendarDays, LayoutTemplate } from "lucide-react";
+    Settings, Armchair, CalendarDays, LayoutTemplate, Crown } from "lucide-react";
 
 const navItems = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -35,6 +35,7 @@ const plannerItems = [
     { name: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
     { name: "Vendors", href: "/dashboard/vendors", icon: HeartHandshake },
     { name: "Templates", href: "/dashboard/templates", icon: LayoutTemplate },
+    { name: "Billing", href: "/dashboard/billing", icon: Crown },
     { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 

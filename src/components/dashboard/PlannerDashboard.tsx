@@ -7,6 +7,7 @@ import { Calendar, CheckSquare, FolderOpen, MapPin, Plus, Sparkles, TrendingUp, 
 import { createClient, getClients, getPlannerWorkspaces } from "@/app/actions/data";
 import { StartPlanningDialog } from "@/components/dashboard/clients/StartPlanningDialog";
 import { AddClientModal } from "@/components/dashboard/clients/AddClientModal";
+import { PlanBanner } from "@/components/dashboard/PlanBanner";
 import { withWedding } from "@/lib/current-wedding";
 import { cn } from "@/lib/utils";
 
@@ -77,6 +78,8 @@ export function PlannerDashboard() {
                     </button>
                 </div>
             </div>
+
+            <PlanBanner />
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 {[

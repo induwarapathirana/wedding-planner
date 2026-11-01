@@ -6,6 +6,7 @@ import { CalendarClock, Copy, LayoutTemplate, ListChecks, Trash2, Wallet } from 
 import {
     applyPlannerTemplate,
     deletePlannerTemplate,
+    getMyPlan,
     getPlannerTemplates,
     getUserWeddings,
     renamePlannerTemplate,
@@ -13,6 +14,7 @@ import {
 } from "@/app/actions/data";
 import { KIND_LABELS, describeTemplate, type TemplateKind } from "@/lib/planner-templates";
 import { cn } from "@/lib/utils";
+import { UpgradeCard } from "@/components/dashboard/PlanBanner";
 
 type Template = Awaited<ReturnType<typeof getPlannerTemplates>>[number];
 type Wedding = Awaited<ReturnType<typeof getUserWeddings>>[number];
@@ -32,9 +34,11 @@ export default function TemplatesPage() {
     const [loading, setLoading] = useState(true);
     const [draft, setDraft] = useState<{ weddingId: string; kind: TemplateKind; name: string }>({ weddingId: "", kind: "checklist", name: "" });
     const [saving, setSaving] = useState(false);
+    const [isPro, setIsPro] = useState(true);
 
     const load = useCallback(async () => {
-        const [list, ws] = await Promise.all([getPlannerTemplates(), getUserWeddings()]);
+        const [list, ws, plan] = await Promise.all([getPlannerTemplates(), getUserWeddings(), getMyPlan()]);
+        setIsPro(!!plan?.isPro);
         setTemplates(list);
         setWeddings(ws);
         setDraft((d) => ({ ...d, weddingId: d.weddingId || ws[0]?.id || "" }));
@@ -105,7 +109,14 @@ export default function TemplatesPage() {
                 <p className="text-sm text-muted-foreground">Save how you plan once, then set up every new client in one step. New workspaces use your newest template of each kind.</p>
             </div>
 
-            <form onSubmit={save} className="rounded-2xl border border-border bg-white p-4">
+            {!isPro && (
+                <UpgradeCard
+                    feature="Your own templates"
+                    detail="Save how you plan once and set up every new client in one step. Templates you've already saved are kept and come back when you upgrade."
+                />
+            )}
+
+            {isPro && <form onSubmit={save} className="rounded-2xl border border-border bg-white p-4">
                 <p className="font-semibold">Save a template from a wedding</p>
                 {weddings.length === 0 ? (
                     <p className="mt-1 text-sm text-muted-foreground">Once you have a client wedding set up the way you like, save its checklist, budget or run of show here.</p>
@@ -132,7 +143,7 @@ export default function TemplatesPage() {
                         </button>
                     </div>
                 )}
-            </form>
+            </form>}
 
             {templates.length === 0 ? (
                 <div className="rounded-2xl border-2 border-dashed border-border bg-white px-6 py-12 text-center">
@@ -172,7 +183,7 @@ export default function TemplatesPage() {
                                                 {describeTemplate(t.kind, t.items)}
                                                 {i === 0 && " · used for new workspaces"}
                                             </p>
-                                            {weddings.length > 0 && (
+                                            {isPro && weddings.length > 0 && (
                                                 <select value="" onChange={(e) => e.target.value && apply(t, e.target.value)} aria-label={`Add ${t.name} to a wedding`} className="mt-2 w-full rounded-lg border border-border bg-white px-2 py-1.5 text-xs">
                                                     <option value="">Add to a wedding…</option>
                                                     {weddings.map((w) => <option key={w.id} value={w.id}>{coupleOf(w)}</option>)}

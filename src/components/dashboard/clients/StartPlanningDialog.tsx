@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Sparkles, X } from "lucide-react";
-import { getPlannerTemplates, startClientWedding } from "@/app/actions/data";
+import { getMyPlan, getPlannerTemplates, startClientWedding } from "@/app/actions/data";
 import { CURRENCIES } from "@/lib/constants";
 import { KIND_LABELS, describeTemplate, type TemplateKind } from "@/lib/planner-templates";
 import { withWedding } from "@/lib/current-wedding";
@@ -33,10 +33,13 @@ export function StartPlanningDialog({
     const [templates, setTemplates] = useState<Template[]>([]);
     const [choice, setChoice] = useState<Record<TemplateKind, string>>({ checklist: "standard", budget: "standard", dayOf: "standard" });
     const [saving, setSaving] = useState(false);
+    const [isPro, setIsPro] = useState(false);
 
     useEffect(() => {
-        getPlannerTemplates().then((list) => {
+        Promise.all([getPlannerTemplates(), getMyPlan()]).then(([list, plan]) => {
             setTemplates(list);
+            setIsPro(!!plan?.isPro);
+            if (!plan?.isPro) return;
             // Prefer the planner's newest template of each kind
             setChoice((c) => {
                 const next = { ...c };
@@ -123,7 +126,11 @@ export function StartPlanningDialog({
                                     <select value={disabled ? "none" : choice[kind]} disabled={disabled} onChange={(e) => setChoice((c) => ({ ...c, [kind]: e.target.value }))} className={field}>
                                         {own.length > 0 && (
                                             <optgroup label="My templates">
-                                                {own.map((t) => <option key={t.id} value={t.id}>{t.name} · {describeTemplate(t.kind, t.items)}</option>)}
+                                                {own.map((t) => (
+                                                    <option key={t.id} value={t.id} disabled={!isPro}>
+                                                        {t.name} · {describeTemplate(t.kind, t.items)}{isPro ? "" : " (Planner Pro)"}
+                                                    </option>
+                                                ))}
                                             </optgroup>
                                         )}
                                         <option value="standard">{STANDARD[kind]}</option>

@@ -55,6 +55,14 @@ model User {
   brandingColor String    @default("#000000")
   calendarToken String?   @unique // Secret for the all-weddings iCal feed
 
+  // Planner Pro (see src/lib/billing.ts)
+  plan               String    @default("free") // 'free', 'pro'
+  planStatus         String?   // 'active', 'past_due', 'cancelled'
+  planInterval       String?   // 'month', 'year'
+  proUntil           DateTime? @db.Timestamptz() // Paid through this moment
+  proTrialEndsAt     DateTime? @db.Timestamptz()
+  payhereSubscriptionId String? @unique
+
   accounts      Account[]
   sessions      Session[]
 
@@ -66,6 +74,7 @@ model User {
   pushSubscriptions PushSubscription[]
   directoryVendors  DirectoryVendor[]
   templates         PlannerTemplate[]
+  orders            Order[]
 }
 
 model VerificationToken {
@@ -374,6 +383,28 @@ model PushSubscription {
 }
 
 /// A planner's own reusable checklist, budget or run of show.
+/// A checkout started with PayHere. The price is set on the server and the
+/// payment notification must match it before anything is upgraded.
+model Order {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String    @db.Uuid
+  kind             String    // 'wedding_premium', 'planner_pro'
+  weddingId        String?   @db.Uuid
+  interval         String?   // Planner Pro: 'month', 'year'
+  amount           Decimal
+  currency         String    @default("LKR")
+  status           String    @default("pending") // 'pending', 'paid', 'failed', 'cancelled'
+  payherePaymentId String?   @unique
+  subscriptionId   String?
+  parentOrderId    String?   @db.Uuid // Renewals point at the order that started the subscription
+  paidAt           DateTime? @db.Timestamptz()
+  createdAt        DateTime  @default(now()) @db.Timestamptz()
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
 model PlannerTemplate {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   plannerId String   @db.Uuid

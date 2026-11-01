@@ -2,8 +2,8 @@
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { planFor } from "@/lib/billing";
 
-const PLANNER_ROLES = ["planner", "vendor", "pro"];
 
 export type PlanTier = 'free' | 'premium';
 
@@ -58,14 +58,25 @@ export async function getEffectiveTier(weddingId: string): Promise<TrialInfo> {
         daysRemaining = Math.ceil(diff / (1000 * 60 * 60 * 24));
     }
 
-    // Planners get premium features on every wedding they work on
+    // Planner Pro (or a planner's trial) covers premium features on the weddings they work on
     const session = await auth();
     const viewer = session?.user?.id
-        ? await prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true } })
+        ? await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: { role: true, plan: true, planStatus: true, planInterval: true, proUntil: true, proTrialEndsAt: true },
+        })
         : null;
-    const isPlanner = PLANNER_ROLES.includes(viewer?.role ?? '');
+    let isProPlanner = !!viewer && planFor(viewer).isPro;
+    // The couple gets the same when their wedding is run by a Pro planner
+    if (!isPaidPremium && !isInTrial && !isProPlanner) {
+        const link = await prisma.client.findFirst({
+            where: { weddingId },
+            select: { planner: { select: { role: true, plan: true, planStatus: true, planInterval: true, proUntil: true, proTrialEndsAt: true } } },
+        });
+        isProPlanner = !!link && planFor(link.planner).isPro;
+    }
 
-    const effectiveTier: PlanTier = isPaidPremium || isInTrial || isPlanner ? 'premium' : 'free';
+    const effectiveTier: PlanTier = isPaidPremium || isInTrial || isProPlanner ? 'premium' : 'free';
 
     return {
         effectiveTier,

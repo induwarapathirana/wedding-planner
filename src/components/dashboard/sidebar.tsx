@@ -22,7 +22,7 @@ import {
     Share2,
     MessageSquare,
     ArrowLeft,
-    Search, Armchair, LayoutTemplate } from "lucide-react";
+    Search, Armchair, LayoutTemplate, Crown } from "lucide-react";
 import { openCommandPalette } from "./CommandPalette";
 import WeddingSelector from "./WeddingSelector";
 import { storedWeddingId, withWedding } from "@/lib/current-wedding";
@@ -116,6 +116,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                     // Planners might want a master directory
                     { name: "Vendor Library", href: "/dashboard/vendors", icon: HeartHandshake },
                     { name: "Templates", href: "/dashboard/templates", icon: LayoutTemplate },
+                    { name: "Billing", href: "/dashboard/billing", icon: Crown },
                     { name: "Settings", href: "/dashboard/settings", icon: Settings }, // NEW
                 ];
             }

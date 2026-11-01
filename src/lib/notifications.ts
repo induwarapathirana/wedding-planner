@@ -163,3 +163,64 @@ export async function sendDueDateNotifications(scheduleType?: Horizon) {
         failed: results.filter((r) => !r.success).length,
     };
 }
+
+/**
+ * Planner Pro nudges, sent with the daily reminder: three days and one day
+ * before a trial ends (unless they've subscribed), and while a failed
+ * payment is in its grace period.
+ */
+export async function sendBillingReminders() {
+    const now = new Date();
+    const dayStart = (offset: number) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + offset));
+    const plannerRoles = ['planner', 'vendor', 'pro'];
+    const notPaid = { OR: [{ proUntil: null }, { proUntil: { lt: now } }] };
+
+    const [trialEnding, pastDue] = await Promise.all([
+        prisma.user.findMany({
+            where: {
+                role: { in: plannerRoles },
+                AND: [
+                    notPaid,
+                    {
+                        OR: [
+                            { proTrialEndsAt: { gte: dayStart(3), lt: dayStart(4) } },
+                            { proTrialEndsAt: { gte: dayStart(1), lt: dayStart(2) } },
+                        ],
+                    },
+                ],
+            },
+            select: { id: true, proTrialEndsAt: true },
+        }),
+        prisma.user.findMany({
+            // Only during the 7-day grace period, not forever
+            where: { role: { in: plannerRoles }, planStatus: 'past_due', proUntil: { gte: new Date(now.getTime() - 7 * DAY_MS) } },
+            select: { id: true },
+        }),
+    ]);
+
+    const results: { success: boolean }[] = [];
+    const notify = async (userId: string, payload: NotificationPayload) => {
+        const subs = await prisma.pushSubscription.findMany({ where: { userId } });
+        for (const s of subs) results.push(await sendPushNotification(s.endpoint, s.p256dh, s.auth, payload));
+    };
+
+    for (const u of trialEnding) {
+        const days = Math.max(1, Math.ceil((u.proTrialEndsAt!.getTime() - now.getTime()) / DAY_MS));
+        await notify(u.id, {
+            title: `Your Planner Pro trial ends in ${days} ${days === 1 ? 'day' : 'days'}`,
+            body: 'Subscribe to keep templates, your branding and unlimited client weddings.',
+            tag: `trial-${u.id}`,
+            data: { url: '/dashboard/billing' },
+        });
+    }
+    for (const u of pastDue) {
+        await notify(u.id, {
+            title: "Planner Pro payment didn't go through",
+            body: 'Update your card with PayHere to keep Pro.',
+            tag: `past-due-${u.id}`,
+            data: { url: '/dashboard/billing' },
+        });
+    }
+
+    return { trialEnding: trialEnding.length, pastDue: pastDue.length, sent: results.filter((r) => r.success).length };
+}

@@ -72,7 +72,7 @@ export function PlannerSettings() {
                         Brand Identity
                     </h2>
                     <p className="-mt-3 text-sm text-gray-500">
-                        Your name, logo and colour appear on your inquiry form, in your clients&apos; workspaces, and on their guests&apos; RSVP and day-of pages.
+                        Your name, logo and colour appear on your inquiry form. With Planner Pro they also appear in your clients&apos; workspaces and on their guests&apos; RSVP and day-of pages.
                     </p>
 
                     <div className="grid md:grid-cols-2 gap-6">

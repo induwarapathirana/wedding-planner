@@ -7,6 +7,7 @@ import { Check, Columns3, FolderOpen, Link as LinkIcon, Mail, MapPin, MessageCir
 import { createClient, getClients, getUserIdFromSession, updateClient } from "@/app/actions/data";
 import { SheetGrid, toDateInput, type SheetColumn } from "@/components/sheet/SheetGrid";
 import { StartPlanningDialog } from "@/components/dashboard/clients/StartPlanningDialog";
+import { PlanBanner } from "@/components/dashboard/PlanBanner";
 import { waNumber } from "@/components/dashboard/guests/WhatsAppQueue";
 import { withWedding } from "@/lib/current-wedding";
 import { cn } from "@/lib/utils";
@@ -156,6 +157,8 @@ export default function ClientsPage() {
                     </button>
                 </div>
             </div>
+
+            <PlanBanner />
 
             <div className="flex flex-wrap items-center gap-2">
                 <div className="flex gap-1 rounded-xl bg-gray-100 p-1" role="tablist" aria-label="Views">

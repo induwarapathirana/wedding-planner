@@ -1,5 +1,6 @@
 import "server-only"
 import { prisma } from "@/lib/prisma"
+import { planFor } from "@/lib/billing"
 
 /** Scheduled payments, plus due dates on budget lines that have no schedule. */
 export async function calendarPayments(weddingIds: string[]) {
@@ -36,8 +37,12 @@ export async function getCalendarFeed(token: string) {
     weddings = [single]
     name = `${[single.coupleName1, single.coupleName2].filter(Boolean).join(" & ")} wedding`
   } else {
-    const user = await prisma.user.findUnique({ where: { calendarToken: token }, select: { id: true, companyName: true, name: true } })
-    if (!user) return null
+    const user = await prisma.user.findUnique({
+      where: { calendarToken: token },
+      select: { id: true, companyName: true, name: true, role: true, plan: true, planStatus: true, planInterval: true, proUntil: true, proTrialEndsAt: true },
+    })
+    // The all-weddings feed is a Planner Pro feature
+    if (!user || !planFor(user).isPro) return null
     const collabs = await prisma.collaborator.findMany({ where: { userId: user.id }, select: { wedding: { select } } })
     weddings = collabs.map((c) => c.wedding)
     name = `${user.companyName || user.name || "My"} weddings`

@@ -27,6 +27,7 @@ import { getEffectiveTier } from "@/lib/trial"
 import { PLAN_LIMITS } from "@/lib/limits"
 import { calendarPayments } from "@/lib/calendar"
 import { getPlannerBrand } from "@/lib/brand"
+import { assertCanAddClientWedding, getPlannerPlan, requirePro, startTrialIfNeeded } from "@/lib/billing"
 import type { BudgetTemplate, ChecklistTemplate, DayOfTemplate, TemplateKind } from "@/lib/planner-templates"
 
 // ============================================
@@ -106,6 +107,25 @@ export async function getCurrentUser() {
   return session.user
 }
 
+/** The signed-in planner's plan (trial, Pro, grace, free) for billing screens and upgrade prompts. */
+export async function getMyPlan() {
+  const userId = await getSessionUserId()
+  if (!userId) return null
+  return getPlannerPlan(userId)
+}
+
+export async function getMyOrders() {
+  const userId = await getSessionUserId()
+  if (!userId) return []
+  const orders = await prisma.order.findMany({
+    where: { userId, status: { not: "pending" } },
+    orderBy: { createdAt: "desc" },
+    take: 24,
+    select: { id: true, kind: true, interval: true, amount: true, currency: true, status: true, paidAt: true, createdAt: true },
+  })
+  return serializeDecimals(orders)
+}
+
 export async function getUserProfile() {
   const userId = await getSessionUserId()
   if (!userId) return null
@@ -121,6 +141,7 @@ export async function updateUserRole(role: string) {
     where: { id: userId },
     data: { role },
   })
+  if (role === "planner") await startTrialIfNeeded(userId)
   revalidatePath("/dashboard")
 }
 
@@ -286,6 +307,7 @@ export async function getPlannerTemplates() {
 /** Snapshot a wedding's checklist, budget or run of show as one of the planner's templates. */
 export async function saveAsTemplate(weddingId: string, input: unknown, tzOffsetMinutes = -330) {
   const { userId } = await requireWeddingAccess(weddingId)
+  await requirePro(userId, "Templates")
   const { kind, name } = validate(plannerTemplateCreate, input)
   const wedding = await prisma.wedding.findUnique({ where: { id: weddingId }, select: { weddingDate: true, estimatedBudget: true } })
   if (!wedding) throw new Error("Wedding not found")
@@ -429,6 +451,7 @@ async function applySavedTemplate(
 
 export async function applyPlannerTemplate(weddingId: string, templateId: string, options?: { tzOffsetMinutes?: number; startTime?: string }) {
   const { userId } = await requireWeddingAccess(weddingId, true)
+  await requirePro(userId, "Templates")
   const [template, wedding] = await Promise.all([
     prisma.plannerTemplate.findFirst({ where: { id: templateId, plannerId: userId } }),
     prisma.wedding.findUnique({ where: { id: weddingId }, select: { weddingDate: true, estimatedBudget: true } }),
@@ -1216,11 +1239,13 @@ export async function getClients() {
 }
 
 /** A client may only be linked to a wedding the planner collaborates on. */
-async function cleanClientData(userId: string, data: any) {
+async function cleanClientData(userId: string, data: any, clientId?: string) {
   const { weddingId, ...rest } = data ?? {}
   const cleaned: Record<string, unknown> = validate(clientUpdate, rest)
   if (weddingId) {
     if (!(await getRoleFor(weddingId, userId))) throw new Error("You don't have access to this wedding")
+    const already = clientId ? await prisma.client.findFirst({ where: { id: clientId, weddingId }, select: { id: true } }) : null
+    if (!already) await assertCanAddClientWedding(userId)
     cleaned.weddingId = weddingId
   } else if (weddingId === null) {
     cleaned.weddingId = null
@@ -1240,7 +1265,7 @@ export async function createClient(data: any) {
 
 export async function updateClient(id: string, data: any) {
   const userId = await requireUserId()
-  const changes = await cleanClientData(userId, data)
+  const changes = await cleanClientData(userId, data, id)
   if (changes.status) {
     const before = await prisma.client.findFirst({ where: { id, plannerId: userId }, select: { status: true } })
     if (before && before.status !== changes.status) changes.stageChangedAt = new Date()
@@ -1303,6 +1328,7 @@ export async function startClientWedding(
   const client = await prisma.client.findFirst({ where: { id: clientId, plannerId: userId } })
   if (!client) throw new Error("Client not found")
   if (client.weddingId) return { weddingId: client.weddingId }
+  await assertCanAddClientWedding(userId)
 
   const name = client.name || [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client"
   const parts = name.split(/ and | & /i)
@@ -1312,6 +1338,7 @@ export async function startClientWedding(
   const tz = Number.isInteger(options.tzOffsetMinutes) ? options.tzOffsetMinutes! : -330
 
   const chosen = [options.checklist, options.budget, options.dayOf].filter((c): c is string => !!c && c !== "standard" && c !== "none")
+  if (chosen.length) await requirePro(userId, "Your own templates")
   const templates = chosen.length ? await prisma.plannerTemplate.findMany({ where: { id: { in: chosen }, plannerId: userId } }) : []
   const templateFor = (choice?: StarterChoice) => templates.find((t) => t.id === choice)
 
@@ -1709,6 +1736,7 @@ export async function getCalendarFeedToken(weddingId: string) {
 /** The planner's feed token covering every wedding they're on, created on first use. */
 export async function getMyCalendarFeedToken() {
   const userId = await requireUserId()
+  await requirePro(userId, "The all-weddings calendar")
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { calendarToken: true } })
   if (user?.calendarToken) return user.calendarToken
   const token = randomBytes(24).toString("base64url")
