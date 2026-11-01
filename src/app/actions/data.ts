@@ -17,12 +17,14 @@ import {
   eventCreate, eventUpdate,
   clientUpdate, weddingUpdate,
   guestBulkUpdate, budgetCategoryCreate, budgetCategoryUpdate, weddingSetup,
+  paymentCreate, paymentUpdate, vendorBooking,
 } from "@/lib/validation"
 import {
   BUDGET_TEMPLATE, DAY_OF_TEMPLATE, checklistFor, dueDateFor, timeframeFor, type Tradition,
 } from "@/lib/templates"
 import { getEffectiveTier } from "@/lib/trial"
 import { PLAN_LIMITS } from "@/lib/limits"
+import { calendarPayments } from "@/lib/calendar"
 
 // ============================================
 // AUTH HELPERS
@@ -337,9 +339,12 @@ export async function getBudgetItems(weddingId: string) {
   const items = await prisma.budgetItem.findMany({
     where: { weddingId },
     orderBy: { category: "asc" },
+    include: withPaymentCount,
   })
   return serializeDecimals(items);
 }
+
+const withPaymentCount = { _count: { select: { payments: true } } } as const
 
 /** Make sure a category row exists so it shows up with an allocation. */
 async function ensureCategory(weddingId: string, name: string) {
@@ -402,6 +407,7 @@ export async function createBudgetItem(weddingId: string, data: any) {
   await ensureCategory(weddingId, parsed.category)
   const item = await prisma.budgetItem.create({
     data: { ...parsed, weddingId },
+    include: withPaymentCount,
   })
   revalidatePath("/dashboard/budget")
   return serializeDecimals(item)
@@ -412,6 +418,7 @@ export async function updateBudgetItem(id: string, data: any) {
   const item = await prisma.budgetItem.update({
     where: { id, wedding: editableBy(userId) },
     data: validate(budgetItemUpdate, data),
+    include: withPaymentCount,
   })
   await ensureCategory(item.weddingId, item.category)
   revalidatePath("/dashboard/budget")
@@ -523,6 +530,164 @@ export async function insertVendors(weddingId: string, vendors: any[]) {
     data: vendors.map((v: any) => ({ ...validate(vendorCreate, v), weddingId })),
   })
   revalidatePath("/dashboard/vendors")
+}
+
+// ============================================
+// PAYMENTS AND BOOKINGS
+// ============================================
+
+const vendorName = (v: { companyName: string | null; contactName: string | null; category: string | null }) =>
+  v.companyName || v.contactName || v.category || "Vendor"
+
+/** Keep a budget line's paid amount, due date and paid-in-full flag in step with its payments. */
+async function syncBudgetItem(tx: Tx, budgetItemId: string) {
+  const payments = await tx.payment.findMany({ where: { budgetItemId } })
+  if (payments.length === 0) return tx.budgetItem.findUnique({ where: { id: budgetItemId }, include: withPaymentCount })
+  const paid = payments.filter((p) => p.paidAt)
+  const nextDue = payments
+    .filter((p) => !p.paidAt && p.dueDate)
+    .map((p) => p.dueDate!)
+    .sort((a, b) => a.getTime() - b.getTime())[0]
+  const allPaid = paid.length === payments.length
+  return tx.budgetItem.update({
+    where: { id: budgetItemId },
+    data: {
+      paidAmount: paid.reduce((n, p) => n + Number(p.amount), 0),
+      dueDate: nextDue ?? null,
+      paidAt: allPaid ? paid.map((p) => p.paidAt!).sort((a, b) => b.getTime() - a.getTime())[0] : null,
+    },
+    include: withPaymentCount,
+  })
+}
+
+export async function getPayments(weddingId: string) {
+  if (!(await canReadWedding(weddingId))) return []
+  const payments = await prisma.payment.findMany({
+    where: { weddingId },
+    orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { sortOrder: "asc" }],
+    include: { budgetItem: { select: { name: true, category: true, vendorId: true } } },
+  })
+  return serializeDecimals(payments)
+}
+
+export async function createPayment(budgetItemId: string, data: unknown) {
+  const userId = await requireUserId()
+  const item = await prisma.budgetItem.findFirst({ where: { id: budgetItemId, wedding: editableBy(userId) } })
+  if (!item) throw new Error("Budget item not found")
+  const parsed = validate(paymentCreate, data)
+  const result = await prisma.$transaction(async (tx) => {
+    const count = await tx.payment.count({ where: { budgetItemId } })
+    const payment = await tx.payment.create({
+      data: { ...parsed, sortOrder: count, budgetItemId, weddingId: item.weddingId },
+      include: { budgetItem: { select: { name: true, category: true, vendorId: true } } },
+    })
+    return { payment, item: await syncBudgetItem(tx, budgetItemId) }
+  })
+  revalidatePath("/dashboard/budget")
+  return serializeDecimals(result)
+}
+
+export async function updatePayment(id: string, data: unknown) {
+  const userId = await requireUserId()
+  const parsed = validate(paymentUpdate, data)
+  const result = await prisma.$transaction(async (tx) => {
+    const payment = await tx.payment.update({
+      where: { id, wedding: editableBy(userId) },
+      data: parsed,
+      include: { budgetItem: { select: { name: true, category: true, vendorId: true } } },
+    })
+    return { payment, item: await syncBudgetItem(tx, payment.budgetItemId) }
+  })
+  revalidatePath("/dashboard/budget")
+  return serializeDecimals(result)
+}
+
+export async function deletePayment(id: string) {
+  const userId = await requireUserId()
+  const item = await prisma.$transaction(async (tx) => {
+    const payment = await tx.payment.delete({ where: { id, wedding: editableBy(userId) } })
+    return syncBudgetItem(tx, payment.budgetItemId)
+  })
+  revalidatePath("/dashboard/budget")
+  return serializeDecimals(item)
+}
+
+/** The current booking for a vendor, to prefill the booking form. */
+export async function getVendorBooking(vendorId: string) {
+  const userId = await getSessionUserId()
+  if (!userId) return null
+  const vendor = await prisma.vendor.findFirst({
+    where: { id: vendorId, wedding: { collaborators: { some: { userId } } } },
+    include: { budgetItem: { include: { payments: { orderBy: { sortOrder: "asc" } } } }, wedding: { select: { weddingDate: true } } },
+  })
+  if (!vendor) return null
+  const openTasks = await prisma.checklistItem.count({ where: { vendorId } })
+  return serializeDecimals({ ...vendor, hasTasks: openTasks > 0 })
+}
+
+/**
+ * Book a vendor in one step: mark them hired, put the agreed price on a budget
+ * line, replace that line's payment schedule and add the follow-up tasks.
+ */
+export async function bookVendor(vendorId: string, input: unknown) {
+  const userId = await requireUserId()
+  const vendor = await prisma.vendor.findFirst({
+    where: { id: vendorId, wedding: editableBy(userId) },
+    include: { wedding: { select: { weddingDate: true } } },
+  })
+  if (!vendor) throw new Error("Vendor not found")
+  const { total, category, payments, addTasks } = validate(vendorBooking, input)
+  const scheduled = payments.reduce((n, p) => n + (p.amount ?? 0), 0)
+  if (payments.length && Math.abs(scheduled - total) > 0.5) {
+    throw new Error("The payments don't add up to the total")
+  }
+  const name = vendorName(vendor)
+  const weddingId = vendor.weddingId
+
+  await ensureCategory(weddingId, category)
+  const result = await prisma.$transaction(async (tx) => {
+    const updated = await tx.vendor.update({ where: { id: vendorId }, data: { status: "hired", cost: total, category: vendor.category || category } })
+    const existing = await tx.budgetItem.findUnique({ where: { vendorId } })
+    const item = existing
+      ? await tx.budgetItem.update({ where: { id: existing.id }, data: { category, actualCost: total } })
+      : await tx.budgetItem.create({ data: { weddingId, vendorId, category, name, estimatedCost: total, actualCost: total } })
+
+    await tx.payment.deleteMany({ where: { budgetItemId: item.id } })
+    if (payments.length) {
+      await tx.payment.createMany({
+        data: payments.map((p, i) => ({ ...p, sortOrder: i, budgetItemId: item.id, weddingId })),
+      })
+    }
+    const synced = await syncBudgetItem(tx, item.id)
+
+    let tasksAdded = 0
+    if (addTasks && (await tx.checklistItem.count({ where: { vendorId } })) === 0) {
+      const weddingDate = vendor.wedding.weddingDate
+      const today = new Date()
+      const inAWeek = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 7))
+      const tasks = [
+        { title: `Sign the contract with ${name}`, dueDate: inAWeek, dueOffsetDays: null },
+        { title: `Confirm final details with ${name}`, offset: 14 },
+        { title: `Send the day-of timeline to ${name}`, offset: 5 },
+      ].map((t) => ({
+        weddingId,
+        vendorId,
+        category: "offset" in t
+          ? timeframeFor(t.offset!)
+          : weddingDate ? timeframeFor(Math.round((weddingDate.getTime() - t.dueDate!.getTime()) / 86_400_000)) : "Anytime",
+        title: t.title,
+        dueOffsetDays: "offset" in t ? t.offset! : null,
+        dueDate: "offset" in t ? (weddingDate ? dueDateFor(weddingDate, t.offset!) : null) : t.dueDate!,
+      }))
+      await tx.checklistItem.createMany({ data: tasks })
+      tasksAdded = tasks.length
+    }
+    return { vendor: updated, item: synced, tasksAdded }
+  })
+  revalidatePath("/dashboard/vendors")
+  revalidatePath("/dashboard/budget")
+  revalidatePath("/dashboard/checklist")
+  return serializeDecimals(result)
 }
 
 // ============================================
@@ -893,8 +1058,6 @@ export async function getDashboardStats(weddingId: string) {
     budgetTotals,
     checklistGroups,
     vendorGroups,
-    upcomingTasks,
-    pendingPayments,
     pendingGuests,
     wedding,
   ] = await Promise.all([
@@ -917,16 +1080,6 @@ export async function getDashboardStats(weddingId: string) {
       by: ["status"],
       where: { weddingId },
       _count: { _all: true },
-    }),
-    prisma.checklistItem.findMany({
-      where: { weddingId, isCompleted: false },
-      orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }],
-      take: 5,
-    }),
-    prisma.budgetItem.findMany({
-      where: { weddingId, paidAt: null },
-      orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }],
-      take: 5,
     }),
     prisma.guest.findMany({
       where: { weddingId, rsvpStatus: "pending" },
@@ -967,10 +1120,78 @@ export async function getDashboardStats(weddingId: string) {
       vendorsBooked,
       vendorsTotal,
     },
-    upcomingTasks,
-    pendingPayments,
     pendingGuests,
   })
+}
+
+// ============================================
+// THIS WEEK (overview)
+// ============================================
+
+export type WeekItem = {
+  id: string
+  kind: "task" | "payment" | "budget" | "event"
+  title: string
+  subtitle?: string | null
+  /** ISO date (date-only for tasks and payments, full timestamp for events) */
+  date: string
+  amount?: number
+  /** Budget lines: the full price, so "mark paid" can settle it */
+  price?: number
+  assignee?: string | null
+}
+
+/** What's overdue or due in the next 7 days, plus a few items after that. */
+export async function getThisWeek(weddingId: string) {
+  const empty = { due: [] as WeekItem[], later: [] as WeekItem[] }
+  if (!(await canReadWedding(weddingId))) return empty
+
+  const now = new Date()
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  const weekEnd = new Date(today.getTime() + 7 * 86_400_000)
+
+  const [tasks, payments, unscheduled, events] = await Promise.all([
+    prisma.checklistItem.findMany({
+      where: { weddingId, isCompleted: false, dueDate: { not: null } },
+      orderBy: { dueDate: "asc" },
+      take: 25,
+      select: { id: true, title: true, dueDate: true, category: true, assignee: true },
+    }),
+    prisma.payment.findMany({
+      where: { weddingId, paidAt: null, dueDate: { not: null } },
+      orderBy: { dueDate: "asc" },
+      take: 15,
+      select: { id: true, label: true, amount: true, dueDate: true, budgetItem: { select: { name: true } } },
+    }),
+    prisma.budgetItem.findMany({
+      where: { weddingId, paidAt: null, dueDate: { not: null }, payments: { none: {} } },
+      orderBy: { dueDate: "asc" },
+      take: 15,
+      select: { id: true, name: true, category: true, dueDate: true, estimatedCost: true, actualCost: true, paidAmount: true },
+    }),
+    prisma.event.findMany({
+      where: { weddingId, startTime: { gte: today, lt: weekEnd } },
+      orderBy: { startTime: "asc" },
+      take: 10,
+      select: { id: true, title: true, startTime: true, location: true },
+    }),
+  ])
+
+  const items: WeekItem[] = [
+    ...tasks.map((t) => ({ id: t.id, kind: "task" as const, title: t.title, subtitle: t.category, date: dateOnly(t.dueDate!), assignee: t.assignee })),
+    ...payments.map((p) => ({ id: p.id, kind: "payment" as const, title: p.budgetItem.name, subtitle: p.label, date: dateOnly(p.dueDate!), amount: Number(p.amount) })),
+    ...unscheduled.map((b) => {
+      const price = Number(b.actualCost) > 0 ? Number(b.actualCost) : Number(b.estimatedCost)
+      return { id: b.id, kind: "budget" as const, title: b.name, subtitle: b.category, date: dateOnly(b.dueDate!), amount: Math.max(0, price - Number(b.paidAmount)), price }
+    }),
+    ...events.map((e) => ({ id: e.id, kind: "event" as const, title: e.title, subtitle: e.location, date: e.startTime!.toISOString() })),
+  ].sort((a, b) => a.date.localeCompare(b.date))
+
+  const cutoff = dateOnly(weekEnd)
+  return {
+    due: items.filter((i) => i.date.slice(0, 10) < cutoff),
+    later: items.filter((i) => i.date.slice(0, 10) >= cutoff).slice(0, 4),
+  }
 }
 
 // ============================================
@@ -1118,6 +1339,28 @@ export type CalendarEntry = {
 
 const dateOnly = (d: Date) => d.toISOString().slice(0, 10)
 
+// ============================================
+// CALENDAR FEED (iCal subscription)
+// ============================================
+
+/** The wedding's private feed token, created on first use. */
+export async function getCalendarFeedToken(weddingId: string) {
+  await requireWeddingAccess(weddingId)
+  const wedding = await prisma.wedding.findUnique({ where: { id: weddingId }, select: { calendarToken: true } })
+  if (wedding?.calendarToken) return wedding.calendarToken
+  const token = randomBytes(24).toString("base64url")
+  await prisma.wedding.update({ where: { id: weddingId }, data: { calendarToken: token } })
+  return token
+}
+
+/** Replaces the token so the old feed link stops working. */
+export async function resetCalendarFeedToken(weddingId: string) {
+  await requireWeddingAccess(weddingId, true)
+  const token = randomBytes(24).toString("base64url")
+  await prisma.wedding.update({ where: { id: weddingId }, data: { calendarToken: token } })
+  return token
+}
+
 /** Wedding dates, events, dated tasks and payment due dates, for one wedding or all of them. */
 export async function getCalendarData(weddingId?: string | null) {
   const userId = await getSessionUserId()
@@ -1147,10 +1390,7 @@ export async function getCalendarData(weddingId?: string | null) {
       where: { weddingId: { in: ids }, dueDate: { not: null } },
       select: { id: true, title: true, dueDate: true, isCompleted: true, weddingId: true },
     }),
-    prisma.budgetItem.findMany({
-      where: { weddingId: { in: ids }, dueDate: { not: null } },
-      select: { id: true, name: true, dueDate: true, paidAt: true, weddingId: true },
-    }),
+    calendarPayments(ids),
   ])
 
   const items: CalendarEntry[] = [
@@ -1184,12 +1424,12 @@ export async function getCalendarData(weddingId?: string | null) {
     })),
     ...payments.map((p) => ({
       id: `pay-${p.id}`,
-      title: `Payment: ${p.name}`,
-      date: dateOnly(p.dueDate!),
+      title: `Payment: ${p.title}`,
+      date: dateOnly(p.dueDate),
       type: "payment" as const,
       weddingId: p.weddingId,
       weddingName: names[p.weddingId],
-      isPaid: !!p.paidAt,
+      isPaid: p.isPaid,
     })),
   ]
 

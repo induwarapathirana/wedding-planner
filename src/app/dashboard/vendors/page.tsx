@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { BookmarkPlus, Download, Library, Mail, MessageCircle, Phone, Store, Trash2 } from "lucide-react";
+import { BookmarkPlus, CalendarCheck, Download, Library, Mail, MessageCircle, Phone, Store, Trash2 } from "lucide-react";
 import {
     createDirectoryVendor,
     createVendor,
     deleteDirectoryVendor,
     deleteVendor,
+    getBudgetCategories,
     getDirectoryVendors,
     getUserProfile,
     getVendors,
@@ -16,6 +17,7 @@ import {
     updateVendor,
 } from "@/app/actions/data";
 import { SheetGrid, type SheetColumn, type SheetGroup } from "@/components/sheet/SheetGrid";
+import { BookVendorDialog } from "@/components/dashboard/vendors/BookVendorDialog";
 import { DirectoryImportModal } from "@/components/dashboard/vendors/DirectoryImportModal";
 import { useWeddingId } from "@/hooks/use-wedding-id";
 import { useWeddingPermission } from "@/hooks/use-wedding-permission";
@@ -86,10 +88,13 @@ export default function VendorsPage() {
     const [currency, setCurrency] = useState("LKR");
     const [loading, setLoading] = useState(true);
     const [importOpen, setImportOpen] = useState(false);
+    const [budgetCategories, setBudgetCategories] = useState<string[]>([]);
+    const [booking, setBooking] = useState<Vendor | null>(null);
 
     const loadWedding = useCallback(async (id: string) => {
-        const [list, wedding] = await Promise.all([getVendors(id), getWeddingById(id)]);
+        const [list, wedding, cats] = await Promise.all([getVendors(id), getWeddingById(id), getBudgetCategories(id)]);
         setVendors(list);
+        setBudgetCategories(cats.map((c) => c.name));
         setCurrency(wedding?.currency || "LKR");
     }, []);
 
@@ -183,7 +188,11 @@ export default function VendorsPage() {
             key: "status", label: "Status", type: "select", options: STATUSES, width: 120, summary: true,
             render: (v) => <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", STATUS_STYLE[v.status] ?? STATUS_STYLE.researching)}>{STATUSES.find((s) => s.value === v.status)?.label ?? v.status}</span>,
         },
-        { key: "priceEstimate", label: "Price", type: "money", width: 130, align: "right", summary: true },
+        { key: "priceEstimate", label: "Quoted", type: "money", width: 120, align: "right", summary: true },
+        {
+            key: "cost", label: "Booked for", type: "money", width: 120, align: "right", readOnly: true,
+            render: (v) => (v.status === "hired" && v.cost ? <span className="font-medium">{money(Number(v.cost))}</span> : <span className="text-muted-foreground/60">—</span>),
+        },
         { key: "pricingType", label: "Pricing", type: "select", options: PRICING, width: 120 },
         { key: "category", label: "Category", type: "select", options: categoryOptions, width: 150 },
         { key: "contactName", label: "Contact", type: "text", width: 140 },
@@ -244,7 +253,7 @@ export default function VendorsPage() {
     ];
 
     const hired = vendors.filter((v) => v.status === "hired");
-    const hiredTotal = hired.reduce((n, v) => n + (Number(v.priceEstimate) || 0), 0);
+    const hiredTotal = hired.reduce((n, v) => n + (Number(v.cost ?? v.priceEstimate) || 0), 0);
 
     const exportCsv = () =>
         downloadCsv(
@@ -331,6 +340,18 @@ export default function VendorsPage() {
                         addRowLabel={(g) => `Add another ${g?.toLowerCase() ?? "vendor"} option`}
                         rowActions={(v) => (
                             <>
+                                {canEdit && v.status !== "declined" && (
+                                    <button
+                                        onClick={() => setBooking(v)}
+                                        className={cn(
+                                            "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold",
+                                            v.status === "hired" ? "text-emerald-700 hover:bg-emerald-50" : "bg-primary/10 text-foreground hover:bg-primary/20"
+                                        )}
+                                        title={v.status === "hired" ? "Edit price and payments" : "Book this vendor"}
+                                    >
+                                        <CalendarCheck className="h-3.5 w-3.5" /> {v.status === "hired" ? "Booked" : "Book"}
+                                    </button>
+                                )}
                                 <ContactLinks phone={v.phone} email={v.email} name={v.companyName || "vendor"} />
                                 {canEdit && (
                                     <button onClick={() => saveToDirectory(v)} className="rounded-md p-1.5 text-muted-foreground hover:bg-gray-100 hover:text-foreground" title="Save to my directory" aria-label={`Save ${v.companyName} to my directory`}>
@@ -371,6 +392,22 @@ export default function VendorsPage() {
                             </button>
                         </>
                     )}
+                />
+            )}
+
+            {booking && (
+                <BookVendorDialog
+                    vendor={booking}
+                    categories={budgetCategories}
+                    symbol={symbol}
+                    onClose={() => setBooking(null)}
+                    onBooked={({ vendor, tasksAdded }) => {
+                        setVendors((list) => list.map((v) => (v.id === vendor.id ? vendor : v)));
+                        setBooking(null);
+                        toast.success(`Booked ${vendor.companyName || "vendor"}`, {
+                            description: `Added to your budget${tasksAdded ? ` with ${tasksAdded} follow-up tasks` : ""}.`,
+                        });
+                    }}
                 />
             )}
 

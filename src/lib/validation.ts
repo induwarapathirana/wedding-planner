@@ -90,8 +90,25 @@ export const checklistItemCreate = z.object({
     dueOffsetDays: integer(0),
     isCompleted: bool,
     notes: text(5000),
+    assignee: text(100),
 });
 export const checklistItemUpdate = checklistItemCreate.partial();
+
+export const paymentCreate = z.object({
+    label: required(100),
+    amount,
+    dueDate: date,
+    paidAt: date,
+});
+export const paymentUpdate = paymentCreate.partial();
+
+/** Booking a vendor: the agreed price, how it's paid and where it sits in the budget. */
+export const vendorBooking = z.object({
+    total: z.coerce.number().min(0),
+    category: required(100),
+    payments: z.array(paymentCreate).max(12),
+    addTasks: z.boolean().default(true),
+});
 
 const vendorFields = {
     category: text(100),

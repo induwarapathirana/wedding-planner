@@ -2,6 +2,9 @@
 "use client";
 
 import Link from "next/link";
+import { ThisWeek } from "@/components/dashboard/ThisWeek";
+import { useWeddingPermission } from "@/hooks/use-wedding-permission";
+import { CURRENCIES } from "@/lib/constants";
 import { useRouter } from "next/navigation";
 import { differenceInDays, parseISO } from "date-fns";
 import { formatLargeNumber, getNumberFontSize } from "@/lib/format";
@@ -40,13 +43,12 @@ export type DashboardStats = {
 type CoupleDashboardProps = {
     wedding: WeddingData;
     stats: DashboardStats;
-    upcomingTasks: any[];
-    pendingPayments: any[];
     pendingGuests: any[];
 };
 
-export function CoupleDashboard({ wedding, stats, upcomingTasks, pendingPayments, pendingGuests }: CoupleDashboardProps) {
+export function CoupleDashboard({ wedding, stats, pendingGuests }: CoupleDashboardProps) {
     const router = useRouter();
+    const { canEdit } = useWeddingPermission(wedding.id);
     const [showPlanModal, setShowPlanModal] = useState(false);
     const daysToGo = wedding.weddingDate ? differenceInDays(parseISO(wedding.weddingDate), new Date()) : null;
 
@@ -147,67 +149,8 @@ export function CoupleDashboard({ wedding, stats, upcomingTasks, pendingPayments
             <div className="pt-2">
                 <h3 className="text-lg md:text-xl font-bold text-foreground mb-4 md:mb-6">At a Glance</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-                    {/* Widget 1: Upcoming Tasks */}
-                    <div className="bg-white rounded-2xl border-2 border-border shadow-sm p-5 md:p-6 flex flex-col min-h-[280px] hover:shadow-md hover:border-amber-200 transition-all">
-                        <div className="flex items-center justify-between mb-5">
-                            <h4 className="font-bold text-foreground flex items-center gap-2.5">
-                                <span className="bg-amber-100 text-amber-700 p-2 rounded-xl text-lg">📋</span>
-                                <span>Upcoming Tasks</span>
-                            </h4>
-                            <button onClick={() => router.push('/dashboard/checklist')} className="text-xs font-semibold text-primary hover:underline hover:text-primary/80 transition-colors">View All</button>
-                        </div>
-                        <div className="space-y-3 flex-1 overflow-auto">
-                            {upcomingTasks.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-full text-center py-8">
-                                    <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center mb-3">
-                                        <span className="text-2xl opacity-40">✅</span>
-                                    </div>
-                                    <p className="text-sm text-muted-foreground font-medium">All tasks completed!</p>
-                                </div>
-                            ) : upcomingTasks.map(task => (
-                                <div key={task.id} className="flex items-start gap-3 p-3 rounded-xl hover:bg-amber-50/50 transition-colors cursor-pointer group">
-                                    <div className="mt-1 w-2 h-2 rounded-full bg-amber-500 flex-shrink-0 group-hover:scale-125 transition-transform"></div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{task.title}</p>
-                                        <p className="text-xs text-muted-foreground mt-1 font-medium">
-                                            {task.dueDate ? new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'No date set'}
-                                        </p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Widget 2: Pending Payments */}
-                    <div className="bg-white rounded-2xl border-2 border-border shadow-sm p-5 md:p-6 flex flex-col min-h-[280px] hover:shadow-md hover:border-rose-200 transition-all">
-                        <div className="flex items-center justify-between mb-5">
-                            <h4 className="font-bold text-foreground flex items-center gap-2.5">
-                                <span className="bg-rose-100 text-rose-700 p-2 rounded-xl text-lg">💸</span>
-                                <span>Pending Payments</span>
-                            </h4>
-                            <button onClick={() => router.push('/dashboard/budget')} className="text-xs font-semibold text-primary hover:underline hover:text-primary/80 transition-colors">View All</button>
-                        </div>
-                        <div className="space-y-3 flex-1 overflow-auto">
-                            {pendingPayments.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-full text-center py-8">
-                                    <div className="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center mb-3">
-                                        <span className="text-2xl opacity-40">✨</span>
-                                    </div>
-                                    <p className="text-sm text-muted-foreground font-medium">All payments settled!</p>
-                                </div>
-                            ) : pendingPayments.map(payment => (
-                                <div key={payment.id} className="flex items-start gap-3 p-3 rounded-xl hover:bg-rose-50/50 transition-colors cursor-pointer group">
-                                    <div className="mt-1 w-2 h-2 rounded-full bg-rose-500 flex-shrink-0 group-hover:scale-125 transition-transform"></div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{payment.name}</p>
-                                        <p className="text-xs text-muted-foreground mt-1 font-medium">
-                                            <span className="font-bold text-rose-600">{stats.currency}{formatLargeNumber(payment.estimatedCost)}</span>
-                                            {payment.dueDate && <span> • {new Date(payment.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>}
-                                        </p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                    <div className="md:col-span-2">
+                        <ThisWeek weddingId={wedding.id} currency={CURRENCIES.find((c) => c.code === stats.currency)?.symbol ?? stats.currency} canEdit={canEdit} />
                     </div>
 
                     {/* Widget 3: Pending RSVPs */}
