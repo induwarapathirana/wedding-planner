@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Armchair, Plus, Printer, Search, Trash2, X } from "lucide-react";
+import { Armchair, Plus, Search, Trash2, X } from "lucide-react";
 import {
     createSeatingTables,
     deleteSeatingTable,
@@ -12,6 +12,7 @@ import {
     updateGuest,
     updateSeatingTable,
 } from "@/app/actions/data";
+import { PrintButton } from "@/components/dashboard/PrintButton";
 import { useWeddingId } from "@/hooks/use-wedding-id";
 import { useWeddingPermission } from "@/hooks/use-wedding-permission";
 import { cn } from "@/lib/utils";
@@ -173,11 +174,7 @@ export default function SeatingPage() {
                         <input type="checkbox" checked={includePending} onChange={(e) => setIncludePending(e.target.checked)} className="h-4 w-4 accent-[var(--primary)]" />
                         Include guests who haven&apos;t replied
                     </label>
-                    {tables.length > 0 && (
-                        <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50">
-                            <Printer className="h-4 w-4" /> Print
-                        </button>
-                    )}
+                    {tables.length > 0 && <PrintButton kind="seating" weddingId={weddingId} />}
                 </div>
             </div>
 

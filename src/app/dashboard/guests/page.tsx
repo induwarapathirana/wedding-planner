@@ -16,6 +16,7 @@ import {
 } from "@/app/actions/data";
 import { SheetGrid, type SheetColumn } from "@/components/sheet/SheetGrid";
 import { ImportGuestsDialog } from "@/components/dashboard/guests/ImportGuestsDialog";
+import { PrintButton } from "@/components/dashboard/PrintButton";
 import { WhatsAppQueue, rsvpLink, waNumber, whatsappUrl, type WeddingInfo } from "@/components/dashboard/guests/WhatsAppQueue";
 import { LANGS, isLang } from "@/lib/rsvp-i18n";
 import { useWeddingId } from "@/hooks/use-wedding-id";
@@ -363,6 +364,7 @@ export default function GuestsPage() {
                             <FileUp className="h-4 w-4" /> Import
                         </button>
                     )}
+                    {guests.length > 0 && <PrintButton kind="guests" weddingId={weddingId} />}
                     <button onClick={exportCsv} disabled={!visible.length} className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-40">
                         <Download className="h-4 w-4" /> Export
                     </button>

@@ -22,6 +22,7 @@ import {
     updateWedding,
 } from "@/app/actions/data";
 import { SheetGrid, type SheetColumn, type SheetGroup } from "@/components/sheet/SheetGrid";
+import { PrintButton } from "@/components/dashboard/PrintButton";
 import { useWeddingId } from "@/hooks/use-wedding-id";
 import { useWeddingPermission } from "@/hooks/use-wedding-permission";
 import { CURRENCIES } from "@/lib/constants";
@@ -425,9 +426,12 @@ export default function BudgetPage() {
                     <h1 className="font-serif text-3xl font-bold">Budget</h1>
                     <p className="text-sm text-muted-foreground">Click any cell to edit. Quantity × unit price fills in the estimate.</p>
                 </div>
+                <div className="flex flex-wrap gap-2">
+                {items.length > 0 && <PrintButton kind="budget" weddingId={weddingId} />}
                 <button onClick={exportCsv} disabled={!items.length} className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-40">
                     <Download className="h-4 w-4" /> Export
                 </button>
+                </div>
             </div>
 
             <div className="grid gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">

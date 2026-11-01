@@ -5,10 +5,14 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
     // Verify the request is authorized (optional but recommended)
+    // Vercel Cron sends `Authorization: Bearer $CRON_SECRET` when the secret is set.
+    // Without a secret, only Vercel's own cron runner may call this.
     const authHeader = request.headers.get('authorization');
     const expectedToken = process.env.CRON_SECRET;
-
-    if (expectedToken && authHeader !== `Bearer ${expectedToken}`) {
+    const authorized = expectedToken
+        ? authHeader === `Bearer ${expectedToken}`
+        : (request.headers.get('user-agent') ?? '').includes('vercel-cron');
+    if (!authorized) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
