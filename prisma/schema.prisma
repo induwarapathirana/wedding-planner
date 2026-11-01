@@ -92,6 +92,7 @@ model Wedding {
   tier            String    @default("free") // 'free', 'premium'
   premiumTrialEndsAt DateTime? @db.Timestamptz()
   whatsappBusinessNumber String? // Enables WhatsApp RSVP confirmations
+  calendarToken String? @unique // Secret for the iCal subscribe feed
 
   // Extended fields from expand_weddings_schema
   name          String?
@@ -112,6 +113,7 @@ model Wedding {
   events        Event[]
   invitations   Invitation[]
   clients       Client[]
+  payments      Payment[]
 
   @@index([createdById])
 }
@@ -143,11 +145,34 @@ model BudgetItem {
   dueDate       DateTime? @db.Date
   paidAt        DateTime? @db.Date
   notes         String?
+  vendorId      String?   @unique @db.Uuid // Set when the line was created by booking a vendor
   createdAt     DateTime  @default(now()) @db.Timestamptz()
 
   wedding       Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  vendor        Vendor?   @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  payments      Payment[]
 
   @@index([weddingId, category])
+}
+
+/// One instalment of a budget line (deposit, balance…). The line's paidAmount
+/// and dueDate are kept in step with its payments.
+model Payment {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  weddingId    String    @db.Uuid
+  budgetItemId String    @db.Uuid
+  label        String
+  amount       Decimal   @default(0)
+  dueDate      DateTime? @db.Date
+  paidAt       DateTime? @db.Date
+  sortOrder    Int       @default(0)
+  createdAt    DateTime  @default(now()) @db.Timestamptz()
+
+  wedding      Wedding    @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  budgetItem   BudgetItem @relation(fields: [budgetItemId], references: [id], onDelete: Cascade)
+
+  @@index([weddingId, paidAt, dueDate])
+  @@index([budgetItemId])
 }
 
 model BudgetCategory {
@@ -198,9 +223,12 @@ model ChecklistItem {
   dueOffsetDays Int?    // Days before the wedding; due date follows the wedding date
   isCompleted Boolean   @default(false)
   notes       String?
+  assignee    String?   // Free text: a partner, a family member, the planner
+  vendorId    String?   @db.Uuid
   createdAt   DateTime  @default(now()) @db.Timestamptz()
 
   wedding     Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  vendor      Vendor?   @relation(fields: [vendorId], references: [id], onDelete: SetNull)
 
   @@index([weddingId, isCompleted, dueDate])
 }
@@ -224,6 +252,8 @@ model Vendor {
   createdAt   DateTime  @default(now()) @db.Timestamptz()
 
   wedding     Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  budgetItem  BudgetItem?
+  tasks       ChecklistItem[]
 
   @@index([weddingId, category])
 }

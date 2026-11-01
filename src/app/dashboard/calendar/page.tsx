@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { getCalendarData } from "@/app/actions/data";
 import { CalendarMonthView } from "@/components/dashboard/calendar/CalendarMonthView";
 import { ScheduleView } from "@/components/dashboard/calendar/ScheduleView";
+import { SubscribeButton } from "@/components/dashboard/calendar/SubscribeButton";
+import { useWeddingPermission } from "@/hooks/use-wedding-permission";
 import { Calendar as CalendarIcon, List, Loader2, Filter } from "lucide-react";
 
 // Unified Type Definition
@@ -36,6 +38,8 @@ function CalendarContent() {
 
     const searchParams = useSearchParams();
     const urlWeddingId = searchParams.get('weddingId');
+    const feedWeddingId = urlWeddingId || (selectedWeddingId !== "all" ? selectedWeddingId : null);
+    const { canEdit } = useWeddingPermission(feedWeddingId);
 
     useEffect(() => {
         if (urlWeddingId) {
@@ -93,6 +97,8 @@ function CalendarContent() {
                             </select>
                         </div>
                     )}
+
+                    {feedWeddingId && <SubscribeButton key={feedWeddingId} weddingId={feedWeddingId} canReset={canEdit} />}
 
                     {/* View Toggles */}
                     <div className="flex p-1 bg-gray-100/80 rounded-xl border border-gray-200 h-[42px]">

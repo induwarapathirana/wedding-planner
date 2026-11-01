@@ -213,6 +213,7 @@ export default function ChecklistPage() {
                 ),
         },
         { key: "category", label: "Timeframe", type: "select", options: TIMEFRAMES.map((t) => ({ value: t, label: t })), width: 150 },
+        { key: "assignee", label: "Who", type: "text", width: 130, placeholder: "Anyone", summary: true },
         { key: "notes", label: "Notes", type: "text", width: 280 },
     ];
 

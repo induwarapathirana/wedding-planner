@@ -48,8 +48,6 @@ export default function DashboardPage() {
     const [role, setRole] = useState<'couple' | 'planner' | null>(null);
 
     const [inviteCode, setInviteCode] = useState("");
-    const [upcomingTasks, setUpcomingTasks] = useState<any[]>([]);
-    const [pendingPayments, setPendingPayments] = useState<any[]>([]);
     const [pendingGuests, setPendingGuests] = useState<any[]>([]);
 
     const router = useRouter();
@@ -135,8 +133,6 @@ export default function DashboardPage() {
 
                 if (dashData) {
                     setStats(dashData.stats);
-                    setUpcomingTasks(dashData.upcomingTasks);
-                    setPendingPayments(dashData.pendingPayments);
                     setPendingGuests(dashData.pendingGuests);
                 }
             } else {
@@ -269,8 +265,6 @@ export default function DashboardPage() {
                 <PlannerWorkspace
                     wedding={wedding}
                     stats={stats}
-                    upcomingTasks={upcomingTasks}
-                    pendingPayments={pendingPayments}
                     pendingGuests={pendingGuests}
                 />
             </div>
@@ -282,8 +276,6 @@ export default function DashboardPage() {
             <CoupleDashboard
                 wedding={wedding}
                 stats={stats}
-                upcomingTasks={upcomingTasks}
-                pendingPayments={pendingPayments}
                 pendingGuests={pendingGuests}
             />
             <PlanComparisonModal isOpen={showPlanModal} onClose={() => setShowPlanModal(false)} />

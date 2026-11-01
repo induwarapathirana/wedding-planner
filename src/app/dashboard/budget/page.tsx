@@ -3,18 +3,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Download, Pencil, Plus, Sparkles, Trash2, Wallet } from "lucide-react";
+import { CalendarClock, Download, Pencil, Plus, Sparkles, Trash2, Wallet } from "lucide-react";
 import {
     applyTemplate,
     createBudgetCategory,
     createBudgetItem,
+    createPayment,
     deleteBudgetCategory,
     deleteBudgetItem,
+    deletePayment,
     getBudgetCategories,
     getBudgetItems,
+    getPayments,
     getWeddingById,
     updateBudgetCategory,
     updateBudgetItem,
+    updatePayment,
     updateWedding,
 } from "@/app/actions/data";
 import { SheetGrid, type SheetColumn, type SheetGroup } from "@/components/sheet/SheetGrid";
@@ -26,11 +30,26 @@ import { cn } from "@/lib/utils";
 
 type Item = Awaited<ReturnType<typeof getBudgetItems>>[number];
 type Category = Awaited<ReturnType<typeof getBudgetCategories>>[number];
+type Payment = Awaited<ReturnType<typeof getPayments>>[number];
 
 const num = (v: unknown) => Number(v) || 0;
 /** What an item will cost: the actual price once known, otherwise the estimate. */
 const cost = (i: Item) => (num(i.actualCost) > 0 ? num(i.actualCost) : num(i.estimatedCost));
 const balance = (i: Item) => Math.max(0, cost(i) - num(i.paidAmount));
+const toDateOnly = (d: Date | string) => (typeof d === "string" ? d.slice(0, 10) : d.toISOString().slice(0, 10));
+/** Lines with a payment schedule take paid and due from their payments. */
+const scheduled = (i: Item) => i._count.payments > 0;
+
+const DAY = 86_400_000;
+function dueLabel(p: Payment) {
+    if (p.paidAt) return { text: "Paid", style: "bg-emerald-100 text-emerald-800" };
+    if (!p.dueDate) return { text: "No date", style: "bg-gray-100 text-gray-600" };
+    const days = Math.round((new Date(p.dueDate).getTime() - new Date(new Date().toISOString().slice(0, 10)).getTime()) / DAY);
+    if (days < 0) return { text: `${-days}d overdue`, style: "bg-rose-100 text-rose-800" };
+    if (days === 0) return { text: "Due today", style: "bg-amber-100 text-amber-800" };
+    if (days <= 14) return { text: `In ${days}d`, style: "bg-amber-100 text-amber-800" };
+    return { text: `In ${days}d`, style: "bg-gray-100 text-gray-600" };
+}
 
 /** Map a grid edit to the item fields it changes (keeps estimate = qty × unit price). */
 function toChanges(item: Item, key: string, value: unknown): Record<string, unknown> {
@@ -56,10 +75,13 @@ export default function BudgetPage() {
     const [loading, setLoading] = useState(true);
     const [newCategory, setNewCategory] = useState("");
     const [seeding, setSeeding] = useState(false);
+    const [payments, setPayments] = useState<Payment[]>([]);
+    const [view, setView] = useState<"items" | "payments">("items");
 
     const load = useCallback(async (id: string) => {
-        const [list, cats, wedding] = await Promise.all([getBudgetItems(id), getBudgetCategories(id), getWeddingById(id)]);
+        const [list, cats, wedding, pays] = await Promise.all([getBudgetItems(id), getBudgetCategories(id), getWeddingById(id), getPayments(id)]);
         setItems(list);
+        setPayments(pays);
         setCategories(cats);
         setTotal(num(wedding?.estimatedBudget));
         setCurrency(wedding?.currency || "LKR");
@@ -164,6 +186,83 @@ export default function BudgetPage() {
         }
     };
 
+    // ---------- Payments ----------
+    const applySynced = (item?: Item | null) => {
+        if (item) setItems((list) => list.map((i) => (i.id === item.id ? item : i)));
+    };
+
+    const savePayment = useCallback(async (id: string, changes: Record<string, unknown>) => {
+        let previous: Payment | undefined;
+        setPayments((list) => list.map((p) => (p.id === id ? ((previous = p), { ...p, ...changes } as Payment) : p)));
+        try {
+            const { payment, item } = await updatePayment(id, changes);
+            setPayments((list) => list.map((p) => (p.id === id ? payment : p)));
+            applySynced(item);
+        } catch (e) {
+            if (previous) setPayments((list) => list.map((p) => (p.id === id ? previous! : p)));
+            toast.error((e as Error).message || "Couldn't save that change");
+        }
+    }, []);
+
+    const addPayment = async (budgetItemId?: string) => {
+        const item = items.find((i) => i.id === budgetItemId);
+        if (!item) return;
+        const existing = payments.filter((p) => p.budgetItemId === item.id);
+        const unscheduled = cost(item) - existing.reduce((n, p) => n + num(p.amount), 0);
+        try {
+            const { payment, item: synced } = await createPayment(item.id, {
+                label: existing.length ? "Payment" : "Advance",
+                amount: Math.max(0, unscheduled),
+            });
+            setPayments((list) => [...list, payment]);
+            applySynced(synced);
+            return payment.id;
+        } catch (e) {
+            toast.error((e as Error).message);
+        }
+    };
+
+    const removePayment = async (p: Payment) => {
+        setPayments((list) => list.filter((x) => x.id !== p.id));
+        try {
+            applySynced(await deletePayment(p.id));
+        } catch (e) {
+            setPayments((list) => [...list, p]);
+            toast.error((e as Error).message);
+        }
+    };
+
+    const paymentGroups = useCallback(
+        (rows: Payment[]): SheetGroup<Payment>[] => {
+            const ids = [...new Set(payments.map((p) => p.budgetItemId))];
+            const nextDue = (id: string) =>
+                rows.filter((p) => p.budgetItemId === id && !p.paidAt && p.dueDate).map((p) => toDateOnly(p.dueDate!)).sort()[0] ?? "9999";
+            return ids
+                .sort((a, b) => nextDue(a).localeCompare(nextDue(b)))
+                .map((id) => ({ key: id, label: items.find((i) => i.id === id)?.name ?? "Item", rows: rows.filter((p) => p.budgetItemId === id) }));
+        },
+        [payments, items]
+    );
+
+    const paymentColumns: SheetColumn<Payment>[] = [
+        { key: "label", label: "Payment", type: "text", width: 180, sticky: true },
+        { key: "amount", label: "Amount", type: "money", width: 130, align: "right", summary: true },
+        { key: "dueDate", label: "Due", type: "date", width: 130, summary: true },
+        {
+            key: "status", label: "Status", type: "text", width: 120, get: (p) => dueLabel(p).text, summary: true,
+            render: (p) => <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", dueLabel(p).style)}>{dueLabel(p).text}</span>,
+        },
+        { key: "paid", label: "Paid", type: "checkbox", width: 70, align: "center", get: (p) => !!p.paidAt, readOnly: false },
+        { key: "paidAt", label: "Paid on", type: "date", width: 130 },
+    ];
+
+    const unscheduledItems = items.filter((i) => !scheduled(i) && !i.paidAt && cost(i) > 0);
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const in30 = new Date(Date.now() + 30 * DAY).toISOString().slice(0, 10);
+    const openPayments = payments.filter((p) => !p.paidAt);
+    const overdue = openPayments.filter((p) => p.dueDate && toDateOnly(p.dueDate) < todayIso);
+    const next30 = openPayments.filter((p) => p.dueDate && toDateOnly(p.dueDate) >= todayIso && toDateOnly(p.dueDate) <= in30);
+
     const saveCategory = async (cat: Category, changes: { name?: string; allocated?: number }) => {
         const before = categories;
         setCategories((list) => list.map((c) => (c.id === cat.id ? { ...c, ...changes } : c)));
@@ -255,13 +354,13 @@ export default function BudgetPage() {
             readOnly: (i) => i.unitPrice !== null && i.unitPrice !== undefined,
         },
         { key: "actualCost", label: "Actual", type: "money", width: 120, align: "right", placeholder: "—" },
-        { key: "paidAmount", label: "Paid", type: "money", width: 120, align: "right" },
+        { key: "paidAmount", label: "Paid", type: "money", width: 120, align: "right", readOnly: scheduled },
         {
             key: "balance", label: "Balance", type: "money", width: 120, align: "right", get: balance, summary: true,
             render: (i) => <span className={cn(balance(i) === 0 ? "text-emerald-700" : "font-medium")}>{balance(i) === 0 ? "Paid" : money(balance(i))}</span>,
         },
-        { key: "dueDate", label: "Due", type: "date", width: 130, summary: true },
-        { key: "paidInFull", label: "Paid in full", type: "checkbox", width: 100, align: "center", get: (i) => !!i.paidAt, readOnly: false },
+        { key: "dueDate", label: "Next due", type: "date", width: 130, summary: true, readOnly: scheduled },
+        { key: "paidInFull", label: "Paid in full", type: "checkbox", width: 100, align: "center", get: (i) => !!i.paidAt, readOnly: scheduled },
         { key: "notes", label: "Notes", type: "text", width: 200 },
     ];
 
@@ -378,7 +477,77 @@ export default function BudgetPage() {
                     )}
                     {total === 0 && <p className="mt-3 text-xs text-muted-foreground">Tip: enter your total budget above first, so each category gets its share.</p>}
                 </div>
+            ) : view === "payments" ? (
+                <div className="space-y-3">
+                    <ViewTabs view={view} setView={setView} paymentCount={payments.length} />
+                    {payments.length > 0 && (
+                        <p className="text-sm text-muted-foreground tabular-nums">
+                            {overdue.length > 0 && <><b className="text-rose-700">{money(overdue.reduce((n, p) => n + num(p.amount), 0))}</b> overdue · </>}
+                            <b className="text-foreground">{money(next30.reduce((n, p) => n + num(p.amount), 0))}</b> due in the next 30 days · <b className="text-foreground">{money(openPayments.reduce((n, p) => n + num(p.amount), 0))}</b> still scheduled
+                        </p>
+                    )}
+                    {payments.length === 0 ? (
+                        <div className="rounded-2xl border-2 border-dashed border-border bg-white px-6 py-12 text-center">
+                            <CalendarClock className="mx-auto h-10 w-10 text-muted-foreground" />
+                            <h2 className="mt-3 font-serif text-2xl font-bold">No payment schedules yet</h2>
+                            <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Book a vendor from the Vendors page, or pick a budget line below to split it into an advance and a balance.</p>
+                        </div>
+                    ) : (
+                        <SheetGrid
+                            rows={payments}
+                            columns={paymentColumns}
+                            getRowId={(p) => p.id}
+                            onCommit={(row, key, value) => savePayment(row.id, key === "paid" ? { paidAt: value ? todayIso : null } : { [key]: value })}
+                            readOnly={!canEdit}
+                            formatMoney={money}
+                            groupBy={paymentGroups}
+                            renderGroupHeader={(g) => {
+                                const item = items.find((i) => i.id === g.key);
+                                const planned = item ? cost(item) : 0;
+                                const sum = g.rows.reduce((n, p) => n + num(p.amount), 0);
+                                const paid = g.rows.filter((p) => p.paidAt).reduce((n, p) => n + num(p.amount), 0);
+                                return (
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                                        <span className="font-semibold">{g.label}</span>
+                                        {item && <span className="text-muted-foreground">{item.category}</span>}
+                                        <span className="text-muted-foreground tabular-nums">Paid <b className="text-foreground">{money(paid)}</b> of {money(planned)}</span>
+                                        {Math.round(planned - sum) !== 0 && (
+                                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                                                {planned > sum ? `${money(planned - sum)} not scheduled` : `${money(sum - planned)} more than the price`}
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            }}
+                            onAddRow={canEdit ? addPayment : undefined}
+                            addRowLabel="Add a payment"
+                            maxHeight="65vh"
+                            rowActions={(p) =>
+                                canEdit ? (
+                                    <button onClick={() => removePayment(p)} className="rounded-md p-1.5 text-muted-foreground hover:bg-rose-50 hover:text-rose-700" aria-label={`Delete ${p.label}`}>
+                                        <Trash2 className="h-4 w-4" />
+                                    </button>
+                                ) : null
+                            }
+                        />
+                    )}
+                    {canEdit && unscheduledItems.length > 0 && (
+                        <label className="flex flex-wrap items-center gap-2 text-sm">
+                            <span className="text-muted-foreground">Schedule payments for</span>
+                            <select
+                                value=""
+                                onChange={(e) => e.target.value && addPayment(e.target.value)}
+                                className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                            >
+                                <option value="">Choose a budget line…</option>
+                                {unscheduledItems.map((i) => <option key={i.id} value={i.id}>{i.name} · {money(balance(i))}</option>)}
+                            </select>
+                        </label>
+                    )}
+                </div>
             ) : (
+                <div className="space-y-3">
+                <ViewTabs view={view} setView={setView} paymentCount={payments.length} />
                 <SheetGrid
                     rows={items}
                     columns={columns}
@@ -400,9 +569,10 @@ export default function BudgetPage() {
                         ) : null
                     }
                 />
+                </div>
             )}
 
-            {!isEmpty && canEdit && (
+            {!isEmpty && canEdit && view === "items" && (
                 <form onSubmit={addCategory} className="flex flex-wrap items-center gap-2">
                     <input
                         value={newCategory}
@@ -416,6 +586,25 @@ export default function BudgetPage() {
                     </button>
                 </form>
             )}
+        </div>
+    );
+}
+
+function ViewTabs({ view, setView, paymentCount }: { view: "items" | "payments"; setView: (v: "items" | "payments") => void; paymentCount: number }) {
+    return (
+        <div className="flex w-fit gap-1 rounded-xl bg-gray-100 p-1" role="tablist" aria-label="Budget views">
+            {([["items", "By category"], ["payments", "Payments"]] as const).map(([value, label]) => (
+                <button
+                    key={value}
+                    role="tab"
+                    aria-selected={view === value}
+                    onClick={() => setView(value)}
+                    className={cn("rounded-lg px-3 py-1.5 text-sm font-medium", view === value ? "bg-white shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                >
+                    {label}
+                    {value === "payments" && paymentCount > 0 && <span className="ml-1 text-xs text-muted-foreground tabular-nums">{paymentCount}</span>}
+                </button>
+            ))}
         </div>
     );
 }
