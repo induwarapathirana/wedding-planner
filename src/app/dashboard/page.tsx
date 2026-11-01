@@ -226,6 +226,23 @@ export default function DashboardPage() {
                     + Create Your Wedding
                 </button>
 
+                <button
+                    onClick={async () => {
+                        if (!confirm("Switch to a planner account? You'll get the client pipeline, templates and an all-weddings calendar.")) return;
+                        setLoading(true);
+                        try {
+                            await updateUserRole("planner");
+                            window.location.reload();
+                        } catch (error: any) {
+                            alert(error?.message || "Couldn't switch account type");
+                            setLoading(false);
+                        }
+                    }}
+                    className="text-sm font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                >
+                    I&apos;m a wedding planner, not a couple
+                </button>
+
                 <div className="pt-8 w-full max-w-sm mx-auto border-t border-gray-100">
                     <p className="text-sm font-medium text-gray-900 mb-4">Collaborate on a Wedding?</p>
                     <div className="flex gap-2">

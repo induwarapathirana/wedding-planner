@@ -98,7 +98,7 @@ function CalendarContent() {
                         </div>
                     )}
 
-                    {feedWeddingId && <SubscribeButton key={feedWeddingId} weddingId={feedWeddingId} canReset={canEdit} />}
+                    <SubscribeButton key={feedWeddingId ?? "all"} weddingId={feedWeddingId} canReset={feedWeddingId ? canEdit : true} />
 
                     {/* View Toggles */}
                     <div className="flex p-1 bg-gray-100/80 rounded-xl border border-gray-200 h-[42px]">

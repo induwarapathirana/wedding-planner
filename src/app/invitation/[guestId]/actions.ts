@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 import { isLang } from "@/lib/rsvp-i18n";
+import { getPlannerBrand } from "@/lib/brand";
 
 // Public, unauthenticated actions: the guest's UUID in the link is the only
 // credential, so only the fields the RSVP page needs are read or written.
@@ -75,7 +76,10 @@ export async function getInvitationData(guestId: string) {
     const coming = people.map((_, i) => (guest.rsvpStatus === "pending" ? true : guest.rsvpStatus === "declined" ? false : saved?.[i] ?? true));
     const note = guest.notes?.split("\n").find((l) => l.startsWith(NOTE_PREFIX))?.slice(NOTE_PREFIX.length) ?? "";
 
+    const planner = await getPlannerBrand(guest.wedding.id);
+
     return {
+        planner,
         guest: {
             id: guest.id,
             name: guest.name,

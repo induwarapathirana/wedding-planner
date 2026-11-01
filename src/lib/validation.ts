@@ -195,10 +195,18 @@ export const clientUpdate = z
         phone: text(40),
         weddingDate: date,
         budget: number,
-        status: z.enum(["lead", "active", "completed", "lost"]).optional(),
+        status: z.enum(["lead", "contacted", "proposal", "active", "completed", "lost"]).optional(),
         notes: text(5000),
+        location: text(200),
+        guestCount: integer(0),
+        nextFollowUp: date,
     })
     .partial();
+
+export const plannerTemplateCreate = z.object({
+    kind: z.enum(["checklist", "budget", "dayOf"]),
+    name: required(100),
+});
 
 export const weddingUpdate = z
     .object({

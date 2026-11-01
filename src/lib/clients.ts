@@ -9,7 +9,7 @@ export type ClientRow = {
     phone: string;
     wedding_date: string;
     budget: number;
-    status: 'lead' | 'active' | 'completed' | 'lost';
+    status: 'lead' | 'contacted' | 'proposal' | 'active' | 'completed' | 'lost';
     wedding_id?: string;
     notes?: string;
 };
@@ -41,18 +41,4 @@ export function toClientRow(c: DbClient): ClientRow {
         wedding_id: c.weddingId || undefined,
         notes: c.notes || undefined,
     };
-}
-
-/** Turn edited snake_case fields back into the camelCase the server actions expect. */
-export function fromClientRow(fields: Partial<ClientRow>) {
-    const out: Record<string, unknown> = {};
-    if (fields.name !== undefined) out.name = fields.name;
-    if (fields.email !== undefined) out.email = fields.email || null;
-    if (fields.phone !== undefined) out.phone = fields.phone || null;
-    if (fields.wedding_date !== undefined) out.weddingDate = fields.wedding_date || null;
-    if (fields.budget !== undefined) out.budget = fields.budget === null ? null : Number(fields.budget) || 0;
-    if (fields.status !== undefined) out.status = fields.status;
-    if (fields.notes !== undefined) out.notes = fields.notes || null;
-    if (fields.wedding_id !== undefined) out.weddingId = fields.wedding_id || null;
-    return out;
 }

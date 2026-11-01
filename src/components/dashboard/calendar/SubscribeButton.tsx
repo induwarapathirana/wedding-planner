@@ -3,10 +3,13 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { CalendarPlus, Copy, RefreshCw, X } from "lucide-react";
-import { getCalendarFeedToken, resetCalendarFeedToken } from "@/app/actions/data";
+import { getCalendarFeedToken, getMyCalendarFeedToken, resetCalendarFeedToken, resetMyCalendarFeedToken } from "@/app/actions/data";
 
-/** Gives a private iCal link that Google, Apple or Outlook calendar can subscribe to. */
-export function SubscribeButton({ weddingId, canReset }: { weddingId: string; canReset: boolean }) {
+/**
+ * Gives a private iCal link that Google, Apple or Outlook calendar can
+ * subscribe to: one wedding's, or (without a weddingId) every wedding the user is on.
+ */
+export function SubscribeButton({ weddingId, canReset }: { weddingId?: string | null; canReset: boolean }) {
     const [open, setOpen] = useState(false);
     const [token, setToken] = useState<string | null>(null);
 
@@ -14,7 +17,7 @@ export function SubscribeButton({ weddingId, canReset }: { weddingId: string; ca
         setOpen(true);
         if (!token) {
             try {
-                setToken(await getCalendarFeedToken(weddingId));
+                setToken(await (weddingId ? getCalendarFeedToken(weddingId) : getMyCalendarFeedToken()));
             } catch (e) {
                 toast.error((e as Error).message);
                 setOpen(false);
@@ -28,7 +31,7 @@ export function SubscribeButton({ weddingId, canReset }: { weddingId: string; ca
     const reset = async () => {
         if (!confirm("Anyone using the current link will stop getting updates. Make a new link?")) return;
         try {
-            setToken(await resetCalendarFeedToken(weddingId));
+            setToken(await (weddingId ? resetCalendarFeedToken(weddingId) : resetMyCalendarFeedToken()));
             toast.success("New link made. Subscribe again with it.");
         } catch (e) {
             toast.error((e as Error).message);
@@ -45,7 +48,9 @@ export function SubscribeButton({ weddingId, canReset }: { weddingId: string; ca
                     <div className="flex items-start justify-between gap-2">
                         <div>
                             <p className="font-semibold">Subscribe in your calendar app</p>
-                            <p className="text-sm text-muted-foreground">Tasks, payments and events show up in your phone's calendar and stay up to date.</p>
+                            <p className="text-sm text-muted-foreground">
+                                {weddingId ? "Tasks, payments and events" : "Every wedding's tasks, payments and events"} show up in your phone&apos;s calendar and stay up to date.
+                            </p>
                         </div>
                         <button onClick={() => setOpen(false)} className="rounded-full p-1 text-muted-foreground hover:bg-gray-100" aria-label="Close"><X className="h-4 w-4" /></button>
                     </div>

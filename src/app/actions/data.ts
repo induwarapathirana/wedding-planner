@@ -18,7 +18,7 @@ import {
   clientUpdate, weddingUpdate,
   guestBulkUpdate, budgetCategoryCreate, budgetCategoryUpdate, weddingSetup,
   paymentCreate, paymentUpdate, vendorBooking,
-  seatingTableCreate, seatingTableUpdate,
+  seatingTableCreate, seatingTableUpdate, plannerTemplateCreate,
 } from "@/lib/validation"
 import {
   BUDGET_TEMPLATE, DAY_OF_TEMPLATE, checklistFor, dueDateFor, timeframeFor, type Tradition,
@@ -26,6 +26,8 @@ import {
 import { getEffectiveTier } from "@/lib/trial"
 import { PLAN_LIMITS } from "@/lib/limits"
 import { calendarPayments } from "@/lib/calendar"
+import { getPlannerBrand } from "@/lib/brand"
+import type { BudgetTemplate, ChecklistTemplate, DayOfTemplate, TemplateKind } from "@/lib/planner-templates"
 
 // ============================================
 // AUTH HELPERS
@@ -261,6 +263,180 @@ export async function applyTemplate(weddingId: string, kind: "checklist" | "budg
 
   revalidatePath("/dashboard")
   return { added }
+}
+
+/** The planner's branding for a wedding, shown to the couple. Null when no planner is involved. */
+export async function getWeddingBrand(weddingId: string) {
+  if (!(await canReadWedding(weddingId))) return null
+  return getPlannerBrand(weddingId)
+}
+
+// ============================================
+// PLANNER TEMPLATES
+// ============================================
+
+const DAY_MS = 86_400_000
+
+export async function getPlannerTemplates() {
+  const userId = await getSessionUserId()
+  if (!userId) return []
+  return prisma.plannerTemplate.findMany({ where: { plannerId: userId }, orderBy: [{ kind: "asc" }, { createdAt: "desc" }] })
+}
+
+/** Snapshot a wedding's checklist, budget or run of show as one of the planner's templates. */
+export async function saveAsTemplate(weddingId: string, input: unknown, tzOffsetMinutes = -330) {
+  const { userId } = await requireWeddingAccess(weddingId)
+  const { kind, name } = validate(plannerTemplateCreate, input)
+  const wedding = await prisma.wedding.findUnique({ where: { id: weddingId }, select: { weddingDate: true, estimatedBudget: true } })
+  if (!wedding) throw new Error("Wedding not found")
+
+  let items: ChecklistTemplate | BudgetTemplate | DayOfTemplate
+  if (kind === "checklist") {
+    const tasks = await prisma.checklistItem.findMany({ where: { weddingId }, orderBy: { dueDate: { sort: "asc", nulls: "last" } } })
+    items = {
+      tasks: tasks.map((t) => ({
+        title: t.title,
+        category: t.category,
+        notes: t.notes,
+        assignee: t.assignee,
+        daysBefore:
+          t.dueOffsetDays ??
+          (t.dueDate && wedding.weddingDate ? Math.max(0, Math.round((wedding.weddingDate.getTime() - t.dueDate.getTime()) / DAY_MS)) : null),
+      })),
+    }
+  } else if (kind === "budget") {
+    const [categories, lines] = await Promise.all([
+      prisma.budgetCategory.findMany({ where: { weddingId }, orderBy: { sortOrder: "asc" } }),
+      prisma.budgetItem.findMany({ where: { weddingId }, orderBy: { category: "asc" } }),
+    ])
+    const total = Number(wedding.estimatedBudget ?? 0) || categories.reduce((n, c) => n + Number(c.allocated), 0)
+    items = {
+      categories: categories.map((c) => ({ name: c.name, pct: total > 0 ? Math.round((Number(c.allocated) / total) * 1000) / 10 : 0 })),
+      items: lines.map((i) => ({
+        category: i.category,
+        name: i.name,
+        units: i.units,
+        unitPrice: i.unitPrice === null ? null : Number(i.unitPrice),
+        estimatedCost: Number(i.estimatedCost),
+        notes: i.notes,
+      })),
+    }
+  } else {
+    const events = await prisma.event.findMany({ where: { weddingId, startTime: { not: null } }, orderBy: { startTime: "asc" } })
+    if (events.length === 0) throw new Error("Add some slots to the itinerary first")
+    const first = events[0].startTime!
+    const local = new Date(first.getTime() - tzOffsetMinutes * 60_000)
+    items = {
+      start: `${String(local.getUTCHours()).padStart(2, "0")}:${String(local.getUTCMinutes()).padStart(2, "0")}`,
+      slots: events.map((e) => ({
+        title: e.title,
+        category: e.category,
+        location: e.location,
+        notes: e.notes,
+        offsetMinutes: Math.round((e.startTime!.getTime() - first.getTime()) / 60_000),
+        durationMinutes: e.endTime ? Math.max(0, Math.round((e.endTime.getTime() - e.startTime!.getTime()) / 60_000)) : 60,
+      })),
+    }
+  }
+
+  const template = await prisma.plannerTemplate.create({ data: { plannerId: userId, kind, name, items: items as unknown as Prisma.InputJsonValue } })
+  revalidatePath("/dashboard/templates")
+  return template
+}
+
+export async function renamePlannerTemplate(id: string, name: string) {
+  const userId = await requireUserId()
+  const clean = String(name ?? "").trim().slice(0, 100)
+  if (!clean) throw new Error("Give the template a name")
+  const { count } = await prisma.plannerTemplate.updateMany({ where: { id, plannerId: userId }, data: { name: clean } })
+  if (!count) throw new Error("Template not found")
+  revalidatePath("/dashboard/templates")
+}
+
+export async function deletePlannerTemplate(id: string) {
+  const userId = await requireUserId()
+  await prisma.plannerTemplate.deleteMany({ where: { id, plannerId: userId } })
+  revalidatePath("/dashboard/templates")
+}
+
+/** Adds a saved template's contents to a wedding, skipping anything already there. */
+async function applySavedTemplate(
+  tx: Tx,
+  weddingId: string,
+  template: { kind: string; items: Prisma.JsonValue },
+  wedding: { weddingDate: Date | null; estimatedBudget: Prisma.Decimal | number | null },
+  tzOffsetMinutes: number,
+  startTime?: string | null
+) {
+  const kind = template.kind as TemplateKind
+  if (kind === "checklist") {
+    const { tasks = [] } = template.items as unknown as ChecklistTemplate
+    const existing = new Set((await tx.checklistItem.findMany({ where: { weddingId }, select: { title: true } })).map((t) => t.title.toLowerCase()))
+    const fresh = tasks.filter((t) => t.title && !existing.has(t.title.toLowerCase()))
+    await tx.checklistItem.createMany({
+      data: fresh.map((t) => ({
+        weddingId,
+        title: t.title,
+        category: t.category ?? (t.daysBefore !== null ? timeframeFor(t.daysBefore) : null),
+        notes: t.notes,
+        assignee: t.assignee,
+        dueOffsetDays: t.daysBefore,
+        dueDate: t.daysBefore !== null && wedding.weddingDate ? dueDateFor(wedding.weddingDate, t.daysBefore) : null,
+      })),
+    })
+    return fresh.length
+  }
+  if (kind === "budget") {
+    const { categories = [], items = [] } = template.items as unknown as BudgetTemplate
+    const total = Number(wedding.estimatedBudget ?? 0)
+    const existing = await tx.budgetCategory.findMany({ where: { weddingId }, select: { name: true } })
+    const have = new Set(existing.map((c) => c.name.toLowerCase()))
+    const fresh = categories.filter((c) => c.name && !have.has(c.name.toLowerCase()))
+    await tx.budgetCategory.createMany({
+      data: fresh.map((c, i) => ({ weddingId, name: c.name, allocated: Math.round((total * c.pct) / 100), sortOrder: existing.length + i })),
+      skipDuplicates: true,
+    })
+    const freshNames = new Set(fresh.map((c) => c.name.toLowerCase()))
+    await tx.budgetItem.createMany({
+      data: items
+        .filter((i) => freshNames.has(i.category.toLowerCase()))
+        .map((i) => ({ weddingId, category: i.category, name: i.name, units: i.units || 1, unitPrice: i.unitPrice, estimatedCost: i.estimatedCost || 0, notes: i.notes })),
+    })
+    return fresh.length
+  }
+  const { start = "06:00", slots = [] } = template.items as unknown as DayOfTemplate
+  if (!wedding.weddingDate) throw new Error("Set the wedding date first")
+  const [h, m] = (startTime || start).split(":").map(Number)
+  const first = new Date(wedding.weddingDate)
+  first.setUTCHours(h || 0, m || 0, 0, 0)
+  first.setUTCMinutes(first.getUTCMinutes() + tzOffsetMinutes)
+  await tx.event.createMany({
+    data: slots.map((slot) => {
+      const begin = new Date(first.getTime() + slot.offsetMinutes * 60_000)
+      return {
+        weddingId,
+        title: slot.title,
+        category: slot.category,
+        location: slot.location,
+        notes: slot.notes,
+        startTime: begin,
+        endTime: new Date(begin.getTime() + slot.durationMinutes * 60_000),
+      }
+    }),
+  })
+  return slots.length
+}
+
+export async function applyPlannerTemplate(weddingId: string, templateId: string, options?: { tzOffsetMinutes?: number; startTime?: string }) {
+  const { userId } = await requireWeddingAccess(weddingId, true)
+  const [template, wedding] = await Promise.all([
+    prisma.plannerTemplate.findFirst({ where: { id: templateId, plannerId: userId } }),
+    prisma.wedding.findUnique({ where: { id: weddingId }, select: { weddingDate: true, estimatedBudget: true } }),
+  ])
+  if (!template || !wedding) throw new Error("Template not found")
+  const added = await prisma.$transaction((tx) => applySavedTemplate(tx, weddingId, template, wedding, options?.tzOffsetMinutes ?? -330, options?.startTime))
+  revalidatePath("/dashboard")
+  return { added, kind: template.kind }
 }
 
 // ============================================
@@ -1056,7 +1232,7 @@ export async function createClient(data: any) {
   const userId = await requireUserId()
 
   const client = await prisma.client.create({
-    data: { ...(await cleanClientData(userId, data)), plannerId: userId },
+    data: { ...(await cleanClientData(userId, data)), plannerId: userId, source: "manual", stageChangedAt: new Date() },
   })
   revalidatePath("/dashboard/clients")
   return serializeDecimals(client)
@@ -1064,9 +1240,14 @@ export async function createClient(data: any) {
 
 export async function updateClient(id: string, data: any) {
   const userId = await requireUserId()
+  const changes = await cleanClientData(userId, data)
+  if (changes.status) {
+    const before = await prisma.client.findFirst({ where: { id, plannerId: userId }, select: { status: true } })
+    if (before && before.status !== changes.status) changes.stageChangedAt = new Date()
+  }
   const client = await prisma.client.update({
     where: { id, plannerId: userId },
-    data: await cleanClientData(userId, data),
+    data: changes,
   })
   revalidatePath("/dashboard/clients")
   return serializeDecimals(client)
@@ -1098,35 +1279,76 @@ export async function updateWedding(id: string, data: any) {
   return serializeDecimals(wedding)
 }
 
-export async function createClientWedding(clientData: {
-  name: string
-  weddingDate?: string | null
-  budget?: number
-}) {
+type StarterChoice = "standard" | "none" | string
+
+/**
+ * Turn a lead into a planned wedding in one step: the workspace with the
+ * planner as owner, set up from the standard starters or the planner's own
+ * templates, linked to the client, who moves to "Booked".
+ */
+export async function startClientWedding(
+  clientId: string,
+  options: {
+    coupleName1?: string
+    coupleName2?: string
+    currency?: string
+    checklist?: StarterChoice
+    budget?: StarterChoice
+    dayOf?: StarterChoice
+    ceremonyTime?: string
+    tzOffsetMinutes?: number
+  } = {}
+) {
   const userId = await requireUserId()
+  const client = await prisma.client.findFirst({ where: { id: clientId, plannerId: userId } })
+  if (!client) throw new Error("Client not found")
+  if (client.weddingId) return { weddingId: client.weddingId }
 
-  const nameParts = clientData.name.split(/ and | & /)
-  const coupleName1 = nameParts[0]?.trim() || clientData.name
-  const coupleName2 = nameParts[1]?.trim() || ''
+  const name = client.name || [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client"
+  const parts = name.split(/ and | & /i)
+  const coupleName1 = String(options.coupleName1 || parts[0] || name).trim().slice(0, 100)
+  const coupleName2 = String(options.coupleName2 ?? parts[1] ?? "").trim().slice(0, 100)
+  const currency = /^[A-Z]{3}$/.test(options.currency ?? "") ? options.currency! : "LKR"
+  const tz = Number.isInteger(options.tzOffsetMinutes) ? options.tzOffsetMinutes! : -330
 
-  const trialEndsAt = new Date()
-  trialEndsAt.setDate(trialEndsAt.getDate() + 14)
+  const chosen = [options.checklist, options.budget, options.dayOf].filter((c): c is string => !!c && c !== "standard" && c !== "none")
+  const templates = chosen.length ? await prisma.plannerTemplate.findMany({ where: { id: { in: chosen }, plannerId: userId } }) : []
+  const templateFor = (choice?: StarterChoice) => templates.find((t) => t.id === choice)
 
-  const wedding = await prisma.wedding.create({
-    data: {
-      createdById: userId,
-      coupleName1,
-      coupleName2,
-      weddingDate: clientData.weddingDate ? new Date(clientData.weddingDate) : null,
-      estimatedBudget: clientData.budget || 0,
-      currency: 'USD',
-      tier: 'free',
-      premiumTrialEndsAt: trialEndsAt,
-      collaborators: { create: { userId, role: 'owner' } },
-    },
+  const trialEndsAt = new Date(Date.now() + 14 * DAY_MS)
+  const wedding = await prisma.$transaction(async (tx) => {
+    const created = await tx.wedding.create({
+      data: {
+        createdById: userId,
+        coupleName1,
+        coupleName2,
+        weddingDate: client.weddingDate,
+        location: client.location,
+        targetGuestCount: client.guestCount,
+        estimatedBudget: client.budget ?? 0,
+        currency,
+        styleTheme: "Elegant",
+        tier: "free",
+        premiumTrialEndsAt: trialEndsAt,
+        collaborators: { create: { userId, role: "owner" } },
+      },
+    })
+    const setup = async (kind: TemplateKind, choice: StarterChoice | undefined, standard: () => Promise<unknown>) => {
+      const saved = templateFor(choice)
+      if (saved && saved.kind === kind) return applySavedTemplate(tx, created.id, saved, created, tz, options.ceremonyTime)
+      if ((choice ?? "standard") === "standard") return standard()
+    }
+    await setup("checklist", options.checklist, () => seedChecklist(tx, created.id, created.weddingDate, ["poruwa", "homecoming"]))
+    await setup("budget", options.budget, () => seedBudget(tx, created.id, Number(client.budget ?? 0), client.guestCount ?? 0))
+    if (created.weddingDate) {
+      await setup("dayOf", options.dayOf, () => seedDayOf(tx, created.id, created.weddingDate!, options.ceremonyTime || "10:00", tz))
+    }
+    await tx.client.update({ where: { id: clientId }, data: { weddingId: created.id, status: "active", stageChangedAt: new Date() } })
+    return created
   })
 
-  return serializeDecimals(wedding)
+  revalidatePath("/dashboard/clients")
+  return { weddingId: wedding.id }
 }
 
 // ============================================
@@ -1444,6 +1666,23 @@ export async function getCalendarFeedToken(weddingId: string) {
   if (wedding?.calendarToken) return wedding.calendarToken
   const token = randomBytes(24).toString("base64url")
   await prisma.wedding.update({ where: { id: weddingId }, data: { calendarToken: token } })
+  return token
+}
+
+/** The planner's feed token covering every wedding they're on, created on first use. */
+export async function getMyCalendarFeedToken() {
+  const userId = await requireUserId()
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { calendarToken: true } })
+  if (user?.calendarToken) return user.calendarToken
+  const token = randomBytes(24).toString("base64url")
+  await prisma.user.update({ where: { id: userId }, data: { calendarToken: token } })
+  return token
+}
+
+export async function resetMyCalendarFeedToken() {
+  const userId = await requireUserId()
+  const token = randomBytes(24).toString("base64url")
+  await prisma.user.update({ where: { id: userId }, data: { calendarToken: token } })
   return token
 }
 

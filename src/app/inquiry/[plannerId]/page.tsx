@@ -8,9 +8,10 @@ export default async function InquiryPage({ params }: { params: Promise<{ planne
     // Use company_name from planner settings, fallback to full_name or generic name
     const businessName = planner?.company_name || planner?.full_name || "Wedding Planner";
     const logoUrl = planner?.logo_url || null;
+    const brand = planner?.branding_color && planner.branding_color !== "#000000" ? planner.branding_color : null;
 
     return (
-        <div className="min-h-screen bg-[#FDFBF7] py-12 px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-center font-sans">
+        <div style={brand ? { borderTop: `6px solid ${brand}` } : undefined} className="min-h-screen bg-[#FDFBF7] py-12 px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-center font-sans">
             <div className="max-w-xl w-full">
                 {/* Header */}
                 <div className="text-center mb-10 space-y-4">
@@ -30,12 +31,12 @@ export default async function InquiryPage({ params }: { params: Promise<{ planne
                         />
                     )}
                     <h1 className="text-4xl font-serif font-bold text-gray-900">{businessName}</h1>
-                    <p className="text-gray-500 text-lg">Inquiry Form</p>
+                    <p className="text-gray-500 text-lg">Tell us about your wedding</p>
                 </div>
 
                 {/* Form Card */}
                 <div className="bg-white p-8 md:p-10 rounded-3xl shadow-xl border border-gray-100">
-                    <InquiryFormClient plannerId={plannerId} />
+                    <InquiryFormClient plannerId={plannerId} brandColor={planner?.branding_color} />
                 </div>
 
                 <div className="mt-8 text-center text-gray-400 text-xs font-medium">

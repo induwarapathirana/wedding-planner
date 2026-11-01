@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { getUserProfile } from "@/app/actions/data";
 import { PlannerSettings } from "@/components/dashboard/settings/PlannerSettings";
 import { CoupleSettings } from "@/components/dashboard/settings/CoupleSettings";
+import { AccountTypeCard } from "@/components/dashboard/settings/AccountTypeCard";
 import { Loader2 } from "lucide-react";
 
 function SettingsContent() {
@@ -20,7 +21,8 @@ function SettingsContent() {
     async function checkRole() {
         const user = await getUserProfile();
         if (user) {
-            setRole(user.role as any);
+            // Older accounts may still carry 'vendor' or 'pro'; both mean planner
+            setRole(["planner", "vendor", "pro"].includes(user.role) ? "planner" : "couple");
         }
         setLoading(false);
     }
@@ -40,11 +42,21 @@ function SettingsContent() {
     }
 
     if (role === 'planner') {
-        return <PlannerSettings />;
+        return (
+            <div className="space-y-6">
+                <PlannerSettings />
+                <div className="mx-auto max-w-4xl"><AccountTypeCard role="planner" /></div>
+            </div>
+        );
     }
 
     // Default to Couple settings for couples (or fallback)
-    return <CoupleSettings weddingIdProp={weddingIdFromUrl ?? undefined} />;
+    return (
+        <div className="space-y-6">
+            <CoupleSettings weddingIdProp={weddingIdFromUrl ?? undefined} />
+            <div className="container mx-auto max-w-4xl px-4 pb-8"><AccountTypeCard role="couple" /></div>
+        </div>
+    );
 }
 
 export default function SettingsPage() {

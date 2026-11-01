@@ -39,6 +39,10 @@ export default function LoginPage() {
         if (params.get('signup') === 'true') {
             setIsSignUp(true);
         }
+        if (params.get('role') === 'planner') {
+            setIsSignUp(true);
+            setRole('planner');
+        }
         const errorCode = params.get('error');
         if (errorCode) {
             setError(SIGN_IN_ERRORS[errorCode] ?? SIGN_IN_ERRORS.Default);
